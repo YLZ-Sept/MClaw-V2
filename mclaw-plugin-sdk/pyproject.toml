@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mclaw-plugin-sdk"
+version = "0.7.1"
+description = "SDK for building Mclaw plugins — protocols, base classes, testing helpers"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "Mclaw Team" }]
+keywords = ["mclaw", "plugin", "sdk", "agent"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/mclaw/mclaw"
+Documentation = "https://docs.mclaw.ai/plugins/"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mclaw_plugin_sdk"]

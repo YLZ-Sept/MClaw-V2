@@ -1,0 +1,21 @@
+{
+  "_comment": "Per-file LOC baseline used by scripts/revamp_loc_audit.py. Update only at phase boundaries (P-RC-X commits) and only to lower the values for agent/* files as their real rewrites land. core/* and orgs/* baselines must never grow \u2014 they are the giants we are shrinking.",
+  "agent_growth_budget": 50,
+  "files": {
+    "src/mclaw/core/_brain_runtime.py": 1802,
+    "src/mclaw/core/_tool_runtime.py": 1818,
+    "src/mclaw/core/_context_runtime.py": 1799,
+    "src/mclaw/core/_reasoning_runtime.py": 8069,
+    "src/mclaw/core/_agent_runtime.py": 9211,
+    "src/mclaw/core/_supervisor_runtime.py": 853,
+    "src/mclaw/orgs/runtime.py": 6355,
+    "src/mclaw/orgs/tool_handler.py": 3474,
+    "src/mclaw/orgs/templates.py": 1266,
+    "src/mclaw/orgs/messenger.py": 651,
+    "src/mclaw/agent/core.py": 336,
+    "src/mclaw/agent/reasoning.py": 352,
+    "src/mclaw/agent/brain.py": 369,
+    "src/mclaw/agent/tools.py": 347,
+    "src/mclaw/agent/context.py": 336
+  }
+}
