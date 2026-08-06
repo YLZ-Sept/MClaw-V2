@@ -5,7 +5,7 @@ import {
   IconChat, IconIM, IconSkills, IconStatus, IconConfig,
   IconChevronDown, IconChevronRight, IconGlobe,
   IconZap, IconPlug, IconCalendar,
-  IconBug, IconBrain, IconGitHub, IconGitee, IconUsers, IconBot,
+  IconBug, IconBrain, IconGitHub, IconUsers, IconBot,
   IconGear, IconBook, IconStorefront, IconPuzzle, IconFingerprint, IconLayoutGrid,
   IconShield, IconRadar, IconBuilding, IconBarChart, IconRefresh,
 } from "../icons";
@@ -496,13 +496,6 @@ export function Sidebar({
             >
               <IconGitHub size={13} />
             </span>
-            <span
-                            onClick={() => openExternalUrl("https://gitee.com/YLZ-Sept/MClaw-V2")}
-              title="Gitee"
-              style={{ color: "var(--accent, #5B8DEF)", opacity: 1, display: "inline-flex", alignItems: "center", cursor: "pointer" }}
-            >
-              <IconGitee size={13} />
-            </span>
           </div>
         </div>
       )}
@@ -573,13 +566,6 @@ export function Sidebar({
               style={{ color: "var(--accent, #5B8DEF)", opacity: 0.5, display: "flex", cursor: "pointer" }}
             >
               <IconGitHub size={14} />
-            </span>
-            <span
-                            onClick={() => openExternalUrl("https://gitee.com/YLZ-Sept/MClaw-V2")}
-              title="Gitee"
-              style={{ color: "var(--accent, #5B8DEF)", opacity: 0.5, display: "flex", cursor: "pointer" }}
-            >
-              <IconGitee size={14} />
             </span>
           </div>
         </div>

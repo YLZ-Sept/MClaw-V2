@@ -320,11 +320,17 @@ a:hover {
 }
 
 .brandLogo {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
   object-fit: contain;
-  flex-shrink: 0;
+  background: rgba(255,255,255,0.05);
+  padding: 2px;
+  transition: transform 0.2s ease;
+}
+.brandLogo:hover {
+  transform: scale(1.08);
 }
 
 .brandTitle {
