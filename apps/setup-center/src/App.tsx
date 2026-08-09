@@ -522,6 +522,29 @@ function MainApp() {
   const [disabledViews, setDisabledViews] = useState<string[]>([]);
   const multiAgentEnabled = true;
   const [storeVisible, setStoreVisible] = useState(() => localStorage.getItem("mclaw_storeVisible") === "true");
+  const [currentUser, setCurrentUser] = useState("");
+  const fetchCurrentUser = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("mclaw_access_token");
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const resp = await fetch(`${httpApiBase()}/api/auth/check`, { headers });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.username) setCurrentUser(data.username);
+      }
+    } catch { /* */ }
+  }, []);
+  useEffect(() => { fetchCurrentUser(); }, [fetchCurrentUser]);
+  const handleLogout = useCallback(async () => {
+    try {
+      await safeFetch(`${httpApiBase()}/api/auth/logout`, { method: "POST" });
+    } catch { /* */ }
+    clearAccessToken();
+    localStorage.removeItem("mclaw_storeVisible");
+    setCurrentUser("");
+    setWebAuthed(false);
+  }, []);
   const transitionToView = useCallback((nextView: ViewId) => {
     startTransition(() => {
       setView(nextView);
@@ -4949,6 +4972,7 @@ function MainApp() {
         installFetchInterceptor();
         webInitDone.current = false;
         setWebAuthed(true);
+        fetchCurrentUser();
       }}
       onSwitchServer={IS_CAPACITOR ? () => setShowServerManager(true) : undefined}
       onPreview={() => {
@@ -5046,6 +5070,8 @@ function MainApp() {
         pendingApprovalsCount={pendingApprovalsCount}
         onCheckForUpdate={IS_TAURI ? handleManualUpdateCheck : undefined}
         updateCheckPending={manualUpdateChecking}
+        username={currentUser}
+        onLogout={currentUser ? handleLogout : undefined}
       />
 
       <main className="main">

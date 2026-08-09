@@ -817,12 +817,10 @@ export function AdvancedView(props: AdvancedViewProps) {
       </div>
 
       {/* ── Card 4: 用户管理 ── */}
-      {storeVisible && (
-        <div className="card" style={{ marginTop: 10 }}>
-          <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{t("adv.userManagementTitle")}</h3>
-          <UserManagementSection apiBaseUrl={shouldUseHttpApi() ? httpApiBase() : ""} />
-        </div>
-      )}
+      <div className="card" style={{ marginTop: 10 }}>
+        <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{t("adv.userManagementTitle")}</h3>
+        <UserManagementSection apiBaseUrl={shouldUseHttpApi() ? httpApiBase() : ""} />
+      </div>
 
       {/* ── Card 5: 数据与备份 ── */}
       <div className="card" style={{ marginTop: 10 }}>

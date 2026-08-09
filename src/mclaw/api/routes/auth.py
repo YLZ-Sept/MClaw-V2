@@ -305,16 +305,6 @@ async def check_auth(request: Request, response: Response):
     response.headers["Cache-Control"] = "no-store"
 
     config = _get_config(request)
-    is_local = _is_local_from_real_ip(request)
-
-    # Local requests are always authenticated (unless behind proxy)
-    if is_local:
-        return {
-            "authenticated": True,
-            "method": "local",
-            "username": "admin",
-            "password_user_set": config.password_user_set,
-        }
 
     # Check bearer token
     auth_header = request.headers.get("authorization", "")

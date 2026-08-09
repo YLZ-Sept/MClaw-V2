@@ -36,6 +36,8 @@ export type SidebarProps = {
   pendingApprovalsCount?: number;
   onCheckForUpdate?: () => Promise<void>;
   updateCheckPending?: boolean;
+  username?: string;
+  onLogout?: () => void;
 };
 
 const stepIcons: Partial<Record<StepId, React.ReactNode>> = {
@@ -99,6 +101,7 @@ export function Sidebar({
   onRefreshStatus, isWeb, mobileOpen, httpApiBase,
   unreadFeedbackCount, pendingApprovalsCount,
   onCheckForUpdate, updateCheckPending = false,
+  username, onLogout,
 }: SidebarProps) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
@@ -504,6 +507,45 @@ export function Sidebar({
           </div>
         </div>
       )}
+      {/* ── User status row ── */}
+      {username && (
+        <div style={{
+          padding: "6px 12px",
+          borderTop: "1px solid var(--line)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 12, color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{
+              width: 22, height: 22, borderRadius: "50%",
+              background: "var(--primary, #2563eb)",
+              color: "#fff", fontSize: 11, fontWeight: 600,
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              {username[0].toUpperCase()}
+            </span>
+            {!collapsed && <span>{username}</span>}
+          </span>
+          {!collapsed && onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              title="退出登录"
+              style={{
+                fontSize: 11, color: "var(--muted)", opacity: 0.6,
+                background: "none", border: "none", cursor: "pointer",
+                padding: "2px 6px", borderRadius: 4,
+              }}
+            >
+              退出
+            </button>
+          )}
+        </div>
+      )}
+
       {releaseNotesOpen && (
         <ReleaseNotesDialog
           version={releaseNotesVersion}

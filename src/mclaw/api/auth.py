@@ -517,11 +517,6 @@ def create_auth_middleware(config: WebAccessConfig):
         if _is_auth_exempt(path) or _is_public_plugin_ui_asset(request):
             return await call_next(request)
 
-        # Local bypass — set user_id to "admin" for local requests
-        if is_trusted_local(request):
-            request.state.user_id = "admin"
-            return await call_next(request)
-
         # Bearer token
         auth_header = request.headers.get("authorization", "")
         if auth_header.startswith("Bearer "):
