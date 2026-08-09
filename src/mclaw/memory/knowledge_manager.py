@@ -376,6 +376,7 @@ class KnowledgeManager:
                 status TEXT DEFAULT 'pending',
                 chunk_count INTEGER DEFAULT 0,
                 error_message TEXT,
+                uploaded_by TEXT DEFAULT '',
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL,
                 metadata_json TEXT DEFAULT '{}',
@@ -407,6 +408,11 @@ class KnowledgeManager:
             CREATE INDEX IF NOT EXISTS idx_kb_chunks_collection
                 ON kb_chunks(collection_id);
         """)
+        # Migration: add uploaded_by to existing tables
+        try:
+            conn.execute("ALTER TABLE kb_documents ADD COLUMN uploaded_by TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass  # column already exists
         conn.commit()
         conn.close()
         logger.info(f"[KnowledgeManager] SQLite 初始化完成: {self._db_path}")
@@ -602,19 +608,16 @@ class KnowledgeManager:
 
     def get_stats(self, collection_id: str) -> CollectionStats:
         conn = self._get_conn()
+        # Use subqueries to avoid cross-join between documents and chunks
         r = conn.execute(
             "SELECT "
-            "  COUNT(DISTINCT d.id) AS doc_count, "
-            "  COUNT(c.id) AS chunk_count, "
-            "  COALESCE(SUM(LENGTH(c.content)), 0) AS total_chars, "
-            "  COALESCE(SUM(d.file_size), 0) AS storage_bytes, "
-            "  COUNT(CASE WHEN c.embedding_id IS NOT NULL THEN 1 END) AS indexed_count, "
-            "  COUNT(CASE WHEN d.status = 'error' THEN 1 END) AS error_count "
-            "FROM kb_collections col "
-            "LEFT JOIN kb_documents d ON d.collection_id = col.id "
-            "LEFT JOIN kb_chunks c ON c.collection_id = col.id "
-            "WHERE col.id = ?",
-            (collection_id,),
+            "  (SELECT COUNT(*) FROM kb_documents WHERE collection_id = ?) AS doc_count, "
+            "  (SELECT COUNT(*) FROM kb_chunks WHERE collection_id = ?) AS chunk_count, "
+            "  (SELECT COALESCE(SUM(LENGTH(content)), 0) FROM kb_chunks WHERE collection_id = ?) AS total_chars, "
+            "  (SELECT COALESCE(SUM(file_size), 0) FROM kb_documents WHERE collection_id = ?) AS storage_bytes, "
+            "  (SELECT COUNT(*) FROM kb_chunks WHERE collection_id = ? AND embedding_id IS NOT NULL) AS indexed_count, "
+            "  (SELECT COUNT(*) FROM kb_documents WHERE collection_id = ? AND status = 'error') AS error_count",
+            (collection_id,) * 6,
         ).fetchone()
         conn.close()
         return CollectionStats(
@@ -687,7 +690,8 @@ class KnowledgeManager:
 
     # ── 文档摄入 ────────────────────────────────────────────────────────────
 
-    def ingest_file(self, collection_id: str, file_path: Path) -> KnowledgeDocument:
+    def ingest_file(self, collection_id: str, file_path: Path,
+                    uploaded_by: str = "") -> KnowledgeDocument:
         """摄入单个文件：解析 → 分块 → 索引"""
         suffix = file_path.suffix.lower()
         if suffix not in EXTENSION_MAP:
@@ -697,7 +701,7 @@ class KnowledgeManager:
         file_size = file_path.stat().st_size
         checksum = _sha256_file(file_path)
 
-        # 检查是否已存在
+        # 检查是否已存在（相同路径+内容）
         conn = self._get_conn()
         existing = conn.execute(
             "SELECT id, checksum FROM kb_documents WHERE collection_id = ? AND file_path = ?",
@@ -718,6 +722,7 @@ class KnowledgeManager:
             file_size=file_size,
             checksum=checksum,
             status=DocStatus.PENDING.value,
+            uploaded_by=uploaded_by,
             created_at=now,
             updated_at=now,
         )
@@ -735,10 +740,11 @@ class KnowledgeManager:
         else:
             conn.execute(
                 "INSERT INTO kb_documents (id, collection_id, filename, file_path, "
-                "file_type, file_size, checksum, status, chunk_count, created_at, updated_at) "
-                "VALUES (?,?,?,?,?,?,?,?,0,?,?)",
+                "file_type, file_size, checksum, status, chunk_count, uploaded_by, created_at, updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,0,?,?,?)",
                 (doc.id, doc.collection_id, doc.filename, doc.file_path,
-                 doc.file_type, doc.file_size, doc.checksum, doc.status, doc.created_at, doc.updated_at),
+                 doc.file_type, doc.file_size, doc.checksum, doc.status,
+                 doc.uploaded_by, doc.created_at, doc.updated_at),
             )
 
         conn.commit()
@@ -753,7 +759,8 @@ class KnowledgeManager:
 
         return self.get_document(doc.id) or doc
 
-    def ingest_url(self, collection_id: str, url: str) -> KnowledgeDocument:
+    def ingest_url(self, collection_id: str, url: str,
+                   uploaded_by: str = "") -> KnowledgeDocument:
         """从 URL 摄入内容"""
         import hashlib as _hashlib
 
@@ -769,6 +776,7 @@ class KnowledgeManager:
             file_size=len(text.encode()),
             checksum=checksum,
             status=DocStatus.INDEXING.value,
+            uploaded_by=uploaded_by,
             created_at=now,
             updated_at=now,
             metadata={"source_url": url, "url_hash": url_hash},
@@ -947,6 +955,16 @@ class KnowledgeManager:
         merged.sort(key=lambda x: x.score, reverse=True)
         return merged[:top_k]
 
+    @staticmethod
+    def _sanitize_fts_query(query: str) -> str:
+        """Make user input safe for FTS5 MATCH."""
+        special = set('"*(){}[]^~:')
+        cleaned = "".join(c if c not in special else " " for c in query)
+        tokens = cleaned.split()
+        if not tokens:
+            return '""'
+        return " OR ".join(tokens)
+
     def _search_bm25(
         self, query: str, collection_id: str | None, limit: int
     ) -> dict[str, float]:
@@ -957,30 +975,35 @@ class KnowledgeManager:
         except ImportError:
             segmented = query
 
+        safe_query = self._sanitize_fts_query(segmented)
         conn = self._get_conn()
+        result: dict[str, float] = {}
 
-        if collection_id:
-            rows = conn.execute(
-                "SELECT c.id, c.content, bm25(kb_chunks_fts, 0, 1, 0) AS rank "
-                "FROM kb_chunks_fts f "
-                "JOIN kb_chunks c ON c.rowid = f.rowid "
-                "WHERE kb_chunks_fts MATCH ? AND c.collection_id = ? "
-                "ORDER BY rank LIMIT ?",
-                (segmented, collection_id, limit),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT c.id, bm25(kb_chunks_fts, 0, 1, 0) AS rank "
-                "FROM kb_chunks_fts f "
-                "JOIN kb_chunks c ON c.rowid = f.rowid "
-                "WHERE kb_chunks_fts MATCH ? "
-                "ORDER BY rank LIMIT ?",
-                (segmented, limit),
-            ).fetchall()
+        try:
+            if collection_id:
+                rows = conn.execute(
+                    "SELECT c.id, c.content, bm25(kb_chunks_fts) AS rank "
+                    "FROM kb_chunks_fts f "
+                    "JOIN kb_chunks c ON c.rowid = f.rowid "
+                    "WHERE kb_chunks_fts MATCH ? AND c.collection_id = ? "
+                    "ORDER BY rank LIMIT ?",
+                    (safe_query, collection_id, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT c.id, bm25(kb_chunks_fts) AS rank "
+                    "FROM kb_chunks_fts f "
+                    "JOIN kb_chunks c ON c.rowid = f.rowid "
+                    "WHERE kb_chunks_fts MATCH ? "
+                    "ORDER BY rank LIMIT ?",
+                    (safe_query, limit),
+                ).fetchall()
+        except Exception:
+            logger.debug("FTS query failed", exc_info=True)
+            rows = []
 
         conn.close()
         # Convert BM25 rank to score: lower rank = better → score = 1/(1+rank)
-        result: dict[str, float] = {}
         for r in rows:
             rank = r["rank"] if isinstance(r, sqlite3.Row) else r[1]
             chunk_id = r["id"] if isinstance(r, sqlite3.Row) else r[0]
@@ -1012,13 +1035,15 @@ class KnowledgeManager:
 
             scores: dict[str, float] = {}
             if results["ids"] and results["ids"][0]:
-                for cid, dist in zip(results["ids"][0], results["distances"][0]):
-                    if cid in results["metadatas"][0]:
-                        chunk_id = results["metadatas"][0][cid].get("chunk_id", "")
-                        if chunk_id:
-                            scores[chunk_id] = max(0, 1.0 - dist)
-                    else:
-                        scores[cid] = max(0, 1.0 - dist)
+                ids_list = results["ids"][0]
+                dists_list = results["distances"][0]
+                mds_list = results.get("metadatas", [[]])[0] or []
+                for idx, (cid, dist) in enumerate(zip(ids_list, dists_list)):
+                    # metadatas[idx] is a dict: {"chunk_id": "...", "collection_id": "..."}
+                    meta = mds_list[idx] if idx < len(mds_list) else {}
+                    chunk_id = meta.get("chunk_id", "") if isinstance(meta, dict) else ""
+                    key = chunk_id if chunk_id else cid
+                    scores[key] = max(0, 1.0 - dist)
             return scores
 
         except Exception as e:
@@ -1149,6 +1174,7 @@ def _doc_from_row(r: sqlite3.Row | dict[str, Any]) -> KnowledgeDocument:
         checksum=d.get("checksum", ""), status=d.get("status", "pending"),
         chunk_count=d.get("chunk_count", 0),
         error_message=d.get("error_message"),
+        uploaded_by=d.get("uploaded_by", ""),
         created_at=d.get("created_at", 0.0), updated_at=d.get("updated_at", 0.0),
         metadata=metadata,
     )

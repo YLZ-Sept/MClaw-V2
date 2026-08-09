@@ -204,16 +204,16 @@ async def list_documents(collection_id: str):
 
 
 @router.post("/collections/{collection_id}/upload", response_model=DocResponse, status_code=201)
-async def upload_document(collection_id: str, file: UploadFile = File(...)):
+async def upload_document(request: Request, collection_id: str, file: UploadFile = File(...)):
     """上传文档到 collection"""
     km = get_knowledge_manager()
+    user_id = getattr(request.state, "user_id", "") or "admin"
     if km.get_collection(collection_id) is None:
         raise HTTPException(status_code=404, detail="Collection 不存在")
 
     if not file.filename:
         raise HTTPException(status_code=400, detail="文件名不能为空")
 
-    # 检查文件类型
     suffix = Path(file.filename).suffix.lower()
     from mclaw.memory.knowledge_types import EXTENSION_MAP
     if suffix not in EXTENSION_MAP:
@@ -223,7 +223,6 @@ async def upload_document(collection_id: str, file: UploadFile = File(...)):
             detail=f"不支持的文件格式: {suffix}，支持: {allowed}",
         )
 
-    # 保存到临时目录
     upload_dir = km.data_dir / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
     tmp_path = upload_dir / f"{int(time.time())}_{file.filename}"
@@ -234,9 +233,8 @@ async def upload_document(collection_id: str, file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"文件保存失败: {e}")
 
-    # 触发摄入
     try:
-        doc = km.ingest_file(collection_id, tmp_path)
+        doc = km.ingest_file(collection_id, tmp_path, uploaded_by=user_id)
     except Exception as e:
         logger.error(f"文档摄入失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"文档索引失败: {e}")
@@ -245,9 +243,10 @@ async def upload_document(collection_id: str, file: UploadFile = File(...)):
 
 
 @router.post("/collections/{collection_id}/import-url", response_model=DocResponse, status_code=201)
-async def import_url(collection_id: str, body: ImportUrlRequest):
+async def import_url(request: Request, collection_id: str, body: ImportUrlRequest):
     """从 URL 导入网页内容"""
     km = get_knowledge_manager()
+    user_id = getattr(request.state, "user_id", "") or "admin"
     if km.get_collection(collection_id) is None:
         raise HTTPException(status_code=404, detail="Collection 不存在")
 
@@ -255,7 +254,7 @@ async def import_url(collection_id: str, body: ImportUrlRequest):
         raise HTTPException(status_code=400, detail="URL 必须以 http:// 或 https:// 开头")
 
     try:
-        doc = km.ingest_url(collection_id, body.url.strip())
+        doc = km.ingest_url(collection_id, body.url.strip(), uploaded_by=user_id)
     except Exception as e:
         logger.error(f"URL 导入失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"URL 导入失败: {e}")
@@ -284,11 +283,23 @@ async def list_document_chunks(doc_id: str):
 
 
 @router.delete("/documents/{doc_id}", response_model=DeleteResponse)
-async def delete_document(doc_id: str):
-    """删除文档及其 chunks 和向量"""
+async def delete_document(request: Request, doc_id: str):
+    """删除文档及其 chunks 和向量（上传者或管理员可删）"""
     km = get_knowledge_manager()
-    if km.get_document(doc_id) is None:
+    user_id = getattr(request.state, "user_id", "") or "admin"
+    doc = km.get_document(doc_id)
+    if doc is None:
         raise HTTPException(status_code=404, detail="文档不存在")
+
+    # Permission check: uploader or admin
+    uploader = doc.uploaded_by if hasattr(doc, 'uploaded_by') else ""
+    if uploader and uploader != user_id:
+        # Check if current user is admin
+        from mclaw.api.auth import WebAccessConfig
+        wac = getattr(request.app.state, "web_access_config", None)
+        if wac and not wac.is_admin(user_id):
+            raise HTTPException(status_code=403, detail="只有上传者或管理员可以删除文档")
+
     deleted = km.delete_document(doc_id)
     return DeleteResponse(ok=True, deleted_chunks=deleted)
 

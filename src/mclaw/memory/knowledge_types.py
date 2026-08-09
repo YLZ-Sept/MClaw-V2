@@ -116,6 +116,7 @@ class KnowledgeDocument:
     status: str = DocStatus.PENDING.value
     chunk_count: int = 0
     error_message: str | None = None
+    uploaded_by: str = ""
     created_at: float = 0.0
     updated_at: float = 0.0
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -132,6 +133,7 @@ class KnowledgeDocument:
             "status": self.status,
             "chunk_count": self.chunk_count,
             "error_message": self.error_message,
+            "uploaded_by": self.uploaded_by,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "metadata": self.metadata,
@@ -149,6 +151,7 @@ class KnowledgeDocument:
             checksum=d.get("checksum", ""),
             status=d.get("status", DocStatus.PENDING.value),
             chunk_count=d.get("chunk_count", 0),
+            uploaded_by=d.get("uploaded_by", ""),
             error_message=d.get("error_message"),
             created_at=d.get("created_at", 0.0),
             updated_at=d.get("updated_at", 0.0),

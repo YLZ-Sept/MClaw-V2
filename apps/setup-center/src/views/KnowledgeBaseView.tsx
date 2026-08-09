@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import {
   Loader2, RefreshCw, Trash2, Search, Plus, Upload, Globe,
-  BookOpen, FileText, Database,
+  BookOpen, FileText, Database, Pencil,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -96,6 +96,10 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
   // Delete confirm
   const [confirmMsg, setConfirmMsg] = useState("");
   const [confirmCb, setConfirmCb] = useState<(() => void) | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [editingColl, setEditingColl] = useState<KBCollection | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
 
   // Import URL
   const [showImportUrl, setShowImportUrl] = useState(false);
@@ -163,7 +167,7 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
         await loadCollections();
       }
     } catch {
-      toast.error("Failed");
+      toast.error(t("common.failed"));
     }
   };
 
@@ -171,13 +175,24 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
     try {
       const res = await safeFetch(`${API}/api/knowledge/collections/${collId}`, { method: "DELETE" });
       if (res.ok) {
-        toast.success("Deleted");
+        toast.success(t("knowledge.deleted"));
         if (selectedColl?.id === collId) setSelectedColl(null);
         await loadCollections();
       }
     } catch {
-      toast.error("Failed");
+      toast.error(t("common.failed"));
     }
+  };
+
+  const doEditCollection = async () => {
+    if (!editingColl || !editName.trim()) return;
+    try {
+      const res = await safeFetch(`${apiBaseUrl}/api/knowledge/collections/${editingColl.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editName.trim(), description: editDesc.trim() }),
+      });
+      if (res.ok) { setEditingColl(null); await loadCollections(); }
+    } catch { toast.error(t("common.failed")); }
   };
 
   const doUploadFiles = async (files: FileList | null) => {
@@ -194,10 +209,10 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
           toast.success(`${file.name} ✓`);
         } else {
           const err = await res.json();
-          toast.error(err.detail || `Failed: ${file.name}`);
+          toast.error(err.detail || t("knowledge.uploadFailed", { name: file.name }));
         }
       } catch {
-        toast.error(`Failed: ${file.name}`);
+        toast.error(t("knowledge.uploadFailed", { name: file.name }));
       }
     }
     await loadDocuments(selectedColl.id);
@@ -226,7 +241,7 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
         toast.error(err.detail || "Failed");
       }
     } catch {
-      toast.error("Failed");
+      toast.error(t("common.failed"));
     }
   };
 
@@ -234,12 +249,12 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
     try {
       const res = await safeFetch(`${API}/api/knowledge/documents/${docId}`, { method: "DELETE" });
       if (res.ok) {
-        toast.success("Deleted");
+        toast.success(t("knowledge.deleted"));
         await loadDocuments(selectedColl!.id);
         await loadCollections();
       }
     } catch {
-      toast.error("Failed");
+      toast.error(t("common.failed"));
     }
   };
 
@@ -247,11 +262,11 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
     try {
       const res = await safeFetch(`${API}/api/knowledge/documents/${docId}/reindex`, { method: "POST" });
       if (res.ok) {
-        toast.success("Re-index ok");
+        toast.success(t("knowledge.reindexOk"));
         await loadDocuments(selectedColl!.id);
       }
     } catch {
-      toast.error("Failed");
+      toast.error(t("common.failed"));
     }
   };
 
@@ -407,6 +422,11 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
                   <span className="truncate">{c.name}</span>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
                     <span className="text-xs text-muted-foreground">{c.doc_count}</span>
+                    <Pencil
+                      size={12}
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={(e) => { e.stopPropagation(); setEditingColl(c); setEditName(c.name); setEditDesc(c.description); }}
+                    />
                     <Trash2
                       size={12}
                       className="text-red-400 hover:text-red-600"
@@ -426,7 +446,14 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
         <div className="flex-1 min-w-0 space-y-4">
           {/* Toolbar */}
           {selectedColl && (
-            <div className="flex items-center gap-2 flex-wrap">
+            <div
+              className={`flex items-center gap-2 flex-wrap p-3 rounded-lg border-2 border-dashed transition-colors ${
+                dragOver ? "border-primary bg-primary/5" : "border-transparent"
+              }`}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) doUploadFiles(e.dataTransfer.files); }}
+            >
               <Button size="sm" variant="outline" onClick={() => document.getElementById("kb-file-input")?.click()}>
                 <Upload size={14} className="mr-1" /> {t("knowledge.uploadDocument")}
               </Button>
@@ -441,7 +468,7 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
               <Button size="sm" variant="outline" onClick={() => setShowImportUrl(true)}>
                 <Globe size={14} className="mr-1" /> {t("knowledge.importUrl")}
               </Button>
-              <span className="text-xs text-muted-foreground">{t("knowledge.uploadHint")}</span>
+              <span className="text-xs text-muted-foreground">{t("knowledge.dragDropHint")}</span>
             </div>
           )}
 
@@ -591,8 +618,8 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
                 className="mb-3"
               />
               <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => setShowCreate(false)}>Cancel</Button>
-                <Button size="sm" onClick={doCreateCollection} disabled={!newName.trim()}>Create</Button>
+                <Button variant="outline" size="sm" onClick={() => setShowCreate(false)}>{t("common.cancel")}</Button>
+                <Button size="sm" onClick={doCreateCollection} disabled={!newName.trim()}>{t("common.create")}</Button>
               </div>
             </CardContent>
           </Card>
@@ -614,8 +641,36 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
                 onKeyDown={(e) => e.key === "Enter" && doImportUrl()}
               />
               <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => setShowImportUrl(false)}>Cancel</Button>
+                <Button variant="outline" size="sm" onClick={() => setShowImportUrl(false)}>{t("common.cancel")}</Button>
                 <Button size="sm" onClick={doImportUrl} disabled={!importUrl.trim()}>{t("knowledge.import")}</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Edit Collection Dialog */}
+      {editingColl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setEditingColl(null)}>
+          <Card className="w-[400px] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+            <CardContent className="p-4">
+              <h3 className="font-bold mb-3">{t("knowledge.editCollection")}</h3>
+              <Input
+                autoFocus
+                placeholder={t("knowledge.collectionName")}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="mb-2"
+              />
+              <Input
+                placeholder={t("knowledge.collectionDesc")}
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                className="mb-3"
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setEditingColl(null)}>{t("common.cancel")}</Button>
+                <Button size="sm" onClick={doEditCollection} disabled={!editName.trim()}>{t("common.save")}</Button>
               </div>
             </CardContent>
           </Card>
@@ -631,8 +686,8 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
               <AlertDialogDescription>{confirmMsg}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setConfirmCb(null)}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => { confirmCb(); setConfirmCb(null); }}>Delete</AlertDialogAction>
+              <AlertDialogCancel onClick={() => setConfirmCb(null)}>{t("common.cancel")}</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { confirmCb(); setConfirmCb(null); }}>{t("common.delete")}</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

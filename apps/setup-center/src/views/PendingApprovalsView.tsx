@@ -10,7 +10,6 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Loader2, RefreshCw, ShieldCheck, ShieldX, Clock, AlertTriangle, CheckCircle2, XCircle,
 } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 
 type PendingApprovalEntry = {
@@ -280,19 +279,10 @@ export function PendingApprovalsView({
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     {entry.status === "pending" && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {timeRemaining(entry.expires_at)}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {t("pendingApprovals.expiresAt", { time: formatTime(entry.expires_at) })}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      <span className="flex items-center gap-1" title={formatTime(entry.expires_at)}>
+                        <Clock className="w-3 h-3" />
+                        {timeRemaining(entry.expires_at)}
+                      </span>
                     )}
                     <span className="font-mono opacity-60">{entry.id}</span>
                   </div>

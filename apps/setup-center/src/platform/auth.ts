@@ -2,24 +2,22 @@
 // Handles JWT access/refresh token lifecycle.
 // Tauri local: no-ops (backend exempts 127.0.0.1). Tauri remote: same as Capacitor.
 
-import { IS_TAURI, IS_CAPACITOR, IS_LOCAL_WEB } from "./detect";
+import { IS_TAURI, IS_CAPACITOR } from "./detect";
 
 const ACCESS_TOKEN_KEY = "mclaw_access_token";
 
 let _tauriRemoteMode = false;
-let _localAuthMode = IS_LOCAL_WEB;
+let _localAuthMode = false; // Always require auth (no local bypass)
 let _passwordUserSet = true;
 
 /** Enable/disable auth for Tauri desktop connecting to a remote backend. */
 export function setTauriRemoteMode(enabled: boolean): void {
   _tauriRemoteMode = enabled;
-  // Reset for Tauri remote; IS_LOCAL_WEB always keeps local mode on.
-  _localAuthMode = IS_LOCAL_WEB;
+  _localAuthMode = false;
 }
 export function isTauriRemoteMode(): boolean { return _tauriRemoteMode; }
 
 function needsAuth(): boolean {
-  if (IS_LOCAL_WEB) return false;
   return !IS_TAURI || _tauriRemoteMode;
 }
 

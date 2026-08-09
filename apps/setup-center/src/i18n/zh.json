@@ -4242,6 +4242,10 @@
     "score": "相似度",
     "sourceBm25": "关键词",
     "sourceVector": "语义",
-    "sourceHybrid": "混合"
+    "sourceHybrid": "混合",
+    "deleted": "已删除",
+    "reindexOk": "重新索引完成",
+    "uploadFailed": "上传失败: {{name}}",
+    "editCollection": "编辑集合"
   }
 }

@@ -4227,6 +4227,10 @@
     "score": "Score",
     "sourceBm25": "Keyword",
     "sourceVector": "Semantic",
-    "sourceHybrid": "Hybrid"
+    "sourceHybrid": "Hybrid",
+    "deleted": "Deleted",
+    "reindexOk": "Re-index complete",
+    "uploadFailed": "Upload failed: {{name}}",
+    "editCollection": "Edit Collection"
   }
 }

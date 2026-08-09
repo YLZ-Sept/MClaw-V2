@@ -1,6 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense, startTransition } from "react";
 import { useTranslation } from "react-i18next";
-import { invoke, listen, IS_TAURI, IS_WEB, IS_CAPACITOR, IS_LOCAL_WEB, getAppVersion, onWsEvent, reconnectWsNow, setWsApiBaseUrl, logger } from "./platform";
+import { invoke, listen, IS_TAURI, IS_WEB, IS_CAPACITOR, getAppVersion, onWsEvent, reconnectWsNow, setWsApiBaseUrl, logger } from "./platform";
 import { getActiveServer, getActiveServerId } from "./platform/servers";
 import { checkAuth, installFetchInterceptor, AUTH_EXPIRED_EVENT, clearAccessToken, setTauriRemoteMode, isTauriRemoteMode } from "./platform/auth";
 import { LoginView } from "./views/LoginView";
@@ -276,7 +276,7 @@ function MainApp() {
   // IS_LOCAL_WEB: hostname is 127.0.0.1/localhost/::1 — backend authenticates
   // by client IP, no tokens or round-trips needed.  This eliminates the entire
   // class of "checkAuth timeout → login page flash" bugs.
-  const needsRemoteAuth = (IS_WEB || IS_CAPACITOR) && !IS_LOCAL_WEB;
+  const needsRemoteAuth = (IS_WEB || IS_CAPACITOR) && true /* was !IS_LOCAL_WEB */;
   const [webAuthed, setWebAuthed] = useState(!needsRemoteAuth);
   const [authChecking, setAuthChecking] = useState(needsRemoteAuth);
   const [showPwBanner, setShowPwBanner] = useState(false);
@@ -541,7 +541,15 @@ function MainApp() {
       await safeFetch(`${httpApiBase()}/api/auth/logout`, { method: "POST" });
     } catch { /* */ }
     clearAccessToken();
-    localStorage.removeItem("mclaw_storeVisible");
+    // Clear all cached data to prevent cross-user data leakage
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith("chat_") || key.startsWith("mclaw_"))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
     setCurrentUser("");
     setWebAuthed(false);
   }, []);
@@ -4969,6 +4977,13 @@ function MainApp() {
     return <LoginView
       apiBaseUrl={IS_CAPACITOR ? apiBaseUrl : ""}
       onLoginSuccess={() => {
+        // Clear chat cache from previous user
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith("chat_")) keysToRemove.push(key);
+        }
+        keysToRemove.forEach((k) => localStorage.removeItem(k));
         installFetchInterceptor();
         webInitDone.current = false;
         setWebAuthed(true);

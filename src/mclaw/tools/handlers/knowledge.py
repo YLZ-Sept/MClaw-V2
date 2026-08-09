@@ -68,14 +68,19 @@ class KnowledgeHandler:
             if km is None:
                 return "❌ 知识库服务未初始化，请联系管理员。"
 
-            # 如果指定了 collection_id，直接搜那个集合
-            # 否则搜所有绑定的集合（或全部，如果没绑定限制）
-            if collection_id:
-                results = km.search_with_chunks(query, collection_id=collection_id, top_k=top_k)
-            elif bound_collections:
-                # 分别搜索每个绑定集合，合并结果
-                from collections import defaultdict
+            # Must have at least one bound collection to search
+            if not bound_collections:
+                return "❌ 此 Agent 未绑定任何知识集合。请在 Agent 编辑中选择要使用的知识库。"
 
+            if collection_id:
+                if collection_id not in bound_collections:
+                    return (
+                        f"❌ 知识集合 '{collection_id}' 未绑定到此 Agent。"
+                        f"绑定的集合: {', '.join(bound_collections)}"
+                    )
+                results = km.search_with_chunks(query, collection_id=collection_id, top_k=top_k)
+            else:
+                # Search all bound collections, merge results
                 all_results: list = []
                 for cid in bound_collections:
                     try:
@@ -86,8 +91,6 @@ class KnowledgeHandler:
 
                 all_results.sort(key=lambda r: r.score, reverse=True)
                 results = all_results[:top_k]
-            else:
-                results = km.search_with_chunks(query, top_k=top_k)
 
             if not results:
                 scope = f"集合 {collection_id}" if collection_id else "知识库"

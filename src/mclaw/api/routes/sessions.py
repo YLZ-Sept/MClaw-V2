@@ -49,6 +49,11 @@ def _validate_id(value: str, field: str) -> None:
         )
 
 
+def _session_user(request: Request) -> str:
+    """Return authenticated user_id from request state."""
+    return getattr(request.state, "user_id", None) or "desktop_user"
+
+
 async def _broadcast_session_event(event: str, data: dict) -> None:
     """Broadcast a session lifecycle event via WebSocket."""
     try:
@@ -730,6 +735,13 @@ def _reconcile_history_todo_lifecycle(
     return entries
 
 
+
+def _session_user(request: Request) -> str:
+    """Return the authenticated user_id from the request."""
+    return getattr(request.state, "user_id", None) or "desktop_user"
+
+
+
 @router.get("/api/sessions")
 async def list_sessions(
     request: Request,
@@ -756,9 +768,11 @@ async def list_sessions(
             "has_more": False,
         }
 
+    current_user = _session_user(request)
     if hasattr(session_manager, "list_session_summaries_page"):
         catalog_page = session_manager.list_session_summaries_page(
             channel=channel,
+            user_id=current_user,
             query=q,
             exclude_org_chats=True,
             limit=limit,
@@ -839,7 +853,7 @@ async def create_session(
     request: Request,
     body: SessionCreateRequest,
     channel: str = "desktop",
-    user_id: str = "desktop_user",
+    user_id: str = "",  # resolved below
 ):
     """Create or update the list metadata for a first-class conversation.
 
@@ -850,6 +864,8 @@ async def create_session(
     conversation_id = body.conversation_id.strip()
     _validate_id(conversation_id, "conversation_id")
     _validate_id(channel, "channel")
+    user_id = user_id or _session_user(request)
+    user_id = user_id or _session_user(request)
     _validate_id(user_id, "user_id")
     session_manager = getattr(request.app.state, "session_manager", None)
     if not session_manager:
@@ -972,11 +988,13 @@ async def update_session_ui_state(
     conversation_id: str,
     body: SessionUiStateRequest,
     channel: str = "desktop",
-    user_id: str = "desktop_user",
+    user_id: str = "",  # resolved below
 ):
     """Persist per-conversation UI selections such as model endpoint and org mode."""
     _validate_id(conversation_id, "conversation_id")
     _validate_id(channel, "channel")
+    user_id = user_id or _session_user(request)
+    user_id = user_id or _session_user(request)
     _validate_id(user_id, "user_id")
     session_manager = getattr(request.app.state, "session_manager", None)
     if not session_manager:
@@ -1012,11 +1030,13 @@ async def update_session_title(
     conversation_id: str,
     body: SessionTitleRequest,
     channel: str = "desktop",
-    user_id: str = "desktop_user",
+    user_id: str = "",  # resolved below
 ):
     """Persist a user-facing conversation title in session metadata."""
     _validate_id(conversation_id, "conversation_id")
     _validate_id(channel, "channel")
+    user_id = user_id or _session_user(request)
+    user_id = user_id or _session_user(request)
     _validate_id(user_id, "user_id")
     session_manager = getattr(request.app.state, "session_manager", None)
     if not session_manager:
@@ -1071,11 +1091,13 @@ async def update_session_pin(
     conversation_id: str,
     body: SessionPinRequest,
     channel: str = "desktop",
-    user_id: str = "desktop_user",
+    user_id: str = "",  # resolved below
 ):
     """Persist conversation pinning so all clients show the same list grouping."""
     _validate_id(conversation_id, "conversation_id")
     _validate_id(channel, "channel")
+    user_id = user_id or _session_user(request)
+    user_id = user_id or _session_user(request)
     _validate_id(user_id, "user_id")
     session_manager = getattr(request.app.state, "session_manager", None)
     if not session_manager:
@@ -1121,7 +1143,7 @@ async def get_session_history(
     request: Request,
     conversation_id: str,
     channel: str = "desktop",
-    user_id: str = "desktop_user",
+    user_id: str = "",  # resolved below
     limit: int = Query(
         _DEFAULT_HISTORY_LIMIT,
         ge=1,
@@ -1140,6 +1162,7 @@ async def get_session_history(
     """
     _validate_id(conversation_id, "conversation_id")
     _validate_id(channel, "channel")
+    user_id = user_id or _session_user(request)
     _validate_id(user_id, "user_id")
 
     session_manager = getattr(request.app.state, "session_manager", None)
@@ -1209,7 +1232,7 @@ async def search_session_files(
     q: str = Query("", max_length=256),
     limit: int = Query(50, ge=1, le=100),
     channel: str = "desktop",
-    user_id: str = "desktop_user",
+    user_id: str = "",  # resolved below
 ):
     """Search regular files inside a conversation's immutable directory."""
     _validate_id(conversation_id, "conversation_id")
@@ -1336,7 +1359,7 @@ async def list_session_file_tree(
     parent: str = Query("", max_length=4096),
     limit: int = Query(500, ge=1, le=500),
     channel: str = "desktop",
-    user_id: str = "desktop_user",
+    user_id: str = "",  # resolved below
 ):
     """List one directory level inside a conversation's immutable directory."""
     _validate_id(conversation_id, "conversation_id")
@@ -1472,7 +1495,7 @@ async def delete_session(
     request: Request,
     conversation_id: str,
     channel: str = "desktop",
-    user_id: str = "desktop_user",
+    user_id: str = "",  # resolved below
 ):
     """Delete a session by chat_id.
 
@@ -1482,6 +1505,7 @@ async def delete_session(
     """
     _validate_id(conversation_id, "conversation_id")
     _validate_id(channel, "channel")
+    user_id = user_id or _session_user(request)
     _validate_id(user_id, "user_id")
 
     session_manager = getattr(request.app.state, "session_manager", None)
@@ -1577,7 +1601,7 @@ async def append_session_messages(
     conversation_id: str,
     body: AppendBatchRequest,
     channel: str = "desktop",
-    user_id: str = "desktop_user",
+    user_id: str = "",  # resolved below
 ):
     """Append messages to a session (create if missing).
 
@@ -1586,6 +1610,7 @@ async def append_session_messages(
     """
     _validate_id(conversation_id, "conversation_id")
     _validate_id(channel, "channel")
+    user_id = user_id or _session_user(request)
     _validate_id(user_id, "user_id")
 
     session_manager = getattr(request.app.state, "session_manager", None)
@@ -1625,7 +1650,7 @@ async def generate_title(request: Request, body: GenerateTitleRequest):
             session = session_manager.get_session(
                 channel="desktop",
                 chat_id=body.conversation_id,
-                user_id="desktop_user",
+                user_id=_session_user(request),
                 create_if_missing=False,
             )
             stored_title = session.get_metadata(_META_CONVERSATION_TITLE) if session else ""
