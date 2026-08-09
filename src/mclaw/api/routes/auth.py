@@ -138,30 +138,29 @@ async def login(request: Request, response: Response):
         )
 
     body = await _parse_body(request)
+    username = (body.get("username") or body.get("name") or "").strip().lower()
     password = body.get("password", "")
 
-    if not config.verify_password(password):
-        # Only failures count against the rate limit. A successful login
-        # immediately clears the counter so the legitimate user isn't punished
-        # for previous typos.
+    if not username or not config.verify_password(username, password):
         _login_limiter.register_failure(client_ip)
-        logger.warning("Failed login attempt from %s", client_ip)
+        logger.warning("Failed login attempt for '%s' from %s", username or "(empty)", client_ip)
         return JSONResponse(
             status_code=401,
-            content={"detail": "Invalid password"},
+            content={"detail": "Invalid username or password"},
         )
 
     _login_limiter.clear(client_ip)
-    access_token = config.create_access_token()
-    refresh_token = config.create_refresh_token()
+    access_token = config.create_access_token(username)
+    refresh_token = config.create_refresh_token(username)
 
     _set_refresh_cookie(response, refresh_token)
 
-    logger.info("Successful login from %s", client_ip)
+    logger.info("Successful login for '%s' from %s", username, client_ip)
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "expires_in": 24 * 3600,
+        "username": username,
     }
 
 
@@ -181,15 +180,16 @@ async def refresh(request: Request, response: Response):
         _clear_refresh_cookie(response)
         return JSONResponse(status_code=401, content={"detail": "Invalid or expired refresh token"})
 
-    # Issue new tokens
-    access_token = config.create_access_token()
-    new_refresh = config.create_refresh_token()
+    username = payload.get("sub", "desktop_user")
+    access_token = config.create_access_token(username)
+    new_refresh = config.create_refresh_token(username)
     _set_refresh_cookie(response, new_refresh)
 
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "expires_in": 24 * 3600,
+        "username": username,
     }
 
 
@@ -270,17 +270,15 @@ async def setup_initial_password(request: Request, response: Response):
         return JSONResponse(status_code=400, content={"detail": err})
 
     async with _setup_lock:
-        # Re-check inside the critical section: another tab may have just
-        # completed setup while this request was in flight.
         if is_setup_complete(config):
             return JSONResponse(
                 status_code=409,
                 content={"detail": "already_set"},
             )
-        config.change_password(new_password)
+        config.add_user("admin", new_password, role="admin")
 
-    access_token = config.create_access_token()
-    refresh_token = config.create_refresh_token()
+    access_token = config.create_access_token("admin")
+    refresh_token = config.create_refresh_token("admin")
     _set_refresh_cookie(response, refresh_token)
 
     client_ip = get_client_ip(
@@ -314,6 +312,7 @@ async def check_auth(request: Request, response: Response):
         return {
             "authenticated": True,
             "method": "local",
+            "username": "admin",
             "password_user_set": config.password_user_set,
         }
 
@@ -322,9 +321,11 @@ async def check_auth(request: Request, response: Response):
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
         if config.validate_access_token(token):
+            username = config.get_token_subject(token) or "desktop_user"
             return {
                 "authenticated": True,
                 "method": "token",
+                "username": username,
                 "password_user_set": config.password_user_set,
             }
 
@@ -337,6 +338,7 @@ async def check_auth(request: Request, response: Response):
                 "authenticated": True,
                 "method": "refresh_cookie",
                 "needs_refresh": True,
+                "username": payload.get("sub", "desktop_user"),
                 "password_user_set": config.password_user_set,
             }
 
@@ -358,26 +360,38 @@ async def change_password(request: Request):
     is_local = _is_local_from_real_ip(request)
     already_set = is_setup_complete(config)
 
-    if already_set and not is_local:
-        current_password = body.get("current_password", "")
-        if not current_password or not config.verify_password(current_password):
-            return JSONResponse(
-                status_code=403,
-                content={"detail": "Current password is required for remote password change"},
-            )
-    elif not already_set and not is_local:
-        # The setup gate normally catches this before we get here; this is a
-        # belt-and-braces check so direct API calls can't bypass the flow.
+    # Determine the username: from token, or from body
+    username = ""
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        username = config.get_token_subject(auth_header[7:]) or ""
+
+    if not already_set and not is_local:
         return JSONResponse(
             status_code=403,
             content={"detail": "Initial password must be set from a local connection"},
         )
 
+    if already_set and not is_local and not username:
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Authentication required to change password"},
+        )
+
+    if already_set and not is_local:
+        current_password = body.get("current_password", "")
+        if not current_password or not config.verify_password(username, current_password):
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Current password is incorrect"},
+            )
+
+    target_user = username or "admin"
     new_password = body.get("new_password", "")
     err = _validate_password_strength(new_password)
     if err:
         return JSONResponse(status_code=400, content={"detail": err})
-    config.change_password(new_password)
+    config.change_password(target_user, new_password)
 
     from .websocket import manager
 
@@ -385,15 +399,110 @@ async def change_password(request: Request):
 
     origin = "localhost" if is_local else "remote"
     logger.info(
-        "Web access password changed from %s, disconnected %d remote session(s)",
-        origin,
-        disconnected,
+        "Password changed for '%s' from %s, disconnected %d remote session(s)",
+        target_user, origin, disconnected,
     )
     return {
         "status": "ok",
         "message": "Password changed. All remote sessions invalidated.",
         "disconnected": disconnected,
     }
+
+
+# ── User management (admin only) ────────────────────────────────────────
+
+
+def _require_admin(request: Request) -> str:
+    """Require admin auth. Returns the admin username. Raises 403 if not admin."""
+    config = _get_config(request)
+    if is_trusted_local(request):
+        return "admin"
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        username = config.get_token_subject(auth_header[7:]) or ""
+        if config.is_admin(username):
+            return username
+    raise JSONException(403, "Admin access required (local or admin token)")
+
+
+class JSONException(Exception):
+    def __init__(self, status: int, detail: str):
+        self.status = status
+        self.detail = detail
+
+
+@router.get("/users")
+async def list_users(request: Request):
+    """List all users (admin only)."""
+    try:
+        _require_admin(request)
+    except JSONException as e:
+        return JSONResponse(status_code=e.status, content={"detail": e.detail})
+    config = _get_config(request)
+    return {"users": config.list_users()}
+
+
+@router.post("/users")
+async def create_user(request: Request):
+    """Create a new user (admin only)."""
+    try:
+        _require_admin(request)
+    except JSONException as e:
+        return JSONResponse(status_code=e.status, content={"detail": e.detail})
+    config = _get_config(request)
+    body = await _parse_body(request)
+    username = body.get("username", "").strip().lower()
+    password = body.get("password", "") or body.get("new_password", "")
+    role = body.get("role", "user")
+
+    if not username or not password:
+        return JSONResponse(status_code=400, content={"detail": "Username and password are required"})
+    err = _validate_password_strength(password)
+    if err:
+        return JSONResponse(status_code=400, content={"detail": err})
+    try:
+        config.add_user(username, password, role)
+    except ValueError as e:
+        return JSONResponse(status_code=409, content={"detail": str(e)})
+    logger.info("Admin created user '%s'", username)
+    return {"status": "ok", "username": username, "role": role}
+
+
+@router.delete("/users/{username}")
+async def delete_user(request: Request, username: str):
+    """Delete a user (admin only)."""
+    try:
+        _require_admin(request)
+    except JSONException as e:
+        return JSONResponse(status_code=e.status, content={"detail": e.detail})
+    config = _get_config(request)
+    try:
+        config.remove_user(username.strip().lower())
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+    logger.info("Admin deleted user '%s'", username)
+    return {"status": "ok"}
+
+
+@router.post("/users/{username}/reset-password")
+async def reset_user_password(request: Request, username: str):
+    """Admin resets a user's password."""
+    try:
+        _require_admin(request)
+    except JSONException as e:
+        return JSONResponse(status_code=e.status, content={"detail": e.detail})
+    config = _get_config(request)
+    body = await _parse_body(request)
+    new_password = body.get("password", "") or body.get("new_password", "")
+    err = _validate_password_strength(new_password)
+    if err:
+        return JSONResponse(status_code=400, content={"detail": err})
+    try:
+        config.admin_reset_password(username.strip().lower(), new_password)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+    logger.info("Admin reset password for user '%s'", username)
+    return {"status": "ok"}
 
 
 # ── GET /api/auth/password-hint (local only) ──

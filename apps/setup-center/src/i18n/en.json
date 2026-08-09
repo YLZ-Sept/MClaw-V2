@@ -2528,7 +2528,21 @@
     "hubProvider": "Skill Source",
     "hubProviderHint": "Restart Mclaw service after switching",
     "hubSkillHub": "Tencent SkillHub",
-    "hubVolces": "Volcano Engine Find-Skill"
+    "hubVolces": "Volcano Engine Find-Skill",
+    "userManagementTitle": "User Management",
+    "userName": "Username",
+    "userRole": "Role",
+    "userActions": "Actions",
+    "roleAdmin": "Admin",
+    "roleUser": "User",
+    "addUser": "Add User",
+    "userPassword": "Password",
+    "resetPassword": "Reset",
+    "resetPasswordFor": "Reset password for {{username}}",
+    "newPassword": "New Password",
+    "userCreated": "User created",
+    "userDeleteConfirm": "Delete user {{username}}?",
+    "userPasswordReset": "Password reset"
   },
   "pluginApp": {
     "loadingTitle": "Loading {{name}}…",
@@ -2645,7 +2659,8 @@
     "networkError": "Unable to connect to the server, please check the address and network",
     "networkErrorMobile": "Unable to connect to the server. Please check:\n1. Phone and computer are on the same WiFi\n2. Remote access is enabled on the desktop app\n3. Server address is correct",
     "timeout": "Connection timed out. Please check that your phone and computer are on the same WiFi",
-    "hint": "Password is auto-generated on first start. View or reset it in the Desktop Setup Center."
+    "hint": "Password is auto-generated on first start. View or reset it in the Desktop Setup Center.",
+    "usernamePlaceholder": "Username"
   },
   "setup": {
     "title": "First Run — Set an Access Password",

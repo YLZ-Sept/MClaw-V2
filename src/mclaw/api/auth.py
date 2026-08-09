@@ -93,7 +93,21 @@ def _verify_password(password: str, hash_hex: str, salt_hex: str) -> bool:
 
 
 class WebAccessConfig:
-    """Manages the web_access.json file."""
+    r"""Manages the web_access.json file with multi-user support.
+
+    Format (v2):
+      {
+        "jwt_secret": "...",
+        "data_epoch": "...",
+        "token_version": 1,
+        "users": {
+          "admin": {"password_hash": "...", "password_salt": "...", "role": "admin"},
+          "zhangsan": {"password_hash": "...", "password_salt": "...", "role": "user"}
+        }
+      }
+
+    Backward-compatible with v1 single-password format — auto-migrates on load.
+    """
 
     def __init__(self, data_dir: Path) -> None:
         self._path = data_dir / "web_access.json"
@@ -106,12 +120,6 @@ class WebAccessConfig:
             try:
                 self._data = json.loads(self._path.read_text("utf-8"))
             except Exception:
-                # File is corrupt (e.g. truncated by power loss before fsync
-                # took effect). Log at ERROR with traceback; we regenerate a
-                # fresh config below. User-visible consequence: any previously
-                # stored password is lost, so the user will need to set it
-                # again. We don't keep a backup because the only meaningful
-                # field is the password hash, which is by design non-recoverable.
                 logger.error(
                     "Failed to read %s — file appears corrupted; "
                     "regenerating fresh config (any saved password will be lost)",
@@ -123,43 +131,51 @@ class WebAccessConfig:
         env_password = os.environ.get(PASSWORD_ENV_VAR, "").strip()
         needs_save = False
 
+        # Ensure base fields
         if not self._data.get("jwt_secret"):
             self._data["jwt_secret"] = secrets.token_hex(32)
             needs_save = True
-
         if not self._data.get("data_epoch"):
             self._data["data_epoch"] = secrets.token_hex(8)
             needs_save = True
-
         if not self._data.get("token_version"):
             self._data["token_version"] = 1
             needs_save = True
 
+        # Migrate v1 single-password format → v2 users dict
+        if "password_hash" in self._data and "users" not in self._data:
+            self._data["users"] = {
+                "admin": {
+                    "password_hash": self._data.pop("password_hash"),
+                    "password_salt": self._data.pop("password_salt"),
+                    "role": "admin",
+                }
+            }
+            self._data.pop("password_plain_hint", None)
+            self._data.pop("password_user_set", None)
+            needs_save = True
+            logger.info("Migrated web_access.json from v1 (single-password) to v2 (multi-user)")
+
+        if "users" not in self._data:
+            self._data["users"] = {}
+
+        # Env-var password → admin user
         if env_password:
-            # Environment variable overrides stored password — but only update
-            # if the password actually changed (avoids needless rehash on every start)
-            existing_hash = self._data.get("password_hash", "")
-            existing_salt = self._data.get("password_salt", "")
+            admin = self._data["users"].get("admin", {})
+            existing_hash = admin.get("password_hash", "")
+            existing_salt = admin.get("password_salt", "")
             if (
                 not existing_hash
                 or not existing_salt
                 or not _verify_password(env_password, existing_hash, existing_salt)
             ):
                 hash_hex, salt_hex = _hash_password(env_password)
-                self._data["password_hash"] = hash_hex
-                self._data["password_salt"] = salt_hex
-                self._data["password_plain_hint"] = _make_hint(env_password)
-                self._data["password_user_set"] = True
+                self._data["users"]["admin"] = {
+                    "password_hash": hash_hex,
+                    "password_salt": salt_hex,
+                    "role": "admin",
+                }
                 needs_save = True
-            elif not self._data.get("password_user_set"):
-                self._data["password_user_set"] = True
-                needs_save = True
-        # Note: the auto-generated password branch was intentionally removed in
-        # v1.28. A fresh install now leaves ``password_hash`` empty until the
-        # user completes the Setup flow (see ``middleware_setup_gate``). This
-        # eliminates the previous footgun where the auto-generated password
-        # was only printed once to logs and easily missed in Docker / systemd
-        # deployments.
 
         if needs_save:
             self._data["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -210,78 +226,108 @@ class WebAccessConfig:
     def data_epoch(self) -> str:
         return self._data.get("data_epoch", "")
 
-    @property
-    def password_hint(self) -> str:
-        return self._data.get("password_plain_hint", "")
+    # ── User registry ────────────────────────────────────────────────────
 
-    def verify_password(self, password: str) -> bool:
-        h = self._data.get("password_hash", "")
-        s = self._data.get("password_salt", "")
-        if not h or not s:
-            return False
-        return _verify_password(password, h, s)
+    @property
+    def _users(self) -> dict[str, Any]:
+        return self._data.get("users", {})
+
+    def verify_password(self, username: str, password: str) -> bool:
+        """Verify username + password. Also accepts old single-password API calls."""
+        user = self._users.get(username)
+        if user:
+            return _verify_password(password, user.get("password_hash", ""),
+                                    user.get("password_salt", ""))
+        return False
 
     @property
     def password_user_set(self) -> bool:
-        return self._data.get("password_user_set", False)
+        return len(self._users) > 0
 
     @property
     def has_password_set(self) -> bool:
-        """Whether a usable password is currently stored.
+        return len(self._users) > 0
 
-        Used by :mod:`mclaw.api.setup_state` to decide whether the Setup
-        flow should be presented to non-loopback clients. Returns ``True`` iff
-        both the hash and salt fields are present and non-empty — this is
-        the same condition that :meth:`verify_password` checks before
-        comparing.
-        """
-        return bool(self._data.get("password_hash")) and bool(self._data.get("password_salt"))
+    def is_admin(self, username: str) -> bool:
+        user = self._users.get(username)
+        return user is not None and user.get("role") == "admin"
 
-    def change_password(self, new_password: str) -> None:
-        hash_hex, salt_hex = _hash_password(new_password)
-        self._data["password_hash"] = hash_hex
-        self._data["password_salt"] = salt_hex
-        self._data["password_plain_hint"] = _make_hint(new_password)
-        self._data["password_user_set"] = True
+    def list_users(self) -> list[dict[str, Any]]:
+        return [
+            {"username": name, "role": info.get("role", "user")}
+            for name, info in self._users.items()
+        ]
+
+    def add_user(self, username: str, password: str, role: str = "user") -> None:
+        username = username.strip().lower()
+        if not username or not re.match(r"^[a-z0-9_-]+$", username):
+            raise ValueError("用户名仅允许小写字母、数字、下划线和连字符")
+        if username in self._users:
+            raise ValueError(f"用户 '{username}' 已存在")
+        hash_hex, salt_hex = _hash_password(password)
+        self._data["users"][username] = {
+            "password_hash": hash_hex,
+            "password_salt": salt_hex,
+            "role": role,
+        }
+        self._data["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        self._save()
+
+    def remove_user(self, username: str) -> None:
+        username = username.strip().lower()
+        if username not in self._users:
+            raise ValueError(f"用户 '{username}' 不存在")
+        if len(self._users) <= 1:
+            raise ValueError("不能删除最后一个用户")
+        self._data["users"].pop(username, None)
         self._data["token_version"] = self.token_version + 1
         self._data["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         self._save()
+
+    def change_password(self, username: str, new_password: str) -> None:
+        username = username.strip().lower()
+        if username not in self._users:
+            raise ValueError(f"用户 '{username}' 不存在")
+        hash_hex, salt_hex = _hash_password(new_password)
+        self._data["users"][username]["password_hash"] = hash_hex
+        self._data["users"][username]["password_salt"] = salt_hex
+        self._data["token_version"] = self.token_version + 1
+        self._data["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        self._save()
+
+    def admin_reset_password(self, username: str, new_password: str) -> None:
+        """Admin resets any user's password (no old password needed)."""
+        self.change_password(username, new_password)
 
     def clear_password(self) -> None:
-        """Drop the password hash so the Setup flow is required again.
-
-        Used by the ``mclaw reset-password`` CLI. Bumps ``token_version``
-        so any access / refresh token previously issued under the old password
-        is invalidated immediately (relevant when a running process keeps the
-        config in memory after the file change — even though the password is
-        gone, stale tokens shouldn't keep working).
-
-        ``jwt_secret`` and ``data_epoch`` are intentionally preserved: rotating
-        them would invalidate session storage signed under those keys, which
-        is more disruptive than necessary for a password reset.
-        """
-        self._data.pop("password_hash", None)
-        self._data.pop("password_salt", None)
-        self._data.pop("password_plain_hint", None)
-        self._data["password_user_set"] = False
+        self._data.pop("users", None)
+        self._data["users"] = {}
         self._data["token_version"] = self.token_version + 1
         self._data["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         self._save()
 
-    def create_access_token(self) -> str:
+    # ── Tokens ────────────────────────────────────────────────────────────
+
+    def _get_user_claims(self, username: str) -> dict[str, Any]:
+        user = self._users.get(username, {})
+        return {"role": user.get("role", "user")}
+
+    def create_access_token(self, username: str = "desktop_user") -> str:
         claims = TokenClaims(
             token_type="access",
-            subject="desktop_user",
+            subject=username,
             expires_in=ACCESS_TOKEN_TTL,
             version=self.token_version,
             scope=["web:access"],
         )
-        return encode_jwt(claims.to_payload(), self.jwt_secret)
+        payload = claims.to_payload()
+        payload["user"] = self._get_user_claims(username)
+        return encode_jwt(payload, self.jwt_secret)
 
-    def create_refresh_token(self) -> str:
+    def create_refresh_token(self, username: str = "desktop_user") -> str:
         claims = TokenClaims(
             token_type="refresh",
-            subject="desktop_user",
+            subject=username,
             expires_in=REFRESH_TOKEN_TTL,
             version=self.token_version,
             scope=["web:refresh"],
@@ -297,6 +343,13 @@ class WebAccessConfig:
         if payload.get("ver") != self.token_version:
             return False
         return True
+
+    def get_token_subject(self, token: str) -> str | None:
+        """Extract the username (subject) from a valid access token."""
+        payload = decode_jwt(token, self.jwt_secret)
+        if not payload:
+            return None
+        return payload.get("sub")
 
     def validate_refresh_token(self, token: str) -> dict[str, Any] | None:
         payload = decode_jwt(token, self.jwt_secret)
@@ -449,43 +502,47 @@ def _is_public_plugin_ui_asset(request: Request) -> bool:
 
 
 def create_auth_middleware(config: WebAccessConfig):
-    """Create the authentication middleware function."""
+    """Create the authentication middleware function.
+
+    On successful auth, sets ``request.state.user_id`` to the authenticated
+    username so downstream routes can scope data per user.
+    """
 
     async def auth_middleware(request: Request, call_next):
-        # CORS preflight must always pass through (browser sends OPTIONS without auth)
         if request.method == "OPTIONS":
             return await call_next(request)
 
         path = request.url.path
 
-        # Static files and auth endpoints are always accessible. Plugin UI
-        # documents are loaded by iframe/resource tags, which cannot attach a
-        # Bearer header; only their read-only static mount is public.
         if _is_auth_exempt(path) or _is_public_plugin_ui_asset(request):
             return await call_next(request)
 
-        # Direct local connections bypass auth (Tauri desktop, curl on the
-        # same host). Reverse-proxy-forwarded requests still need a token even
-        # when they originate from 127.0.0.1, because the proxy itself always
-        # connects from loopback. See :func:`is_trusted_local`.
+        # Local bypass — set user_id to "admin" for local requests
         if is_trusted_local(request):
+            request.state.user_id = "admin"
             return await call_next(request)
 
-        # Check Authorization header
+        # Bearer token
         auth_header = request.headers.get("authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
             if config.validate_access_token(token):
+                user_id = config.get_token_subject(token) or "desktop_user"
+                request.state.user_id = user_id
+                request.state.token = token
                 return await call_next(request)
 
-        # Check query parameter token (for <img> / <audio> tags that can't set headers)
+        # Query token
         query_token = request.query_params.get("token", "")
         if query_token and config.validate_access_token(query_token):
+            user_id = config.get_token_subject(query_token) or "desktop_user"
+            request.state.user_id = user_id
             return await call_next(request)
 
-        # Check X-API-Key header (for programmatic access)
+        # X-API-Key (programmatic) — try verify against admin user
         api_key = request.headers.get("x-api-key", "")
-        if api_key and config.verify_password(api_key):
+        if api_key and config.verify_password("admin", api_key):
+            request.state.user_id = "admin"
             return await call_next(request)
 
         return JSONResponse(

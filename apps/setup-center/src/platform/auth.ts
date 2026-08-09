@@ -183,6 +183,7 @@ export async function authFetch(
 // ---------------------------------------------------------------------------
 
 export async function login(
+  username: string,
   password: string,
   apiBase = "",
 ): Promise<{ success: boolean; error?: string }> {
@@ -191,12 +192,13 @@ export async function login(
       method: "POST",
       signal: AbortSignal.timeout(IS_CAPACITOR ? 5_000 : 10_000),
     };
+    const body = { username, password };
     if (isCrossOriginMode()) {
       fetchOpts.headers = { "Content-Type": "application/x-www-form-urlencoded" };
-      fetchOpts.body = new URLSearchParams({ password }).toString();
+      fetchOpts.body = new URLSearchParams(body).toString();
     } else {
       fetchOpts.headers = { "Content-Type": "application/json" };
-      fetchOpts.body = JSON.stringify({ password });
+      fetchOpts.body = JSON.stringify(body);
       fetchOpts.credentials = "include";
     }
     const res = await fetch(`${apiBase}/api/auth/login`, fetchOpts);

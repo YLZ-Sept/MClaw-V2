@@ -19,17 +19,18 @@ export function LoginView({
   onPreview?: () => void;
 }) {
   const { t } = useTranslation();
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = useCallback(async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!password.trim()) return;
+    if (!username.trim() || !password.trim()) return;
     setLoading(true);
     setError(null);
 
-    const result = await login(password, apiBaseUrl);
+    const result = await login(username.trim(), password, apiBaseUrl);
     setLoading(false);
 
     if (result.success) {
@@ -48,7 +49,7 @@ export function LoginView({
         setError(result.error || t("login.failed"));
       }
     }
-  }, [password, apiBaseUrl, onLoginSuccess, t]);
+  }, [username, password, apiBaseUrl, onLoginSuccess, t]);
 
   const serverDisplay = apiBaseUrl ? apiBaseUrl.replace(/^https?:\/\//, "") : "";
 
@@ -130,11 +131,34 @@ export function LoginView({
         )}
 
         <input
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder={t("login.usernamePlaceholder")}
+          autoFocus
+          autoComplete="username"
+          disabled={loading}
+          style={{
+            width: "100%",
+            padding: "10px 14px",
+            fontSize: 15,
+            borderRadius: 10,
+            border: "1px solid var(--line, #e2e8f0)",
+            background: "var(--bg, #f8fafc)",
+            color: "var(--text, #1e293b)",
+            outline: "none",
+            boxSizing: "border-box",
+            marginBottom: 12,
+            transition: "border-color 0.15s",
+          }}
+          onFocus={(e) => { e.target.style.borderColor = "var(--primary, #2563eb)"; }}
+          onBlur={(e) => { e.target.style.borderColor = "var(--line, #e2e8f0)"; }}
+        />
+        <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder={t("login.passwordPlaceholder")}
-          autoFocus
           disabled={loading}
           style={{
             width: "100%",
@@ -155,7 +179,7 @@ export function LoginView({
 
         <button
           type="submit"
-          disabled={loading || !password.trim()}
+          disabled={loading || !username.trim() || !password.trim()}
           style={{
             width: "100%",
             background: loading

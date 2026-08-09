@@ -2528,7 +2528,21 @@
     "hubProvider": "技能商店来源",
     "hubProviderHint": "切换后需重启 Mclaw 服务生效",
     "hubSkillHub": "腾讯 SkillHub",
-    "hubVolces": "火山引擎 Find-Skill"
+    "hubVolces": "火山引擎 Find-Skill",
+    "userManagementTitle": "用户管理",
+    "userName": "用户名",
+    "userRole": "角色",
+    "userActions": "操作",
+    "roleAdmin": "管理员",
+    "roleUser": "用户",
+    "addUser": "添加用户",
+    "userPassword": "密码",
+    "resetPassword": "改密",
+    "resetPasswordFor": "为用户 {username} 重置密码",
+    "newPassword": "新密码",
+    "userCreated": "用户已创建",
+    "userDeleteConfirm": "确定删除用户 {{username}}？",
+    "userPasswordReset": "密码已重置"
   },
   "pluginApp": {
     "loadingTitle": "正在加载 {{name}}…",
@@ -2645,7 +2659,8 @@
     "networkError": "无法连接服务器，请检查地址和网络",
     "networkErrorMobile": "无法连接服务器，请确认：\n1. 手机与电脑在同一 WiFi 下\n2. 桌面端已开启远程访问\n3. 服务器地址正确",
     "timeout": "连接超时，请确认手机与电脑在同一 WiFi 下",
-    "hint": "密码在服务首次启动时自动生成，可在桌面端设置中查看或重置"
+    "hint": "密码在服务首次启动时自动生成，可在桌面端设置中查看或重置",
+    "usernamePlaceholder": "用户名"
   },
   "setup": {
     "title": "首次访问 — 请设置访问密码",

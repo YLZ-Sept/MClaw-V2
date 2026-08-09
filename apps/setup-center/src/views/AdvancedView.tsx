@@ -6,7 +6,7 @@
  * via props.
  */
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { IconFolder, IconFile, IconClipboard, IconLightbulb, IconCheck } from "../icons";
 import { invoke, IS_TAURI, saveFileDialog } from "../platform";
@@ -16,6 +16,7 @@ import { notifySuccess, notifyError, notifyLoading, dismissLoading } from "../ut
 import { FieldText, FieldBool, FieldSelect } from "../components/EnvFields";
 import { Section } from "../components/Section";
 import { WebPasswordManager } from "../components/WebPasswordManager";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,6 +63,160 @@ export interface AdvancedViewProps {
   restartService: () => Promise<void>;
   setView: (view: ViewId) => void;
 }
+
+// ── User Management (inline component) ────────────────────────────────────
+
+function UserManagementSection({ apiBaseUrl }: { apiBaseUrl: string }) {
+  const { t } = useTranslation();
+  const [users, setUsers] = useState<{ username: string; role: string }[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [newUser, setNewUser] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [resetUser, setResetUser] = useState<string | null>(null);
+  const [resetPass, setResetPass] = useState("");
+  const [msg, setMsg] = useState("");
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const resp = await safeFetch(`${apiBaseUrl}/api/auth/users`);
+      const data = await resp.json();
+      setUsers(data.users || []);
+    } catch { /* */ }
+  }, [apiBaseUrl]);
+
+  useEffect(() => { fetchUsers(); }, [fetchUsers]);
+
+  const doAdd = async () => {
+    if (!newUser.trim() || !newPass.trim()) return;
+    try {
+      const resp = await safeFetch(`${apiBaseUrl}/api/auth/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: newUser.trim(), password: newPass }),
+      });
+      if (resp.ok) { setAddOpen(false); setNewUser(""); setNewPass(""); fetchUsers(); setMsg(t("adv.userCreated")); }
+      else { const d = await resp.json().catch(() => ({})); setMsg((d as any).detail || "Error"); }
+    } catch { setMsg("Network error"); }
+  };
+
+  const doDelete = async (username: string) => {
+    if (!confirm(t("adv.userDeleteConfirm", { username }))) return;
+    try {
+      const resp = await safeFetch(`${apiBaseUrl}/api/auth/users/${encodeURIComponent(username)}`, { method: "DELETE" });
+      if (resp.ok) fetchUsers();
+      else { const d = await resp.json().catch(() => ({})); setMsg((d as any).detail || "Error"); }
+    } catch { setMsg("Network error"); }
+  };
+
+  const doReset = async () => {
+    if (!resetUser || !resetPass.trim()) return;
+    try {
+      const resp = await safeFetch(`${apiBaseUrl}/api/auth/users/${encodeURIComponent(resetUser)}/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_password: resetPass }),
+      });
+      if (resp.ok) { setResetUser(null); setResetPass(""); setMsg(t("adv.userPasswordReset")); }
+      else { const d = await resp.json().catch(() => ({})); setMsg((d as any).detail || "Error"); }
+    } catch { setMsg("Network error"); }
+  };
+
+  return (
+    <div className="space-y-2">
+      {/* User list */}
+      <div className="rounded-md border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-muted-foreground text-xs">
+              <th className="text-left px-3 py-2 font-medium">{t("adv.userName")}</th>
+              <th className="text-left px-3 py-2 font-medium">{t("adv.userRole")}</th>
+              <th className="text-right px-3 py-2 font-medium">{t("adv.userActions")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.username} className="border-b last:border-0">
+                <td className="px-3 py-1.5 font-medium">{u.username}</td>
+                <td className="px-3 py-1.5">
+                  <Badge variant={u.role === "admin" ? "default" : "outline"} className="text-[10px]">
+                    {u.role === "admin" ? t("adv.roleAdmin") : t("adv.roleUser")}
+                  </Badge>
+                </td>
+                <td className="px-3 py-1.5 text-right">
+                  <Button size="sm" variant="ghost" className="h-7 text-xs"
+                    onClick={() => { setResetUser(u.username); setResetPass(""); }}>
+                    {t("adv.resetPassword")}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs text-red-500"
+                    onClick={() => doDelete(u.username)}
+                    disabled={users.length <= 1}>
+                    {t("common.delete")}
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {msg && (
+        <p className="text-xs text-muted-foreground">{msg}</p>
+      )}
+
+      {/* Add user */}
+      {!addOpen ? (
+        <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
+          + {t("adv.addUser")}
+        </Button>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            placeholder={t("adv.userName")}
+            value={newUser}
+            onChange={(e) => setNewUser(e.target.value)}
+            className="w-32 h-8 text-xs"
+          />
+          <Input
+            type="password"
+            placeholder={t("adv.userPassword")}
+            value={newPass}
+            onChange={(e) => setNewPass(e.target.value)}
+            className="w-32 h-8 text-xs"
+          />
+          <Button size="sm" onClick={doAdd} disabled={!newUser.trim() || !newPass.trim()} className="h-8 text-xs">
+            {t("common.save")}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => { setAddOpen(false); setNewUser(""); setNewPass(""); }} className="h-8 text-xs">
+            {t("common.cancel")}
+          </Button>
+        </div>
+      )}
+
+      {/* Reset password dialog */}
+      {resetUser && (
+        <div className="flex flex-wrap items-center gap-2 mt-2 p-2 rounded-md border bg-muted/30">
+          <span className="text-xs text-muted-foreground">
+            {t("adv.resetPasswordFor", { username: resetUser })}
+          </span>
+          <Input
+            type="password"
+            placeholder={t("adv.newPassword")}
+            value={resetPass}
+            onChange={(e) => setResetPass(e.target.value)}
+            className="w-32 h-8 text-xs"
+          />
+          <Button size="sm" onClick={doReset} disabled={!resetPass.trim()} className="h-8 text-xs">
+            {t("common.save")}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setResetUser(null)} className="h-8 text-xs">
+            {t("common.cancel")}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export function AdvancedView(props: AdvancedViewProps) {
   const {
@@ -661,7 +816,15 @@ export function AdvancedView(props: AdvancedViewProps) {
         </Section>
       </div>
 
-      {/* ── Card 4: 数据与备份 ── */}
+      {/* ── Card 4: 用户管理 ── */}
+      {storeVisible && (
+        <div className="card" style={{ marginTop: 10 }}>
+          <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{t("adv.userManagementTitle")}</h3>
+          <UserManagementSection apiBaseUrl={shouldUseHttpApi() ? httpApiBase() : ""} />
+        </div>
+      )}
+
+      {/* ── Card 5: 数据与备份 ── */}
       <div className="card" style={{ marginTop: 10 }}>
         <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{t("adv.dataBackupTitle")}</h3>
 
