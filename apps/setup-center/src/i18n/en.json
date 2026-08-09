@@ -1,7 +1,7 @@
 {
   "brand": {
-    "title": "Mclaw",
-    "sub": "Enterprise Management Platform"
+    "title": "Mclaw V2",
+    "sub": "Enterprise AI Agent Platform"
   },
   "sidebar": {
     "chat": "Chat",
@@ -4231,6 +4231,7 @@
     "deleted": "Deleted",
     "reindexOk": "Re-index complete",
     "uploadFailed": "Upload failed: {{name}}",
-    "editCollection": "Edit Collection"
+    "editCollection": "Edit Collection",
+    "dropHere": "Drop files to upload"
   }
 }

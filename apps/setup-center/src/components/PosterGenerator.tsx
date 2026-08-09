@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toPng } from "html-to-image";
 import { IS_TAURI, saveFileDialog, writeFile } from "../platform";
-import logoUrl from "../assets/logo.png";
+import logoUrl from "../assets/logo-new.png";
 import { ModalOverlay } from "./ModalOverlay";
 
 interface PosterProps {

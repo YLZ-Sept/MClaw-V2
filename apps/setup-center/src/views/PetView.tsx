@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { invoke } from "../platform";
 import { onWsEvent } from "../platform/websocket";
-import logoUrl from "../assets/logo.png";
+import logoUrl from "../assets/logo-new.png";
 import "../styles/pet.css";
 
 type PetState = "idle" | "thinking" | "tool_execution" | "completed" | "error";

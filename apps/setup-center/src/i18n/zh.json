@@ -1,7 +1,7 @@
 {
   "brand": {
-    "title": "Mclaw",
-    "sub": "企业管理平台"
+    "title": "Mclaw V2",
+    "sub": "企业智能体管理平台"
   },
   "sidebar": {
     "chat": "聊天",
@@ -4246,6 +4246,7 @@
     "deleted": "已删除",
     "reindexOk": "重新索引完成",
     "uploadFailed": "上传失败: {{name}}",
-    "editCollection": "编辑集合"
+    "editCollection": "编辑集合",
+    "dropHere": "释放文件以上传"
   }
 }

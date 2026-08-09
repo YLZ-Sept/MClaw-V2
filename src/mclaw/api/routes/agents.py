@@ -372,6 +372,7 @@ class ProfileUpdateRequest(BaseModel):
     runtime_env_mode: Literal["shared", "agent", "custom"] | None = None
     runtime_env_dependencies: list[str] | None = None
     runtime_env_python: str | None = Field(None, max_length=1000)
+    knowledge_collections: list[str] | None = None
 
 
 class ProfileVisibilityRequest(BaseModel):

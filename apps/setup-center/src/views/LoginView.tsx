@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { login } from "../platform/auth";
 import { IS_CAPACITOR } from "../platform/detect";
 import { IconLink } from "../icons";
-import logoUrl from "../assets/logo.png";
+import logoUrl from "../assets/logo-new.png";
 
 export function LoginView({
   apiBaseUrl,

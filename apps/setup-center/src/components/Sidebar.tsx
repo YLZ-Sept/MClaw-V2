@@ -9,7 +9,7 @@ import {
   IconGear, IconBook, IconStorefront, IconPuzzle, IconFingerprint, IconLayoutGrid,
   IconShield, IconRadar, IconBuilding, IconBarChart, IconRefresh,
 } from "../icons";
-import logoUrl from "../assets/logo.png";
+import logoUrl from "../assets/logo-new.png";
 import { openExternalUrl } from "../platform";
 import { ReleaseNotesDialog, normalizeReleaseVersion } from "./ReleaseNotesDialog";
 

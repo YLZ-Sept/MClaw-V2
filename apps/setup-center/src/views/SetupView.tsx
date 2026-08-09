@@ -18,7 +18,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import logoUrl from "../assets/logo.png";
+import logoUrl from "../assets/logo-new.png";
 import { IS_CAPACITOR } from "../platform/detect";
 import { checkAuth, setupInitialPassword } from "../platform/auth";
 

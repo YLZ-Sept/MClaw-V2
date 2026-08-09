@@ -4,7 +4,7 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { IS_CAPACITOR } from "../platform/detect";
-import logoUrl from "../assets/logo.png";
+import logoUrl from "../assets/logo-new.png";
 import {
   getServers, addServer, updateServer, removeServer,
   setActiveServer, testConnection,

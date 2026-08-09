@@ -70,6 +70,7 @@ class DocResponse(BaseModel):
     status: str
     chunk_count: int
     error_message: str | None
+    uploaded_by: str = ""
     created_at: float
     updated_at: float
     metadata: dict[str, Any]
@@ -237,8 +238,17 @@ async def upload_document(request: Request, collection_id: str, file: UploadFile
         doc = km.ingest_file(collection_id, tmp_path, uploaded_by=user_id)
     except Exception as e:
         logger.error(f"文档摄入失败: {e}", exc_info=True)
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"文档索引失败: {e}")
 
+    # Clean up temp file after successful ingestion
+    try:
+        tmp_path.unlink(missing_ok=True)
+    except Exception:
+        pass
     return doc.to_dict()
 
 

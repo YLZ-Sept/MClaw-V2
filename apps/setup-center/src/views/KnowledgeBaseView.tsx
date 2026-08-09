@@ -201,10 +201,13 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
       const formData = new FormData();
       formData.append("file", file);
       try {
-        const res = await safeFetch(
-          `${API}/api/knowledge/collections/${selectedColl.id}/upload`,
-          { method: "POST", body: formData },
-        );
+        // fetch with auth header (no timeout — ingestion can be slow)
+        const token = localStorage.getItem("mclaw_access_token");
+        const headers: Record<string, string> = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        const res = await fetch(`${API}/api/knowledge/collections/${selectedColl.id}/upload`, {
+          method: "POST", body: formData, headers,
+        });
         if (res.ok) {
           toast.success(`${file.name} ✓`);
         } else {
@@ -228,6 +231,7 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: importUrl.trim() }),
+          signal: AbortSignal.timeout(60_000),
         },
       );
       if (res.ok) {
@@ -260,7 +264,8 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
 
   const doReindex = async (docId: string) => {
     try {
-      const res = await safeFetch(`${API}/api/knowledge/documents/${docId}/reindex`, { method: "POST" });
+      const res = await safeFetch(`${API}/api/knowledge/documents/${docId}/reindex`,
+        { method: "POST", signal: AbortSignal.timeout(120_000) });
       if (res.ok) {
         toast.success(t("knowledge.reindexOk"));
         await loadDocuments(selectedColl!.id);
@@ -442,18 +447,16 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
           </Card>
         </div>
 
-        {/* Right: Documents + Search */}
-        <div className="flex-1 min-w-0 space-y-4">
+        {/* Right: Documents + Search (full-panel drop zone) */}
+        <div
+          className="flex-1 min-w-0 space-y-4 relative"
+          onDragOver={(e) => { e.preventDefault(); if (selectedColl) setDragOver(true); }}
+          onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); if (selectedColl && e.dataTransfer.files.length) doUploadFiles(e.dataTransfer.files); }}
+        >
           {/* Toolbar */}
           {selectedColl && (
-            <div
-              className={`flex items-center gap-2 flex-wrap p-3 rounded-lg border-2 border-dashed transition-colors ${
-                dragOver ? "border-primary bg-primary/5" : "border-transparent"
-              }`}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) doUploadFiles(e.dataTransfer.files); }}
-            >
+            <div className="flex items-center gap-2 flex-wrap">
               <Button size="sm" variant="outline" onClick={() => document.getElementById("kb-file-input")?.click()}>
                 <Upload size={14} className="mr-1" /> {t("knowledge.uploadDocument")}
               </Button>
@@ -593,6 +596,19 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
                 )}
               </CardContent>
             </Card>
+          )}
+          {/* Drag-overlay: full-panel drop target */}
+          {dragOver && selectedColl && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-primary/10 backdrop-blur-[1px] rounded-lg border-2 border-dashed border-primary"
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) doUploadFiles(e.dataTransfer.files); }}
+            >
+              <div className="text-center pointer-events-none">
+                <Upload size={48} className="mx-auto mb-3 text-primary opacity-80" />
+                <p className="text-lg font-semibold text-primary">{t("knowledge.dropHere")}</p>
+                <p className="text-sm text-muted-foreground mt-1">{t("knowledge.dragDropHint")}</p>
+              </div>
+            </div>
           )}
         </div>
       </div>
