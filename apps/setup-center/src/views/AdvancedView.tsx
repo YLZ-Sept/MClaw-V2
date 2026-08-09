@@ -88,7 +88,7 @@ export function AdvancedView(props: AdvancedViewProps) {
   // ── Local state (previously in App.tsx top-level, only used here) ──
   const [advSysInfo, setAdvSysInfo] = useState<Record<string, string> | null>(null);
   const [advLoading, setAdvLoading] = useState<Record<string, boolean>>({});
-  const [hubApiUrl, setHubApiUrl] = useState<string>("");
+  const [hubProvider, setHubProvider] = useState<string>("skillhub");
 
   const [backupHistory, setBackupHistory] = useState<Array<{ filename: string; path: string; size_bytes: number; created_at: string; manifest?: any }>>([]);
   const [backupShowHistory, setBackupShowHistory] = useState(false);
@@ -129,7 +129,7 @@ export function AdvancedView(props: AdvancedViewProps) {
       safeFetch(`${apiUrl}/api/config/env`, { signal: AbortSignal.timeout(5_000) })
         .then((r) => r.json())
         .then((data) => {
-          if (data.env?.HUB_API_URL) setHubApiUrl(data.env.HUB_API_URL);
+          if (data.env?.HUB_PROVIDER) setHubProvider(data.env.HUB_PROVIDER);
           if (data.env?.HUB_ENABLED != null) {
             const enabled = data.env.HUB_ENABLED === "true" || data.env.HUB_ENABLED === "True";
             setStoreVisible(enabled);
@@ -626,51 +626,37 @@ export function AdvancedView(props: AdvancedViewProps) {
             />
           }
         >
-          <p className="text-xs text-muted-foreground mb-1">{t("adv.hubHint")}</p>
-          <div className="flex items-center gap-1.5">
-            <Input
-              value={hubApiUrl}
-              onChange={(e) => setHubApiUrl(e.target.value)}
-              placeholder={t("adv.hubUrlPlaceholder")}
-              className="flex-1 max-w-[380px]"
-            />
-            <Button
-              size="sm"
-              disabled={!!busy}
-              onClick={async () => {
-                const val = hubApiUrl.trim() || "https://mclaw.ai/api";
-                if (shouldUseHttpApi()) {
-                  try {
-                    await safeFetch(`${httpApiBase()}/api/config/env`, {
+          <p className="text-xs text-muted-foreground mb-2">{t("adv.hubHint")}</p>
+
+          <div className="space-y-2">
+            <div>
+              <Label className="text-xs text-muted-foreground">{t("adv.hubProvider")}</Label>
+              <Select
+                value={hubProvider}
+                onValueChange={(v) => {
+                  setHubProvider(v);
+                  const entries: Record<string, string> = { HUB_PROVIDER: v };
+                  if (shouldUseHttpApi()) {
+                    safeFetch(`${httpApiBase()}/api/config/env`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ entries: { HUB_API_URL: val } }),
-                    });
-                    notifySuccess(t("adv.hubSaved"));
-                  } catch (e) { notifyError(String(e)); }
-                } else {
-                  setEnvDraft((prev) => envSet(prev, "HUB_API_URL", val));
-                  notifySuccess(t("adv.hubSaved"));
-                }
-              }}
-            >
-              {t("common.save") || "Save"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!!busy}
-              onClick={async () => {
-                const url = (hubApiUrl.trim() || "https://mclaw.ai/api").replace(/\/$/, "");
-                try {
-                  const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(6000) });
-                  if (res.ok) notifySuccess(t("adv.hubTestOk"));
-                  else notifyError(t("adv.hubTestFail"));
-                } catch { notifyError(t("adv.hubTestFail")); }
-              }}
-            >
-              {t("adv.hubTest")}
-            </Button>
+                      body: JSON.stringify({ entries }),
+                    }).catch(() => {});
+                  } else {
+                    setEnvDraft((prev) => envSet(prev, "HUB_PROVIDER", v));
+                  }
+                }}
+              >
+                <SelectTrigger className="max-w-[280px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="skillhub">{t("adv.hubSkillHub")}</SelectItem>
+                  <SelectItem value="volces">{t("adv.hubVolces")}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{t("adv.hubProviderHint")}</p>
+            </div>
           </div>
         </Section>
       </div>

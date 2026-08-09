@@ -322,10 +322,6 @@ class SkillHubAdapter(BaseProviderAdapter):
         start = (page - 1) * limit
         paged = normalized[start:start + limit] if limit > 0 else normalized
 
-        # Heuristic: when API returns a full page, more results likely exist
-        if len(raw_items) >= fetch_limit:
-            total = max(total, 25000)
-
         return {"items": paged, "total": total}
 
     async def get_detail(self, client, skill_id):
@@ -401,8 +397,12 @@ _ADAPTERS: dict[str, type[BaseProviderAdapter]] = {
 
 
 def _resolve_provider() -> str:
-    """Return the effective hub provider from settings."""
-    provider = getattr(settings, "hub_provider", None) or "mclaw"
+    """Return the effective hub provider.
+
+    Checks os.environ first (so frontend .env changes take effect without
+    restart), then falls back to pydantic settings default.
+    """
+    provider = os.environ.get("HUB_PROVIDER") or getattr(settings, "hub_provider", None) or "skillhub"
     return provider.strip().lower()
 
 

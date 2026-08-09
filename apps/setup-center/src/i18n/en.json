@@ -2374,8 +2374,8 @@
     "logAuto": "Auto-refresh",
     "logCopy": "Copy All",
     "logEmpty": "No logs yet. Click \"Refresh\" to fetch.",
-    "hubTitle": "Platform Connection (Agent Hub / Skill Store)",
-    "hubHint": "Configure the Mclaw remote platform URL. Leave empty to use the default. Local features work even if the platform is unavailable.",
+    "hubTitle": "Market Connection (Agent Hub / Skill Store)",
+    "hubHint": "Enable to show the Market group in the sidebar. Choose a skill source and the stores will fetch content from that platform.",
     "hubUrl": "Platform API URL",
     "hubUrlPlaceholder": "https://mclaw.ai/api",
     "hubSaved": "Platform URL saved",
@@ -2524,7 +2524,11 @@
     "extChatHint": "You can also ask Akita to install these for you in chat, e.g. \"install opencli for me\"",
     "extCreditsTitle": "Credits",
     "extCreditsHint": "Mclaw's tool calling and browser capabilities are enhanced by these open-source projects",
-    "extCopied": "Copied"
+    "extCopied": "Copied",
+    "hubProvider": "Skill Source",
+    "hubProviderHint": "Restart Mclaw service after switching",
+    "hubSkillHub": "Tencent SkillHub",
+    "hubVolces": "Volcano Engine Find-Skill"
   },
   "pluginApp": {
     "loadingTitle": "Loading {{name}}…",

@@ -2374,8 +2374,8 @@
     "logAuto": "自动刷新",
     "logCopy": "复制全部",
     "logEmpty": "暂无日志，点击「刷新」获取",
-    "hubTitle": "平台连接（Agent 市场 / 技能商店）",
-    "hubHint": "配置 Mclaw 远程平台地址。留空使用默认值。平台不可用时本地功能不受影响。",
+    "hubTitle": "市场连接（Agent 市场 / 技能商店）",
+    "hubHint": "开启后在侧边栏显示市场入口。选择技能来源后，Agent 商店和技能商店将从对应平台获取内容。",
     "hubUrl": "平台 API 地址",
     "hubUrlPlaceholder": "https://mclaw.ai/api",
     "hubSaved": "平台地址已保存",
@@ -2524,7 +2524,11 @@
     "extChatHint": "你也可以直接在对话中让 Akita 帮你安装，例如发送「帮我安装 opencli」",
     "extCreditsTitle": "致谢",
     "extCreditsHint": "Mclaw 的工具调用和浏览器访问能力得益于以下开源项目",
-    "extCopied": "已复制"
+    "extCopied": "已复制",
+    "hubProvider": "技能商店来源",
+    "hubProviderHint": "切换后需重启 Mclaw 服务生效",
+    "hubSkillHub": "腾讯 SkillHub",
+    "hubVolces": "火山引擎 Find-Skill"
   },
   "pluginApp": {
     "loadingTitle": "正在加载 {{name}}…",
