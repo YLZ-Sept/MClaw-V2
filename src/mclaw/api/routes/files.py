@@ -33,10 +33,11 @@ def _get_workspace_root(request: Request, conversation_id: str = "") -> Path:
         session_manager = getattr(request.app.state, "session_manager", None)
         if session_manager is None:
             raise HTTPException(status_code=503, detail="Session manager unavailable")
+        chat_user = getattr(request.state, "user_id", None) or "desktop_user"
         session = session_manager.get_session(
             channel="desktop",
             chat_id=conversation_id,
-            user_id="desktop_user",
+            user_id=chat_user,
             create_if_missing=False,
         )
         if session is None:

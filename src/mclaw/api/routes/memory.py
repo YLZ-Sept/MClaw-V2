@@ -213,16 +213,17 @@ def _serialize(mem: Any) -> dict:
 
 
 def _current_owner(request: Request) -> tuple[str, str]:
-    # 1) Explicit override for (future) multi-user REST clients: an upstream
-    #    proxy / caller can pin the tenant via headers without relying on any
-    #    request-context state.
+    # 1) Explicit override for multi-user REST clients via headers.
     user_hdr = (request.headers.get("X-Mclaw-User") or "").strip()
     ws_hdr = (request.headers.get("X-Mclaw-Workspace") or "").strip()
     if user_hdr:
         return user_hdr, (ws_hdr or "default")
 
-    # 2) Honour a real owner already bound to *this* request context (e.g. tests
-    #    or a future path that starts a memory session before hitting the route).
+    # 2) Read authenticated user from auth middleware (request.state.user_id).
+    #    Local requests get "admin", remote requests get their JWT subject.
+    auth_user = getattr(request.state, "user_id", None) or ""
+
+    # 3) Honour a real owner already bound to this request context.
     user_id, workspace_id = "default", "default"
     mm = _get_manager(request)
     if mm and hasattr(mm, "_current_owner"):
@@ -231,24 +232,12 @@ def _current_owner(request: Request) -> tuple[str, str]:
         except Exception:
             user_id, workspace_id = "default", "default"
 
-    # 3) The /api/memories management panel is the desktop single-user surface.
-    #    It hits this route directly, WITHOUT a memory session bound to the
-    #    request context, so the manager's per-request ContextVar falls back to
-    #    "default". The desktop *chat* path, however, binds owner to
-    #    "desktop_user" (see chat.py get_session(user_id="desktop_user")). Those
-    #    two buckets never overlap, so memories created in the panel were
-    #    invisible to the agent's conversation recall and vice-versa (Domain3
-    #    P1-1). Align the REST fallback to the same canonical desktop identity so
-    #    the panel and the chat share one owner bucket.
-    #
-    #    We deliberately do NOT trust the memory manager's *mutable singleton*
-    #    owner across contexts here: on a multi-user backend it reflects whoever
-    #    (possibly an IM user) chatted most recently, and leaking that onto the
-    #    desktop admin surface would be a cross-tenant read. Only the per-request
-    #    ContextVar value above is trusted; when it is the generic fallback we
-    #    resolve to the desktop identity.
+    # 4) Fallback chain: auth user → memory context → canonical identity
     if user_id in ("default", "", "anonymous"):
-        user_id = "desktop_user"
+        if auth_user and auth_user != "desktop_user":
+            user_id = auth_user
+        else:
+            user_id = "desktop_user"
 
     return user_id, workspace_id
 

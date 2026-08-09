@@ -18,6 +18,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+
+def _chat_user(request: Request) -> str:
+    """Return the authenticated user_id for chat session binding."""
+    return getattr(request.state, "user_id", None) or "desktop_user"
+
+
 from mclaw.agent.security_actions import execute_controlled_action
 from mclaw.agent.trusted_paths import grant_session_trust
 from mclaw.core.ask_user_context import AskUserReplyContext
@@ -90,7 +96,7 @@ def _bootstrap_working_directory(
     existing = session_manager.get_session(
         channel="desktop",
         chat_id=body.conversation_id,
-        user_id="desktop_user",
+        user_id=_chat_user(request),
         create_if_missing=False,
     )
     if existing is not None and requested:
@@ -101,7 +107,7 @@ def _bootstrap_working_directory(
     session = existing or session_manager.get_session(
         channel="desktop",
         chat_id=body.conversation_id,
-        user_id="desktop_user",
+        user_id=_chat_user(request),
         create_if_missing=True,
         working_directory=requested,
     )
@@ -130,7 +136,7 @@ def _session_for_desktop(
         return session_manager.get_session(
             channel="desktop",
             chat_id=conversation_id,
-            user_id="desktop_user",
+            user_id=_chat_user(request),
             create_if_missing=create_if_missing,
         )
     except Exception:
@@ -386,7 +392,7 @@ async def _handle_pending_risk_answer(
                 session = session_manager.get_session(
                     channel="desktop",
                     chat_id=conversation_id,
-                    user_id="desktop_user",
+                    user_id=_chat_user(request),
                     create_if_missing=True,
                 )
                 if session:
@@ -426,7 +432,7 @@ async def _handle_pending_risk_answer(
                     session = session_manager.get_session(
                         channel="desktop",
                         chat_id=conversation_id,
-                        user_id="desktop_user",
+                        user_id=_chat_user(request),
                         create_if_missing=True,
                     )
                     if session:
@@ -509,7 +515,7 @@ async def _handle_pending_risk_answer(
             session = session_manager.get_session(
                 channel="desktop",
                 chat_id=conversation_id,
-                user_id="desktop_user",
+                user_id=_chat_user(request),
                 create_if_missing=True,
             )
             if session:
@@ -636,7 +642,7 @@ async def clear_chat(request: Request):
     cleared = session_manager.clear_history(
         channel="desktop",
         chat_id=conversation_id,
-        user_id="desktop_user",
+        user_id=_chat_user(request),
     )
     if cleared:
         _cleanup_chat_runtime_state(request, conversation_id)
@@ -1489,7 +1495,7 @@ async def _stream_chat(
                 session = session_manager.get_session(
                     channel="desktop",
                     chat_id=conversation_id,
-                    user_id="desktop_user",
+                    user_id=_chat_user(request),
                     create_if_missing=True,
                 )
                 if session:
@@ -2380,7 +2386,7 @@ async def _stream_org_command_chat(
             session = session_manager.get_session(
                 channel="desktop",
                 chat_id=conversation_id,
-                user_id="desktop_user",
+                user_id=_chat_user(request),
                 create_if_missing=True,
             )
             if session is None:
@@ -2427,7 +2433,7 @@ async def _stream_org_command_chat(
             session = session_manager.get_session(
                 channel="desktop",
                 chat_id=conversation_id,
-                user_id="desktop_user",
+                user_id=_chat_user(request),
                 create_if_missing=True,
             )
             if session:
@@ -2480,7 +2486,7 @@ async def _stream_org_command_chat(
                     source=OrgCommandSource(
                         channel="desktop",
                         chat_id=conversation_id,
-                        user_id="desktop_user",
+                        user_id=_chat_user(request),
                         client_id=client_id,
                     ),
                     origin_surface=OrgCommandSurface.DESKTOP_CHAT,
@@ -2596,7 +2602,7 @@ async def _stream_org_command_chat(
                         session = session_manager.get_session(
                             channel="desktop",
                             chat_id=conversation_id,
-                            user_id="desktop_user",
+                            user_id=_chat_user(request),
                             create_if_missing=True,
                         )
                         if session:
