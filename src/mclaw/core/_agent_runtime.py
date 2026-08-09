@@ -105,6 +105,7 @@ from ..tools.handlers.powershell import create_handler as create_powershell_hand
 from ..tools.handlers.profile import create_handler as create_profile_handler
 from ..tools.handlers.scheduled import create_handler as create_scheduled_handler
 from ..tools.handlers.search import create_handler as create_search_handler
+from ..tools.handlers.knowledge import create_handler as create_knowledge_handler
 from ..tools.handlers.skill_store import create_handler as create_skill_store_handler
 
 # NOTE: ``create_skills_handler`` is imported lazily inside ``_init_handlers``
@@ -1780,6 +1781,9 @@ class Agent:
 
         # Semantic Search
         self.handler_registry.register("search", create_search_handler(self))
+
+        # Knowledge Base Search
+        self.handler_registry.register("knowledge", create_knowledge_handler(self))
 
         # Mode Switch
         self.handler_registry.register("mode", create_mode_handler(self))

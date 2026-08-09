@@ -355,6 +355,11 @@ export function Sidebar({
           </div>
         )}
 
+        {/* ── Knowledge Base ── */}
+        <div className={`navItem ${view === "knowledge" ? "navItemActive" : ""}`} onClick={() => onViewChange("knowledge")} role="button" tabIndex={0} title={t("sidebar.knowledge")}>
+          <IconBook size={16} /> {!collapsed && <span>{t("sidebar.knowledge")}</span>}
+        </div>
+
         {/* ── Group: Store ── */}
         {storeVisible && (
           <>

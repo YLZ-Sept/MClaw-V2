@@ -20,6 +20,7 @@ import logging
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -556,22 +557,16 @@ async def hub_search_agents(
     configured" case (exploratory v10 issue #17) was masking real
     failures and surfacing scary error toasts in normal operation.
     """
-    client = _get_hub_client()
-    try:
-        result = await client.search(query=q, category=category, sort=sort, page=page, limit=limit)
-        return result
-    except Exception as e:
-        logger.warning(f"Hub search agents unavailable (remote platform may be offline): {e}")
-        return {
-            "items": [],
-            "total_count": 0,
-            "page": page,
-            "has_next": False,
-            "available": False,
-            "reason": "store_not_configured",
-        }
-    finally:
-        await client.close()
+    # Agent Store has no external provider yet (mclaw.ai is not ready);
+    # short-circuit to avoid slow/timeout proxy calls that return bad data.
+    return {
+        "items": [],
+        "total_count": 0,
+        "page": page,
+        "has_next": False,
+        "available": False,
+        "reason": "agent_store_not_available",
+    }
 
 
 @router.get("/api/hub/agents/{agent_id}")
@@ -664,6 +659,8 @@ async def hub_search_skills(
             page=page,
             limit=limit,
         )
+        result["provider"] = client.provider
+        result["available"] = True
         return result
     except Exception as e:
         logger.warning(f"Hub search skills unavailable (remote platform may be offline): {e}")
@@ -705,22 +702,39 @@ async def hub_skill_detail(skill_id: str):
 @router.post("/api/hub/skills/{skill_id}/install")
 async def hub_install_skill(request: Request, skill_id: str):
     """Get skill info from platform and install locally."""
-    client = _get_skill_client()
+    # Allow frontend to pass install_url directly (volces/skillhub)
+    body: dict[str, Any] = {}
     try:
-        detail = await client.get_detail(skill_id)
-    except Exception as e:
-        logger.warning(f"Hub skill install - cannot reach platform: {e}")
-        raise HTTPException(
-            status_code=502,
-            detail=_hub_unavailable_detail(
-                "skill_store",
-                "远程 Skill Store 暂不可用，无法安装。",
-                "可在「技能管理 → 浏览市场」通过 skills.sh 安装，或使用 install_skill 从 GitHub 安装。",
-            ),
-        )
+        body = await request.json()
+    except Exception:
+        pass
+    client = _get_skill_client()
 
-    skill = detail.get("skill", detail)
-    install_url = skill.get("installUrl", "")
+    install_url = body.get("install_url", "")
+
+    if not install_url:
+        # Fallback: get install_url from platform detail API
+        try:
+            detail = await client.get_detail(skill_id)
+        except Exception as e:
+            logger.warning(f"Hub skill install - cannot reach platform: {e}")
+            raise HTTPException(
+                status_code=502,
+                detail=_hub_unavailable_detail(
+                    "skill_store",
+                    "远程 Skill Store 暂不可用，无法安装。",
+                    "可在「技能管理 → 浏览市场」通过 skills.sh 安装，或使用 install_skill 从 GitHub 安装。",
+                ),
+            )
+
+        skill = detail.get("skill", detail)
+        install_url = skill.get("installUrl") or skill.get("install_url") or ""
+        if not install_url:
+            repo = skill.get("sourceRepo") or skill.get("source_repo") or ""
+            name = skill.get("name", "")
+            if repo and name:
+                install_url = f"{repo}@{name}"
+
     if not install_url:
         await client.close()
         raise HTTPException(status_code=400, detail="该 Skill 没有安装地址")
@@ -736,7 +750,7 @@ async def hub_install_skill(request: Request, skill_id: str):
 
     return {
         "message": "Skill installed from Store",
-        "skill_name": skill.get("name", skill_id),
+        "skill_name": install_url.rsplit("@", 1)[-1] if "@" in install_url else skill_id,
         "skill_dir": str(skill_dir),
-        "trust_level": skill.get("trustLevel", "community"),
+        "trust_level": "community",
     }

@@ -7,16 +7,23 @@ interface Skill {
   id: string;
   name: string;
   description: string;
-  category: string;
-  trustLevel: "official" | "certified" | "community";
+  display_description?: string;
+  category?: string;
+  trustLevel?: "official" | "certified" | "community";
   authorName?: string;
   installCount: number;
+  download_count?: number;
   avgRating?: number;
   ratingCount?: number;
+  rating?: number;
   version?: string;
   githubStars?: number;
   sourceRepo?: string;
+  source_repo?: string;
+  slug?: string;
   license?: string;
+  keywords?: string;
+  provider?: string;
 }
 
 interface SkillStoreViewProps {
@@ -62,8 +69,8 @@ export function SkillStoreView({ apiBaseUrl, visible }: SkillStoreViewProps) {
       if (trustLevel) params.set("trust_level", trustLevel);
       const resp = await safeFetch(`${apiBaseUrl}/api/hub/skills?${params}`);
       const data = await resp.json();
-      setSkills(data.skills || data.data || []);
-      setTotal(data.total || 0);
+      setSkills(data.items || data.skills || data.data || []);
+      setTotal(data.total || data.total_count || 0);
     } catch (e: any) {
       setError(e.message || t("skillStore.connectFail"));
       setSkills([]);
@@ -80,8 +87,11 @@ export function SkillStoreView({ apiBaseUrl, visible }: SkillStoreViewProps) {
     const key = skillUniqueKey(skill);
     setInstallingSet(prev => { const next = new Set(prev); next.add(key); return next; });
     try {
+      const installUrl = (skill as any).install_url || "";
       const resp = await safeFetch(`${apiBaseUrl}/api/hub/skills/${skill.id}/install`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ install_url: installUrl }),
         signal: AbortSignal.timeout(180_000),
       });
       const data = await resp.json();
@@ -116,23 +126,26 @@ export function SkillStoreView({ apiBaseUrl, visible }: SkillStoreViewProps) {
           <select value={trustLevel} onChange={(e) => { setTrustLevel(e.target.value); setPage(1); }} style={{ width: "auto", minWidth: 0 }}>
             <option value="">{t("skillStore.allTrust")}</option>
             <option value="official">{t("skillStore.trustOfficial")}</option>
-            <option value="certified">{t("skillStore.trustCertified")}</option>
             <option value="community">{t("skillStore.trustCommunity")}</option>
           </select>
           <select value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }} style={{ width: "auto", minWidth: 0 }}>
             <option value="">{t("skillStore.allCategories")}</option>
-            <option value="general">{t("skillStore.catGeneral")}</option>
-            <option value="development">{t("skillStore.catDevelopment")}</option>
-            <option value="productivity">{t("skillStore.catProductivity")}</option>
-            <option value="data">{t("skillStore.catData")}</option>
-            <option value="creative">{t("skillStore.catCreative")}</option>
-            <option value="communication">{t("skillStore.catCommunication")}</option>
+            <option value="dev-programming">{t("skillStore.catDevelopment")}</option>
+            <option value="office-efficiency">{t("skillStore.catProductivity")}</option>
+            <option value="ai-agent">{t("skillStore.catAiAgent")}</option>
+            <option value="content-creation">{t("skillStore.catCreative")}</option>
+            <option value="data-analysis">{t("skillStore.catData")}</option>
+            <option value="business-ops">{t("skillStore.catBusiness")}</option>
+            <option value="education">{t("skillStore.catEducation")}</option>
+            <option value="design-media">{t("skillStore.catDesign")}</option>
+            <option value="knowledge-management">{t("skillStore.catKnowledge")}</option>
+            <option value="life-service">{t("skillStore.catLife")}</option>
+            <option value="it-ops-security">{t("skillStore.catItOps")}</option>
           </select>
           <select value={sort} onChange={(e) => { setSort(e.target.value); setPage(1); }} style={{ width: "auto", minWidth: 0 }}>
-            <option value="installs">{t("skillStore.sortInstalls")}</option>
+            <option value="downloads">{t("skillStore.sortInstalls")}</option>
             <option value="rating">{t("skillStore.sortRating")}</option>
             <option value="newest">{t("skillStore.sortNewest")}</option>
-            <option value="stars">{t("skillStore.sortStars")}</option>
           </select>
           <button onClick={fetchSkills} disabled={loading} style={{ whiteSpace: "nowrap" }}>
             {loading ? t("skillStore.searching") : t("common.search")}
@@ -158,7 +171,9 @@ export function SkillStoreView({ apiBaseUrl, visible }: SkillStoreViewProps) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
         {skills.map((s) => {
-          const badge = trustBadge(s.trustLevel);
+          const badge = trustBadge(s.trustLevel || "community");
+          const desc = s.display_description || s.description || "";
+          const installs = s.download_count ?? s.installCount;
           const uk = skillUniqueKey(s);
           return (
             <div key={uk} className="card" style={{ position: "relative" }}>
@@ -172,10 +187,10 @@ export function SkillStoreView({ apiBaseUrl, visible }: SkillStoreViewProps) {
                 {s.name}
               </div>
               <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8, lineHeight: 1.5 }}>
-                {s.description?.slice(0, 120) || t("skillStore.noDesc")}
+                {desc.slice(0, 120) || t("skillStore.noDesc")}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "var(--muted)", marginBottom: 8, flexWrap: "wrap" }}>
-                <span>{t("skillStore.installs", { count: s.installCount })}</span>
+                <span>{t("skillStore.installs", { count: installs })}</span>
                 {s.avgRating != null && s.avgRating > 0 && <span>{s.avgRating.toFixed(1)}</span>}
                 {s.githubStars != null && s.githubStars > 0 && <span>{s.githubStars} stars</span>}
                 {s.version && <span>v{s.version}</span>}

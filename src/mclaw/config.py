@@ -903,6 +903,10 @@ class Settings(BaseSettings):
         default="https://mclaw.ai/api",
         description="Mclaw Platform API base URL for Agent Hub and Skill Store",
     )
+    hub_provider: str = Field(
+        default="skillhub",
+        description="Skill Store provider: mclaw | volces (火山引擎 Find-Skill) | skillhub (腾讯 SkillHub)",
+    )
     hub_api_key: str = Field(
         default="",
         description="Mclaw Platform API Key (ak_live_...)",

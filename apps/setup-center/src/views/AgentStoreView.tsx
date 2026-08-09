@@ -48,8 +48,22 @@ export function AgentStoreView({ apiBaseUrl, visible }: AgentStoreViewProps) {
       if (category) params.set("category", category);
       const resp = await safeFetch(`${apiBaseUrl}/api/hub/agents?${params}`);
       const data = await resp.json();
-      setAgents(data.agents || data.data || []);
-      setTotal(data.total || 0);
+      // Handle nested response format from different backends:
+      // mclaw: {code:0, data:{skills:[...]}}
+      // degraded: {items:[], available:false}
+      let items: any[] = [];
+      const raw = data?.items ?? data?.agents ?? data?.data;
+      if (Array.isArray(raw)) {
+        items = raw;
+      } else if (raw && typeof raw === "object") {
+        items = raw.agents || raw.skills || raw.items || [];
+        if (!Array.isArray(items)) items = [];
+      }
+      setAgents(items);
+      setTotal(data?.total || data?.total_count || items.length);
+      if ((data?.available === false || data?.code !== 0) && items.length === 0) {
+        setError(t("agentStore.notAvailable"));
+      }
     } catch (e: any) {
       setError(e.message || t("agentStore.connectFail"));
       setAgents([]);

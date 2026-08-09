@@ -38,6 +38,7 @@ type AgentProfile = {
   identity_mode?: string;
   memory_mode?: string;
   memory_inherit_global?: boolean;
+  knowledge_collections?: string[];
   name_i18n?: Record<string, string>;
   description_i18n?: Record<string, string>;
 };
@@ -92,6 +93,7 @@ const EMPTY_PROFILE: AgentProfile = {
   identity_mode: "shared",
   memory_mode: "shared",
   memory_inherit_global: true,
+  knowledge_collections: [],
 };
 
 type CategoryInfo = {
@@ -179,6 +181,7 @@ export function AgentManagerView({
   const [availableSkills, setAvailableSkills] = useState<SkillItem[]>([]);
   const [availableToolCategories, setAvailableToolCategories] = useState<ToolCategoryItem[]>([]);
   const [availableMcpServers, setAvailableMcpServers] = useState<McpServerItem[]>([]);
+  const [availableCollections, setAvailableCollections] = useState<{ id: string; name: string; description: string; doc_count: number }[]>([]);
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [iconCat, setIconCat] = useState("common");
@@ -331,6 +334,16 @@ export function AgentManagerView({
     }
   }, [apiBaseUrl]);
 
+  const fetchCollections = useCallback(async () => {
+    try {
+      const res = await safeFetch(`${apiBaseUrl}/api/knowledge/collections`);
+      const data = await res.json();
+      setAvailableCollections(Array.isArray(data) ? data : (data.collections || []));
+    } catch {
+      /* knowledge endpoint may not be available */
+    }
+  }, [apiBaseUrl]);
+
   const browserDownloadJson = useCallback((data: unknown, filename: string) => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -439,6 +452,7 @@ export function AgentManagerView({
       fetchToolCategories();
       fetchMcpServers();
       fetchModels();
+      fetchCollections();
     }
   }, [
     visible,
@@ -447,6 +461,7 @@ export function AgentManagerView({
     fetchToolCategories,
     fetchMcpServers,
     fetchModels,
+    fetchCollections,
   ]);
 
   useEffect(() => {
@@ -499,6 +514,7 @@ export function AgentManagerView({
       mcp_mode: profile.mcp_mode || "all",
       skills: profile.skills || [],
       skills_mode: profile.skills_mode || "all",
+      knowledge_collections: profile.knowledge_collections || [],
     });
     setIsCreating(false);
     setEditorOpen(true);
@@ -594,6 +610,7 @@ export function AgentManagerView({
         identity_mode: editingProfile.identity_mode || "shared",
         memory_mode: editingProfile.memory_mode || "shared",
         memory_inherit_global: editingProfile.memory_inherit_global ?? true,
+        knowledge_collections: editingProfile.knowledge_collections || [],
       };
 
       const url = isCreating
@@ -1587,6 +1604,54 @@ export function AgentManagerView({
                   </div>
                 </>
               )}
+            </div>
+
+            {/* Knowledge Base */}
+            <div className="space-y-1.5">
+              <Label className="text-xs opacity-70">{t("agentManager.knowledgeBase")}</Label>
+              {availableCollections.length === 0 ? (
+                <div className="rounded-md border px-3 py-4 text-center text-[12px] text-muted-foreground">
+                  {t("agentManager.noKnowledgeCollections")}
+                </div>
+              ) : (
+                <div className="max-h-[180px] overflow-y-auto rounded-md border p-1">
+                  {availableCollections.map((coll) => {
+                    const checked = (editingProfile.knowledge_collections || []).includes(coll.id);
+                    return (
+                      <label
+                        key={coll.id}
+                        className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] transition-colors ${
+                          checked ? "bg-primary/8" : "hover:bg-accent/50"
+                        }`}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => {
+                            setEditingProfile((prev) => {
+                              const prevList = prev.knowledge_collections || [];
+                              const next = prevList.includes(coll.id)
+                                ? prevList.filter((id) => id !== coll.id)
+                                : [...prevList, coll.id];
+                              return { ...prev, knowledge_collections: next };
+                            });
+                          }}
+                          className="mt-0.5"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">{coll.name}</span>
+                          <span className="block truncate text-[11px] text-muted-foreground">
+                            {coll.description || t("agentManager.knowledgeCollectionDesc")}
+                          </span>
+                        </span>
+                        <Badge variant="outline" className="shrink-0 text-[10px] font-normal">
+                          {t("agentManager.knowledgeDocCount", { count: coll.doc_count })}
+                        </Badge>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground">{t("agentManager.knowledgeBaseHint")}</p>
             </div>
 
             {/* Preferred Endpoint */}

@@ -84,7 +84,7 @@ TOOL_CATEGORIES: dict[str, list[str]] = {
         "update_scheduled_task",
         "trigger_scheduled_task",
     ],
-    "code": ["read_lints", "lsp", "semantic_search"],
+    "code": ["read_lints", "lsp", "semantic_search", "knowledge_search"],
     "profile": [
         "get_user_profile",
         "update_user_profile",

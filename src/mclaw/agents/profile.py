@@ -202,6 +202,9 @@ class AgentProfile:
     runtime_env_dependencies: list[str] = field(default_factory=list)
     runtime_env_python: str | None = None
 
+    # 知识库绑定
+    knowledge_collections: list[str] = field(default_factory=list)
+
     # Execution constraints (inspired by Claude Code's BaseAgentDefinition)
     max_turns: int | None = None  # Max reasoning iterations per delegation
     background: bool = False  # Force background execution
@@ -619,6 +622,7 @@ class ProfileStore:
             "runtime_env_mode",
             "runtime_env_dependencies",
             "runtime_env_python",
+            "knowledge_collections",
         }
     )
 

@@ -63,6 +63,7 @@ from .routes import (
     skills,
     token_stats,
     upload,
+    knowledge,
     wechat_onboard,
     wecom_onboard,
     workspace_io,
@@ -1109,6 +1110,7 @@ def create_app(
     app.include_router(mcp.router, tags=["MCP"])
     app.include_router(memory.router, tags=["记忆"])
     app.include_router(memory_repair.router, tags=["记忆修复"])
+    app.include_router(knowledge.router, tags=["知识库"])
     app.include_router(scheduler.router, tags=["定时任务"])
     app.include_router(pending_approvals.router, tags=["待审批"])
     app.include_router(optional_features.router, tags=["可选功能"])
@@ -1684,6 +1686,27 @@ def create_app(
                 )
         except Exception as e:  # noqa: BLE001 -- never block startup
             logger.debug("[Startup] Frontend bundle freshness check skipped: %s", e)
+
+    # ── KnowledgeManager 初始化 ──────────────────────────────────────────
+    @app.on_event("startup")
+    async def _init_knowledge_manager() -> None:
+        """初始化 KnowledgeManager（后台加载 ChromaDB，不阻塞启动）。"""
+        try:
+            from mclaw.config import settings as _settings
+
+            project_root = getattr(_settings, "project_root", None)
+            if project_root is None:
+                project_root = Path.cwd()
+            data_dir = Path(project_root) / "data" / "knowledge"
+
+            from mclaw.memory.knowledge_manager import KnowledgeManager
+            from mclaw.api.routes.knowledge import set_knowledge_manager
+
+            km = KnowledgeManager(data_dir=data_dir)
+            set_knowledge_manager(km)
+            logger.info("[Startup] KnowledgeManager initialized (data_dir=%s)", data_dir)
+        except Exception as e:
+            logger.warning("[Startup] KnowledgeManager init failed (non-fatal): %s", e)
 
     # ------------------------------------------------------------
     # Sprint 16 P0: close aiosqlite connections held by loaded plugins.
