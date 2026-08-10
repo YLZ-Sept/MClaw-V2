@@ -3,14 +3,13 @@ import { useTranslation } from "react-i18next";
 import type { StepId, Step, ViewId, PluginUIApp } from "../types";
 import {
   IconChat, IconIM, IconSkills, IconStatus, IconConfig,
-  IconChevronDown, IconChevronRight, IconGlobe,
+  IconChevronDown, IconChevronRight,
   IconZap, IconPlug, IconCalendar,
-  IconBug, IconBrain, IconGitHub, IconUsers, IconBot,
+  IconBrain, IconUsers, IconBot,
   IconGear, IconBook, IconStorefront, IconPuzzle, IconFingerprint, IconLayoutGrid,
-  IconShield, IconRadar, IconBuilding, IconBarChart, IconRefresh,
+  IconShield, IconRadar, IconBuilding, IconBarChart,
 } from "../icons";
 import logoUrl from "../assets/logo-new.png";
-import { openExternalUrl } from "../platform";
 import { ReleaseNotesDialog, normalizeReleaseVersion } from "./ReleaseNotesDialog";
 
 export type SidebarProps = {
@@ -427,86 +426,6 @@ export function Sidebar({
       </div>
 
       {/* Version info + website and feedback links at sidebar bottom */}
-      {!collapsed && (
-        <div style={{
-          padding: "10px 16px",
-          borderTop: "1px solid var(--line)",
-          fontSize: 11,
-          lineHeight: 1.6,
-          flexShrink: 0,
-        }}>
-          <div className="sidebarVersionRow">
-            <div
-              onClick={() => setReleaseNotesOpen(true)}
-              title={t("version.releaseNotesButton")}
-              className="sidebarVersionText sidebarVersionLink"
-            >
-              {isWeb ? "Web" : "Desktop"} v{desktopVersion}{import.meta.env.VITE_PREVIEW_BUILD === "true" && <span style={{ marginLeft: 6, color: "#e8a735", fontWeight: 600, opacity: 1 }}>预览版</span>}
-            </div>
-            {onCheckForUpdate && (
-              <button
-                type="button"
-                className="sidebarUpdateButton"
-                onClick={() => { void onCheckForUpdate(); }}
-                disabled={updateCheckPending}
-                title={updateCheckPending ? t("version.checking") : t("version.checkNow")}
-                aria-label={updateCheckPending ? t("version.checking") : t("version.checkNow")}
-              >
-                <IconRefresh size={14} className={updateCheckPending ? "spinIcon" : undefined} />
-              </button>
-            )}
-          </div>
-          {backendVersion && <div className="sidebarVersionText">Backend v{backendVersion}</div>}
-          {!backendVersion && serviceRunning && <div className="sidebarVersionText">Backend: -</div>}
-          <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <span
-              onClick={() => openExternalUrl("http://ynmbkj.cn")}
-              style={{ color: "var(--accent, #5B8DEF)", textDecoration: "none", opacity: 1, display: "inline-flex", alignItems: "center", gap: 3, cursor: "pointer" }}
-              onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-              onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-            >
-              <IconGlobe size={11} />
-              ynmbkj.cn
-            </span>
-            {serviceRunning && (
-              <span
-                onClick={() => onViewChange("my_feedback")}
-                title={t("sidebar.myFeedback")}
-                style={{ cursor: "pointer", opacity: 1, color: view === "my_feedback" ? "var(--fg)" : "var(--accent, #5B8DEF)", display: "inline-flex", alignItems: "center", gap: 2, position: "relative" }}
-                onMouseEnter={(e) => { const s = e.currentTarget.querySelector<HTMLElement>(".myFeedbackText"); if (s) s.style.textDecoration = "underline"; }}
-                onMouseLeave={(e) => { const s = e.currentTarget.querySelector<HTMLElement>(".myFeedbackText"); if (s) s.style.textDecoration = "none"; }}
-              >
-                <IconBug size={12} />
-                <span className="myFeedbackText" style={{ fontSize: 11 }}>{t("sidebar.myFeedback")}</span>
-                {(unreadFeedbackCount ?? 0) > 0 && (
-                  <span style={{
-                    position: "absolute", top: -4, right: -6,
-                    width: 7, height: 7, borderRadius: "50%",
-                    background: "#ef4444",
-                  }} />
-                )}
-              </span>
-            )}
-            <span
-              onClick={() => onViewChange("docs")}
-              style={{ color: "var(--accent, #5B8DEF)", textDecoration: "none", opacity: 1, display: "inline-flex", alignItems: "center", gap: 3, cursor: "pointer" }}
-              onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-              onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-              title={t("sidebar.docs")}
-            >
-              <IconBook size={12} />
-              {t("sidebar.docs")}
-            </span>
-            <span
-              onClick={() => openExternalUrl("https://github.com/YLZ-Sept/MClaw-V2")}
-              title="GitHub"
-              style={{ color: "var(--accent, #5B8DEF)", opacity: 1, display: "inline-flex", alignItems: "center", cursor: "pointer" }}
-            >
-              <IconGitHub size={13} />
-            </span>
-          </div>
-        </div>
-      )}
       {/* ── User status row ── */}
       {username && (
         <div style={{
@@ -551,71 +470,6 @@ export function Sidebar({
           version={releaseNotesVersion}
           onClose={() => setReleaseNotesOpen(false)}
         />
-      )}
-      {collapsed && (
-        <div style={{
-          padding: "8px 0",
-          borderTop: "1px solid var(--line)",
-          flexShrink: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 6,
-        }}>
-          <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
-            {onCheckForUpdate && (
-              <button
-                type="button"
-                className="sidebarCollapsedUpdateButton"
-                onClick={() => { void onCheckForUpdate(); }}
-                disabled={updateCheckPending}
-                title={updateCheckPending ? t("version.checking") : t("version.checkNow")}
-                aria-label={updateCheckPending ? t("version.checking") : t("version.checkNow")}
-              >
-                <IconRefresh size={14} className={updateCheckPending ? "spinIcon" : undefined} />
-              </button>
-            )}
-            <span
-              onClick={() => openExternalUrl("http://ynmbkj.cn")}
-              title="ynmbkj.cn"
-              style={{ color: "var(--accent, #5B8DEF)", opacity: 0.5, display: "flex", cursor: "pointer" }}
-            >
-              <IconGlobe size={14} />
-            </span>
-            {serviceRunning && (
-              <span
-                onClick={() => onViewChange("my_feedback")}
-                title={t("sidebar.myFeedback")}
-                style={{ color: view === "my_feedback" ? "var(--fg)" : "var(--accent, #5B8DEF)", opacity: view === "my_feedback" ? 1 : 0.5, display: "flex", cursor: "pointer", position: "relative" }}
-              >
-                <IconBug size={14} />
-                {(unreadFeedbackCount ?? 0) > 0 && (
-                  <span style={{
-                    position: "absolute", top: -2, right: -2,
-                    width: 6, height: 6, borderRadius: "50%",
-                    background: "#ef4444",
-                  }} />
-                )}
-              </span>
-            )}
-          </div>
-          <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
-            <span
-              onClick={() => onViewChange("docs")}
-              title={t("sidebar.docs")}
-              style={{ color: "var(--accent, #5B8DEF)", opacity: 0.5, display: "flex", cursor: "pointer" }}
-            >
-              <IconBook size={14} />
-            </span>
-            <span
-              onClick={() => openExternalUrl("https://github.com/YLZ-Sept/MClaw-V2")}
-              title="GitHub"
-              style={{ color: "var(--accent, #5B8DEF)", opacity: 0.5, display: "flex", cursor: "pointer" }}
-            >
-              <IconGitHub size={14} />
-            </span>
-          </div>
-        </div>
       )}
     </aside>
   );

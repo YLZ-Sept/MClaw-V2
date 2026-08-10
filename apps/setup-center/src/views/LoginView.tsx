@@ -83,7 +83,7 @@ export function LoginView({
         <img
           src={logoUrl}
           alt="Mclaw"
-          style={{ width: 56, height: 56, marginBottom: 12, borderRadius: 12 }}
+          style={{ width: 56, height: 56, margin: "0 auto 12px", borderRadius: 12, display: "block" }}
         />
         <h2 style={{
           margin: "0 0 8px",
@@ -91,16 +91,8 @@ export function LoginView({
           fontWeight: 600,
           color: "var(--text, #1e293b)",
         }}>
-          Mclaw Web
+          Mclaw V2
         </h2>
-        <p style={{
-          margin: "0 0 20px",
-          fontSize: 14,
-          color: "var(--text3, #64748b)",
-          lineHeight: 1.6,
-        }}>
-          {t("login.prompt")}
-        </p>
 
         {/* Server address display for Capacitor */}
         {IS_CAPACITOR && serverDisplay && (
@@ -232,57 +224,7 @@ export function LoginView({
           </button>
         )}
 
-        {/* Preview mode button */}
-        {onPreview && (
-          <button
-            type="button"
-            onClick={onPreview}
-            style={{
-              width: "100%",
-              marginTop: 10,
-              background: "none",
-              border: "none",
-              padding: "8px 0",
-              fontSize: 13,
-              color: "var(--text3, #94a3b8)",
-              cursor: "pointer",
-              textDecoration: "underline",
-              textUnderlineOffset: 3,
-            }}
-          >
-            {t("login.preview", { defaultValue: "跳过连接，预览界面" })}
-          </button>
-        )}
       </form>
-
-      <div style={{
-        marginTop: 16,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 6,
-      }}>
-        <p style={{
-          margin: 0,
-          fontSize: 12,
-          color: "var(--text3, #94a3b8)",
-        }}>
-          {t("login.hint")}
-        </p>
-        <a
-          href="https://mclaw.ai"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            fontSize: 12,
-            color: "var(--brand, #2563eb)",
-            textDecoration: "none",
-            opacity: 0.8,
-          }}
-        >
-          mclaw.ai - {t("login.downloadDesktop", { defaultValue: "下载桌面端" })}
-        </a>
-      </div>
     </div>
   );
 }
