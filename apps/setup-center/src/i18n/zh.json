@@ -4203,6 +4203,7 @@
     "documents": "文档列表",
     "noDocuments": "暂未上传文档",
     "uploadDocument": "上传文档",
+    "uploadFolder": "上传文件夹",
     "importUrl": "导入网页",
     "urlPlaceholder": "输入网页 URL...",
     "import": "导入",

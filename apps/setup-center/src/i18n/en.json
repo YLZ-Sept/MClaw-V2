@@ -4188,6 +4188,7 @@
     "documents": "Documents",
     "noDocuments": "No documents uploaded yet",
     "uploadDocument": "Upload Document",
+    "uploadFolder": "Upload Folder",
     "importUrl": "Import URL",
     "urlPlaceholder": "Enter webpage URL...",
     "import": "Import",

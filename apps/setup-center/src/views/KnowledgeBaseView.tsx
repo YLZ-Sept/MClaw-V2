@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import {
   Loader2, RefreshCw, Trash2, Search, Plus, Upload, Globe,
-  BookOpen, FileText, Database, Pencil,
+  BookOpen, FileText, Database, Pencil, FolderOpen,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -195,14 +195,41 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
     } catch { toast.error(t("common.failed")); }
   };
 
-  const doUploadFiles = async (files: FileList | null) => {
-    if (!files || !selectedColl) return;
-    for (const file of Array.from(files)) {
+  /** 递归遍历拖放的目录条目，收集所有文件 */
+  const collectFilesFromEntries = async (entries: any[]): Promise<File[]> => {
+    const files: File[] = [];
+    for (const entry of entries) {
+      if (entry.isFile) {
+        const file: File = await new Promise((resolve) => entry.file(resolve));
+        files.push(file);
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        const readAllEntries = (): Promise<any[]> =>
+          new Promise((resolve) => {
+            const all: any[] = [];
+            const read = () => {
+              reader.readEntries((batch: any[]) => {
+                if (batch.length) { all.push(...batch); read(); }
+                else resolve(all);
+              });
+            };
+            read();
+          });
+        const subEntries = await readAllEntries();
+        const subFiles = await collectFilesFromEntries(subEntries);
+        files.push(...subFiles);
+      }
+    }
+    return files;
+  };
+
+  const uploadFileList = async (files: File[]) => {
+    if (!files.length || !selectedColl) return;
+    const token = localStorage.getItem("mclaw_access_token");
+    for (const file of files) {
       const formData = new FormData();
       formData.append("file", file);
       try {
-        // fetch with auth header (no timeout — ingestion can be slow)
-        const token = localStorage.getItem("mclaw_access_token");
         const headers: Record<string, string> = {};
         if (token) headers["Authorization"] = `Bearer ${token}`;
         const res = await fetch(`${API}/api/knowledge/collections/${selectedColl.id}/upload`, {
@@ -220,6 +247,11 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
     }
     await loadDocuments(selectedColl.id);
     await loadCollections();
+  };
+
+  const doUploadFiles = async (files: FileList | null) => {
+    if (!files || !selectedColl) return;
+    await uploadFileList(Array.from(files));
   };
 
   const doImportUrl = async () => {
@@ -452,7 +484,22 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
           className="flex-1 min-w-0 space-y-4 relative"
           onDragOver={(e) => { e.preventDefault(); if (selectedColl) setDragOver(true); }}
           onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
-          onDrop={(e) => { e.preventDefault(); setDragOver(false); if (selectedColl && e.dataTransfer.files.length) doUploadFiles(e.dataTransfer.files); }}
+          onDrop={async (e) => {
+            e.preventDefault(); setDragOver(false);
+            if (!selectedColl || !e.dataTransfer.items.length) return;
+            // 支持文件夹拖放
+            const entries: any[] = [];
+            for (let i = 0; i < e.dataTransfer.items.length; i++) {
+              const entry = e.dataTransfer.items[i].webkitGetAsEntry?.();
+              if (entry) entries.push(entry);
+            }
+            if (entries.length) {
+              const files = await collectFilesFromEntries(entries);
+              if (files.length) await uploadFileList(files);
+            } else if (e.dataTransfer.files.length) {
+              doUploadFiles(e.dataTransfer.files);
+            }
+          }}
         >
           {/* Toolbar */}
           {selectedColl && (
@@ -465,6 +512,19 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
                 type="file"
                 multiple
                 accept=".pdf,.md,.txt,.docx,.html,.htm,.xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(e) => doUploadFiles(e.target.files)}
+              />
+              <Button size="sm" variant="outline" onClick={() => document.getElementById("kb-folder-input")?.click()}>
+                <FolderOpen size={14} className="mr-1" /> {t("knowledge.uploadFolder")}
+              </Button>
+              <input
+                id="kb-folder-input"
+                type="file"
+                /* @ts-ignore */
+                webkitdirectory=""
+                /* @ts-ignore */
+                directory=""
                 className="hidden"
                 onChange={(e) => doUploadFiles(e.target.files)}
               />
