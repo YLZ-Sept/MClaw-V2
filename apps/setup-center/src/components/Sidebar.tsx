@@ -194,7 +194,7 @@ export function Sidebar({
 
   const capViews: ViewId[] = ["skills", "mcp", "plugins", "memory", "scheduler"];
   const monViews: ViewId[] = ["token_stats", "skill_usage", "security", "pending_approvals"];
-  const maViews: ViewId[] = ["dashboard", "org_editor", "pixel_office", "agent_manager"];
+  const maViews: ViewId[] = ["dashboard", "org_editor", "pixel_office", "agent_manager", "digital_employee"];
   const stViews: ViewId[] = ["agent_store", "skill_store"];
 
   const prevViewRef = useRef(view);
@@ -353,6 +353,9 @@ export function Sidebar({
             </div>
             <div className={`navItem ${view === "agent_manager" ? "navItemActive" : ""}`} onClick={() => onViewChange("agent_manager")} role="button" tabIndex={0} title={t("sidebar.agentManager")}>
               <IconBot size={16} /> {!collapsed && <span>{t("sidebar.agentManager")}</span>}
+            </div>
+            <div className={`navItem ${view === "digital_employee" ? "navItemActive" : ""}`} onClick={() => onViewChange("digital_employee")} role="button" tabIndex={0} title="数字员工">
+              <IconUsers size={16} /> {!collapsed && <span>数字员工</span>}
             </div>
           </div>
         )}

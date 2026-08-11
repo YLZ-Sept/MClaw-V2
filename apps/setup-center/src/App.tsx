@@ -23,6 +23,7 @@ const KnowledgeBaseView = lazy(() => import("./views/KnowledgeBaseView").then(m 
 const IdentityView = lazy(() => import("./views/IdentityView").then(m => ({ default: m.IdentityView })));
 const AgentDashboardView = lazy(() => import("./views/AgentDashboardView").then(m => ({ default: m.AgentDashboardView })));
 const AgentManagerView = lazy(() => import("./views/AgentManagerView").then(m => ({ default: m.AgentManagerView })));
+const DigitalEmployeeView = lazy(() => import("./views/DigitalEmployeeView").then(m => ({ default: m.DigitalEmployeeView })));
 const OrgEditorView = lazy(() => import("./views/OrgEditorView").then(m => ({ default: m.OrgEditorView })));
 const PixelOfficeView = lazy(() => import("./views/PixelOfficeView").then(m => ({ default: m.PixelOfficeView })));
 const AgentStoreView = lazy(() => import("./views/AgentStoreView").then(m => ({ default: m.AgentStoreView })));
@@ -4813,6 +4814,9 @@ function MainApp() {
           visible={view === "agent_manager"}
         />
       );
+    }
+    if (view === "digital_employee") {
+      return <DigitalEmployeeView />;
     }
     if (view === "agent_store") {
       return (
