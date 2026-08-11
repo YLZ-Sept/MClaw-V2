@@ -338,7 +338,7 @@ export function AgentManagerView({
     try {
       const res = await safeFetch(`${apiBaseUrl}/api/knowledge/collections`);
       const data = await res.json();
-      setAvailableCollections(Array.isArray(data) ? data : (data.collections || []));
+      setAvailableCollections(Array.isArray(data) ? data : (data.items ?? data.collections ?? []));
     } catch {
       /* knowledge endpoint may not be available */
     }

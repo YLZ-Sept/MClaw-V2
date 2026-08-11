@@ -674,23 +674,26 @@ class KnowledgeManager:
         logger.info(f"[KnowledgeManager] 创建 collection: {coll.name} ({coll.id}) ws={workspace_id}")
         return coll
 
-    def list_collections(self, workspace_id: str | None = None) -> list[KnowledgeCollection]:
+    def list_collections(self, workspace_id: str | None = None,
+                          offset: int = 0, limit: int = 50) -> tuple[list[KnowledgeCollection], int]:
+        """列出 collections（分页），返回 (items, total)"""
         conn = self._get_conn()
+        count_sql = "SELECT COUNT(*) FROM kb_collections"
+        base_sql = (
+            "SELECT c.*, "
+            "  (SELECT COUNT(*) FROM kb_documents WHERE collection_id = c.id) AS doc_count, "
+            "  (SELECT COUNT(*) FROM kb_chunks WHERE collection_id = c.id) AS chunk_count "
+            "FROM kb_collections c"
+        )
+        params: tuple = ()
         if workspace_id:
-            rows = conn.execute(
-                "SELECT c.*, "
-                "  (SELECT COUNT(*) FROM kb_documents WHERE collection_id = c.id) AS doc_count, "
-                "  (SELECT COUNT(*) FROM kb_chunks WHERE collection_id = c.id) AS chunk_count "
-                "FROM kb_collections c WHERE c.workspace_id = ? ORDER BY c.updated_at DESC",
-                (workspace_id,),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT c.*, "
-                "  (SELECT COUNT(*) FROM kb_documents WHERE collection_id = c.id) AS doc_count, "
-                "  (SELECT COUNT(*) FROM kb_chunks WHERE collection_id = c.id) AS chunk_count "
-                "FROM kb_collections c ORDER BY c.updated_at DESC"
-            ).fetchall()
+            count_sql += " WHERE workspace_id = ?"
+            base_sql += " WHERE c.workspace_id = ?"
+            params = (workspace_id,)
+        base_sql += " ORDER BY c.updated_at DESC LIMIT ? OFFSET ?"
+
+        total = conn.execute(count_sql, params).fetchone()[0]  # type: ignore[arg-type]
+        rows = conn.execute(base_sql, params + (limit, offset)).fetchall()  # type: ignore[operator]
         conn.close()
         # sqlite3.Row 不支持 .get()，用 dict(r) 转换
         return [
@@ -703,7 +706,7 @@ class KnowledgeManager:
                 doc_count=r["doc_count"], chunk_count=r["chunk_count"],
             )
             for r in rows
-        ]
+        ], total
 
     def get_collection(self, collection_id: str) -> KnowledgeCollection | None:
         conn = self._get_conn()
@@ -807,14 +810,21 @@ class KnowledgeManager:
 
     # ── Document CRUD ───────────────────────────────────────────────────────
 
-    def list_documents(self, collection_id: str) -> list[KnowledgeDocument]:
+    def list_documents(self, collection_id: str, offset: int = 0,
+                        limit: int = 50) -> tuple[list[KnowledgeDocument], int]:
+        """列出文档（分页），返回 (items, total)"""
         conn = self._get_conn()
-        rows = conn.execute(
-            "SELECT * FROM kb_documents WHERE collection_id = ? ORDER BY created_at DESC",
+        total = conn.execute(
+            "SELECT COUNT(*) FROM kb_documents WHERE collection_id = ?",
             (collection_id,),
+        ).fetchone()[0]
+        rows = conn.execute(
+            "SELECT * FROM kb_documents WHERE collection_id = ? "
+            "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (collection_id, limit, offset),
         ).fetchall()
         conn.close()
-        return [_doc_from_row(r) for r in rows]
+        return [_doc_from_row(r) for r in rows], total
 
     def get_document(self, doc_id: str) -> KnowledgeDocument | None:
         conn = self._get_conn()

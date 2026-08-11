@@ -117,8 +117,9 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
   const loadCollections = useCallback(async () => {
     try {
       const res = await safeFetch(`${API}/api/knowledge/collections`);
-      const data = res.ok ? await res.json() : [];
-      setCollections(Array.isArray(data) ? data : []);
+      const data = res.ok ? await res.json() : null;
+      // 兼容分页格式 {items, total} 和旧数组格式
+      setCollections(Array.isArray(data) ? data : (data?.items ?? []));
     } catch {
       // silent for non-running backend
     }
@@ -130,7 +131,10 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
         safeFetch(`${API}/api/knowledge/collections/${collId}/documents`),
         safeFetch(`${API}/api/knowledge/collections/${collId}/stats`),
       ]);
-      if (docsRes.ok) setDocuments(await docsRes.json());
+      if (docsRes.ok) {
+        const data = await docsRes.json();
+        setDocuments(Array.isArray(data) ? data : (data?.items ?? []));
+      }
       if (statsRes.ok) setStats(await statsRes.json());
     } catch {
       // silent

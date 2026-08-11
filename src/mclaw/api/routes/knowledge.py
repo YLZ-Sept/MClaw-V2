@@ -115,6 +115,16 @@ class DeleteResponse(BaseModel):
     deleted_chunks: int = 0
 
 
+class PaginatedCollections(BaseModel):
+    items: list[Any]
+    total: int
+
+
+class PaginatedDocuments(BaseModel):
+    items: list[Any]
+    total: int
+
+
 class ErrorResponse(BaseModel):
     detail: str
 
@@ -186,12 +196,17 @@ def _check_collection_access(
 
 # ── Collection 路由 ────────────────────────────────────────────────────────────
 
-@router.get("/collections", response_model=list[CollectionResponse])
-async def list_collections(request: Request):
-    """列出当前工作区的 collections"""
+@router.get("/collections")
+async def list_collections(
+    request: Request,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """列出当前工作区的 collections（分页）"""
     km = get_knowledge_manager()
     user_id, workspace_id = _current_owner(request)
-    return [c.to_dict() for c in km.list_collections(workspace_id)]
+    items_list, total = km.list_collections(workspace_id, offset=offset, limit=limit)
+    return {"items": [c.to_dict() for c in items_list], "total": total}
 
 
 @router.post("/collections", response_model=CollectionResponse, status_code=201)
@@ -269,15 +284,20 @@ async def get_collection_stats(collection_id: str):
 
 # ── Document 路由 ──────────────────────────────────────────────────────────────
 
-@router.get("/collections/{collection_id}/documents", response_model=list[DocResponse])
-async def list_documents(request: Request, collection_id: str):
-    """列出 collection 中的文档"""
+@router.get("/collections/{collection_id}/documents")
+async def list_documents(
+    request: Request, collection_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """列出 collection 中的文档（分页）"""
     km = get_knowledge_manager()
     coll = km.get_collection(collection_id)
     user_id, _ws = _current_owner(request)
     _check_collection_access(coll.to_dict() if coll else None, user_id,
                              _is_admin(request, user_id))
-    return [d.to_dict() for d in km.list_documents(collection_id)]
+    items_list, total = km.list_documents(collection_id, offset=offset, limit=limit)
+    return {"items": [d.to_dict() for d in items_list], "total": total}
 
 
 @router.post("/collections/{collection_id}/upload", response_model=DocResponse, status_code=201)
