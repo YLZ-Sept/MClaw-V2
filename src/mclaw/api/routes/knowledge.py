@@ -226,7 +226,9 @@ async def upload_document(request: Request, collection_id: str, file: UploadFile
 
     upload_dir = km.data_dir / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
-    tmp_path = upload_dir / f"{int(time.time())}_{file.filename}"
+    # 文件夹上传时文件名可能含子目录路径，用 _ 替换防止路径穿越
+    safe_name = file.filename.replace("\\", "_").replace("/", "_")
+    tmp_path = upload_dir / f"{int(time.time())}_{safe_name}"
 
     try:
         content = await file.read()
