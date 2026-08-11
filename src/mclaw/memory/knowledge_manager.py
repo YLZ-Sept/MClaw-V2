@@ -67,12 +67,62 @@ def _lazy_import_chroma() -> bool:
 
 # ── 文本提取器 ─────────────────────────────────────────────────────────────────
 
+def _pdf_ocr_fallback(file_path: Path) -> str:
+    """图片型 PDF 的 OCR 回退：pdf2image → pytesseract / paddleocr"""
+    ocr_parts: list[str] = []
+
+    # 尝试 pdf2image + pytesseract
+    try:
+        from pdf2image import convert_from_path
+        import pytesseract
+        from PIL import Image
+
+        images = convert_from_path(file_path, dpi=200)
+        for i, img in enumerate(images):
+            t = pytesseract.image_to_string(img, lang="chi_sim+eng")
+            if t and t.strip():
+                ocr_parts.append(t.strip())
+        if ocr_parts:
+            logger.info(f"[OCR] pytesseract 从 {len(images)} 页中提取了 {len(ocr_parts)} 页文字")
+            return "\n\n".join(ocr_parts)
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning(f"[OCR] pytesseract 失败: {e}")
+
+    # 回退: paddleocr（纯 Python，无需系统依赖）
+    try:
+        from paddleocr import PaddleOCR
+        from pdf2image import convert_from_path
+
+        ocr = PaddleOCR(lang="ch", use_angle_cls=True, show_log=False)
+        images = convert_from_path(file_path, dpi=200)
+        for img in images:
+            import numpy as np
+            result = ocr.ocr(np.array(img), cls=True)
+            if result and result[0]:
+                lines = [line[1][0] for line in result[0] if line[1][0]]
+                if lines:
+                    ocr_parts.append("\n".join(lines))
+        if ocr_parts:
+            logger.info(f"[OCR] PaddleOCR 从 {len(images)} 页中提取了 {len(ocr_parts)} 页文字")
+            return "\n\n".join(ocr_parts)
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning(f"[OCR] PaddleOCR 失败: {e}")
+
+    return ""
+
+
 def _extract_text(file_path: Path, file_type: DocFileType) -> str:
     """从文件中提取纯文本"""
     if file_type == DocFileType.TEXT or file_type == DocFileType.MARKDOWN:
         return file_path.read_text(encoding="utf-8", errors="replace")
 
     if file_type == DocFileType.PDF:
+        text = ""
+        # 第 1 步: pdfplumber（文字型 PDF）
         try:
             import pdfplumber
             text_parts: list[str] = []
@@ -81,13 +131,13 @@ def _extract_text(file_path: Path, file_type: DocFileType) -> str:
                     t = page.extract_text()
                     if t:
                         text_parts.append(t)
-            return "\n\n".join(text_parts)
+            text = "\n\n".join(text_parts)
         except ImportError:
             # fallback to PyPDF2
             try:
                 from PyPDF2 import PdfReader
                 reader = PdfReader(str(file_path))
-                return "\n\n".join(
+                text = "\n\n".join(
                     page.extract_text() or "" for page in reader.pages
                 )
             except ImportError:
@@ -95,6 +145,14 @@ def _extract_text(file_path: Path, file_type: DocFileType) -> str:
                     "PDF 解析需要安装 pdfplumber 或 PyPDF2: "
                     "pip install pdfplumber"
                 )
+
+        # 第 2 步: 文字提取为空 → 可能是图片型 PDF，尝试 OCR
+        if not text.strip():
+            ocr_text = _pdf_ocr_fallback(file_path)
+            if ocr_text:
+                return ocr_text
+
+        return text
 
     if file_type == DocFileType.DOCX:
         try:
@@ -810,7 +868,15 @@ class KnowledgeManager:
         chunks = _chunk_text(text)
 
         if not chunks:
-            raise ValueError(f"文档内容为空: {file_path.name}")
+            suffix = file_path.suffix.lower()
+            hint = ""
+            if suffix == ".pdf":
+                hint = (
+                    "（PDF 可能为图片扫描件，文字提取为空。"
+                    "请安装 Tesseract OCR 和 pytesseract："
+                    "https://github.com/UB-Mannheim/tesseract/wiki）"
+                )
+            raise ValueError(f"文档内容为空: {file_path.name}{hint}")
 
         self._persist_chunks(doc, chunks)
         self._embed_chunks(doc, chunks)

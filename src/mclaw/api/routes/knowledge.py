@@ -236,6 +236,10 @@ async def upload_document(request: Request, collection_id: str, file: UploadFile
 
     try:
         doc = km.ingest_file(collection_id, tmp_path, uploaded_by=user_id)
+    except ValueError as e:
+        # 空内容等业务错误：保留文件，用户可下载后自行处理
+        logger.warning(f"文档摄入失败（保留文件）: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"文档摄入失败: {e}", exc_info=True)
         try:
