@@ -124,7 +124,7 @@ export function Sidebar({
     capabilities: false,
     apps: false,
     monitor: false,
-    multiAgent: true,
+    multiAgent: false,
     store: false,
   });
 

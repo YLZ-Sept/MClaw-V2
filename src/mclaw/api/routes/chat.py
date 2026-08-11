@@ -3204,6 +3204,18 @@ async def chat(request: Request, body: ChatRequest):
         body.endpoint = None
         body.endpoint_policy = "prefer"
 
+    # 数字员工：根据消息内容路由到最合适的 Agent
+    if getattr(body, "digital_employee_id", None) and not body.agent_profile_id:
+        from mclaw.digital_employee.manager import get_digital_employee_manager
+        try:
+            dem = get_digital_employee_manager()
+            routed_id, reason = dem.route(body.digital_employee_id, body.message or "")
+            if routed_id:
+                body.agent_profile_id = routed_id
+                logger.info(f"[Chat API] 数字员工路由: {reason}")
+        except Exception as e:
+            logger.warning(f"[Chat API] 数字员工路由失败: {e}")
+
     if body.agent_profile_id:
         from mclaw.agents.presets import SYSTEM_PRESETS
         from mclaw.agents.profile import get_profile_store

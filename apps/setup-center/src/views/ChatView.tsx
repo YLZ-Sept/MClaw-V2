@@ -1174,6 +1174,24 @@ export function ChatView({
   const [hasInputText, setHasInputText] = useState(false);
   const [selectedEndpoint, setSelectedEndpoint] = useState("auto");
   const [selectedEndpointPolicy, setSelectedEndpointPolicy] = useState<EndpointPolicy>("prefer");
+  const [selectedDigitalEmployee, setSelectedDigitalEmployee] = useState<string>("");
+  const [digitalEmployees, setDigitalEmployees] = useState<any[]>([]);
+
+  // 加载数字员工列表
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const token = localStorage.getItem("mclaw_access_token");
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(`${apiBaseUrl}/api/digital-employees`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          setDigitalEmployees(Array.isArray(data) ? data : []);
+        }
+      } catch { /* silent */ }
+    };
+    if (visible) load();
+  }, [apiBaseUrl, visible]);
   const [chatMode, setChatMode] = useState<"agent" | "plan" | "ask">("agent");
   const pendingCompletionActionsRef = useRef<MessageCompletionAction[]>([]);
   const [pendingApproval, setPendingApproval] = useState<PlanApprovalEvent | null>(null);
@@ -4061,6 +4079,7 @@ export function ChatView({
         thinking_mode: thinkingMode !== "auto" ? thinkingMode : null,
         thinking_depth: thinkingMode !== "off" ? thinkingDepth : null,
         agent_profile_id: selectedAgent,
+        digital_employee_id: selectedDigitalEmployee || null,
         org_mode: Boolean(effectiveOrgId),
         org_id: effectiveOrgId,
         org_node_id: effectiveOrgNodeId,
@@ -8130,6 +8149,40 @@ export function ChatView({
           <div className={`chatInputBox ${chatMode === "plan" ? "chatInputBoxPlan" : chatMode === "ask" ? "chatInputBoxAsk" : ""}`}>
             {/* Top row: compact model picker */}
             <div className="chatInputTop" data-testid="chat-input-pickers">
+              {/* 数字员工选择器 */}
+              {digitalEmployees.length > 0 && (
+                <div className="chatPickerGroup">
+                  <button
+                    data-slot="chat-picker"
+                    type="button"
+                    className="chatModelPickerBtn"
+                    style={{ fontSize: 11 }}
+                    onClick={() => setSelectedDigitalEmployee(selectedDigitalEmployee ? "" : (digitalEmployees[0]?.id || ""))}
+                    title={selectedDigitalEmployee ? "已选数字员工，点击取消" : "点击选择数字员工"}
+                  >
+                    <span className="chatModelPickerLabel" style={{ opacity: selectedDigitalEmployee ? 1 : 0.5 }}>
+                      {selectedDigitalEmployee
+                        ? `👤 ${digitalEmployees.find(d => d.id === selectedDigitalEmployee)?.name || "数字员工"}`
+                        : "👤 数字员工"}
+                    </span>
+                  </button>
+                  {digitalEmployees.length > 1 && (
+                    <div className="chatModelMenu" style={{ display: selectedDigitalEmployee ? "none" : "block", position: "absolute", top: "100%", left: 0, zIndex: 50, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, minWidth: 180, maxHeight: 200, overflow: "auto" }}>
+                      {digitalEmployees.map((de: any) => (
+                        <div
+                          key={de.id}
+                          className="chatModelMenuItem"
+                          onClick={() => { setSelectedDigitalEmployee(de.id); }}
+                          style={{ fontSize: 12 }}
+                        >
+                          <span>{de.icon || "🤖"}</span> {de.name}
+                          <span style={{ fontSize: 10, opacity: 0.5, marginLeft: "auto" }}>{de.agents?.length || 0} agents</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="chatPickerGroup" ref={modelMenuRef}>
                 <button
                   data-slot="chat-picker"
