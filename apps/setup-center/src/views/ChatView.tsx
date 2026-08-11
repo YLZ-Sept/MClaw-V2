@@ -1174,26 +1174,6 @@ export function ChatView({
   const [hasInputText, setHasInputText] = useState(false);
   const [selectedEndpoint, setSelectedEndpoint] = useState("auto");
   const [selectedEndpointPolicy, setSelectedEndpointPolicy] = useState<EndpointPolicy>("prefer");
-  const [selectedDigitalEmployee, setSelectedDigitalEmployee] = useState<string>("");
-  const [digitalEmployees, setDigitalEmployees] = useState<any[]>([]);
-  const [deMenuOpen, setDeMenuOpen] = useState(false);
-  const deMenuRef = useRef<HTMLDivElement | null>(null);
-
-  // 加载数字员工列表
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const token = localStorage.getItem("mclaw_access_token");
-        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await fetch(`${apiBaseUrl}/api/digital-employees`, { headers });
-        if (res.ok) {
-          const data = await res.json();
-          setDigitalEmployees(Array.isArray(data) ? data : []);
-        }
-      } catch { /* silent */ }
-    };
-    if (visible) load();
-  }, [apiBaseUrl, visible]);
   const [chatMode, setChatMode] = useState<"agent" | "plan" | "ask">("agent");
   const pendingCompletionActionsRef = useRef<MessageCompletionAction[]>([]);
   const [pendingApproval, setPendingApproval] = useState<PlanApprovalEvent | null>(null);
@@ -4080,8 +4060,7 @@ export function ChatView({
         endpoint_policy: selectedEndpoint === "auto" ? "prefer" : selectedEndpointPolicy,
         thinking_mode: thinkingMode !== "auto" ? thinkingMode : null,
         thinking_depth: thinkingMode !== "off" ? thinkingDepth : null,
-        agent_profile_id: selectedDigitalEmployee ? null : selectedAgent,
-        digital_employee_id: selectedDigitalEmployee || null,
+        agent_profile_id: selectedAgent,
         org_mode: Boolean(effectiveOrgId),
         org_id: effectiveOrgId,
         org_node_id: effectiveOrgNodeId,
@@ -8151,44 +8130,6 @@ export function ChatView({
           <div className={`chatInputBox ${chatMode === "plan" ? "chatInputBoxPlan" : chatMode === "ask" ? "chatInputBoxAsk" : ""}`}>
             {/* Top row: compact model picker */}
             <div className="chatInputTop" data-testid="chat-input-pickers">
-              {/* 数字员工选择器 */}
-              {digitalEmployees.length > 0 && (
-                <div className="chatPickerGroup" ref={deMenuRef}>
-                  <button
-                    data-slot="chat-picker"
-                    type="button"
-                    className="chatModelPickerBtn"
-                    onClick={() => setDeMenuOpen(v => !v)}
-                  >
-                    <span className="chatModelPickerLabel">
-                      {selectedDigitalEmployee
-                        ? `👤 ${digitalEmployees.find(d => d.id === selectedDigitalEmployee)?.name || "数字员工"}`
-                        : "👤 数字员工"}
-                    </span>
-                    <IconChevronDown size={12} />
-                  </button>
-                  {deMenuOpen && (
-                    <div className="chatModelMenu">
-                      <div
-                        className={`chatModelMenuItem ${!selectedDigitalEmployee ? "chatModelMenuItemActive" : ""}`}
-                        onClick={() => { setSelectedDigitalEmployee(""); setDeMenuOpen(false); }}
-                      >
-                        <span>🤖</span> 不使用数字员工
-                      </div>
-                      {digitalEmployees.map((de: any) => (
-                        <div
-                          key={de.id}
-                          className={`chatModelMenuItem ${selectedDigitalEmployee === de.id ? "chatModelMenuItemActive" : ""}`}
-                          onClick={() => { setSelectedDigitalEmployee(de.id); setDeMenuOpen(false); }}
-                        >
-                          <span>{de.icon || "🤖"}</span> {de.name}
-                          <span style={{ fontSize: 10, opacity: 0.5, marginLeft: "auto" }}>{de.agents?.length || 0} 个Agent</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
               <div className="chatPickerGroup" ref={modelMenuRef}>
                 <button
                   data-slot="chat-picker"

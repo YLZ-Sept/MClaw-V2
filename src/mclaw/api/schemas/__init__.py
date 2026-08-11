@@ -207,10 +207,6 @@ class ChatRequest(BaseModel):
         None,
         description="Agent profile to use for this message.",
     )
-    digital_employee_id: str | None = Field(
-        None,
-        description="Digital employee ID for automatic agent routing.",
-    )
     org_mode: bool | None = Field(
         None,
         description="Whether this conversation is currently bound to an organization.",

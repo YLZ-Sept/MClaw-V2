@@ -63,7 +63,6 @@ from .routes import (
     skills,
     token_stats,
     upload,
-    digital_employee,
     knowledge,
     wechat_onboard,
     wecom_onboard,
@@ -1111,7 +1110,6 @@ def create_app(
     app.include_router(mcp.router, tags=["MCP"])
     app.include_router(memory.router, tags=["记忆"])
     app.include_router(memory_repair.router, tags=["记忆修复"])
-    app.include_router(digital_employee.router, tags=["数字员工"])
     app.include_router(knowledge.router, tags=["知识库"])
     app.include_router(scheduler.router, tags=["定时任务"])
     app.include_router(pending_approvals.router, tags=["待审批"])
