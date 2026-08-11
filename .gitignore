@@ -109,6 +109,11 @@ apps/setup-center/src-tauri/resources/bootstrap/bin/
 apps/setup-center/src-tauri/resources/bootstrap/wheels/
 apps/setup-center/src-tauri/resources/bootstrap/wheelhouse/
 apps/setup-center/src-tauri/resources/bootstrap/python/
+apps/setup-center/data/
+
+# apps/setup-center Identity — 运行时派生产物不入库
+apps/setup-center/identity/MEMORY.md
+apps/setup-center/identity/runtime/
 
 # Data (keep structure)
 data/*

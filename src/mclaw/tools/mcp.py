@@ -800,7 +800,10 @@ class MCPClient:
             self._tools[f"{server_name}:{tool.name}"] = MCPTool(
                 name=tool.name,
                 description=tool.description or "",
-                input_schema=tool.inputSchema or {},
+                # 兼容不同 MCP SDK 版本的字段名：input_schema / inputSchema
+                input_schema=getattr(tool, "input_schema", None)
+                or getattr(tool, "inputSchema", None)
+                or {},
                 annotations=annotations,
             )
 
