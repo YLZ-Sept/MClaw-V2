@@ -26,6 +26,10 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
+      const msg = this.state.error?.message || "未知错误";
+      // useContext null means React is broken (duplicate instances),
+      // resetting state won't help — need a full reload.
+      const needsReload = msg.includes("useContext");
       return (
         <div style={{
           padding: "12px 16px",
@@ -37,17 +41,23 @@ export class ErrorBoundary extends Component<Props, State> {
         }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>渲染异常</div>
           <div style={{ opacity: 0.7, fontSize: 12, wordBreak: "break-word" }}>
-            {this.state.error?.message || "未知错误"}
+            {msg}
           </div>
           <button
-            onClick={() => this.setState({ hasError: false, error: null })}
+            onClick={() => {
+              if (needsReload) {
+                window.location.reload();
+              } else {
+                this.setState({ hasError: false, error: null });
+              }
+            }}
             style={{
               marginTop: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600,
               borderRadius: 6, border: "1px solid rgba(239, 68, 68, 0.3)",
               background: "transparent", color: "var(--danger, #ef4444)", cursor: "pointer",
             }}
           >
-            重试
+            {needsReload ? "刷新页面" : "重试"}
           </button>
         </div>
       );

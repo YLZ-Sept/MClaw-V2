@@ -5271,7 +5271,9 @@ function MainApp() {
             }}
           >
             <Suspense fallback={<div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", opacity: 0.5 }}><div className="spinner" style={{ width: 24, height: 24 }} /></div>}>
+            <ErrorBoundary>
             {renderStepContent()}
+            </ErrorBoundary>
             </Suspense>
           </div>
         </div>

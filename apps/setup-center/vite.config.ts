@@ -66,7 +66,10 @@ export default defineConfig({
     // calling react-i18next's useTranslation() against a different React copy
     // than the host renderer, causing "Cannot read properties of null
     // (reading 'useContext')" at hook-dispatch time.
-    dedupe: ["react", "react-dom", "react-i18next", "@xyflow/react", "zustand", "radix-ui", "three"],
+    dedupe: ["react", "react-dom", "react-i18next", "@xyflow/react", "zustand", "radix-ui", "three",
+      "i18next", "i18next-browser-languagedetector", "class-variance-authority", "clsx", "tailwind-merge",
+      "lucide-react", "sonner", "react-force-graph-3d", "3d-force-graph", "three-forcegraph",
+      "three-render-objects"],
   },
   optimizeDeps: {
     include: [
@@ -91,6 +94,27 @@ export default defineConfig({
       "three-forcegraph",
       "three-render-objects",
       "three",
+      // All shared UI deps that lazy views might import for the first time
+      // — pre-bundle them so Vite never re-optimizes mid-session and
+      // creates a duplicate React instance.
+      "class-variance-authority",
+      "clsx",
+      "tailwind-merge",
+      "lucide-react",
+      "sonner",
+      "@radix-ui/react-slider",
+      "react-markdown",
+      "react-virtuoso",
+      "rehype-highlight",
+      "rehype-raw",
+      "rehype-sanitize",
+      "remark-gfm",
+      "remark-math",
+      "katex",
+      "highlight.js",
+      "html-to-image",
+      "next-themes",
+      "qrcode.react",
     ],
   },
   base: isWebBuild ? "/web/" : isCapBuild ? "./" : undefined,

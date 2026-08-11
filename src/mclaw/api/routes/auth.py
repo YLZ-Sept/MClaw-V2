@@ -126,7 +126,8 @@ async def login(request: Request, response: Response):
     trust_proxy = os.environ.get("TRUST_PROXY", "").lower() in ("1", "true", "yes")
     client_ip = get_client_ip(request, trust_proxy=trust_proxy)
 
-    if not _login_limiter.is_allowed(client_ip):
+    # 本地开发绕过速率限制
+    if client_ip not in ("127.0.0.1", "::1", "localhost") and not _login_limiter.is_allowed(client_ip):
         retry_after = _login_limiter.retry_after_seconds(client_ip)
         return JSONResponse(
             status_code=429,

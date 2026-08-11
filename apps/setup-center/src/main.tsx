@@ -423,7 +423,7 @@ waitForBackend().then((ok) => {
 });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
+  <>
     {/* P-RC-2 P2.8: stale-bundle banner. Lives outside
         GlobalErrorBoundary so a render crash in App.tsx does
         not also blank the upgrade prompt. */}
@@ -437,7 +437,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </TooltipProvider>
       )}
     </GlobalErrorBoundary>
-  </React.StrictMode>,
+  </>,
 );
 
 // In case App mounts but doesn't emit.
