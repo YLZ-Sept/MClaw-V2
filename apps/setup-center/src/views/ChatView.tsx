@@ -4080,7 +4080,7 @@ export function ChatView({
         endpoint_policy: selectedEndpoint === "auto" ? "prefer" : selectedEndpointPolicy,
         thinking_mode: thinkingMode !== "auto" ? thinkingMode : null,
         thinking_depth: thinkingMode !== "off" ? thinkingDepth : null,
-        agent_profile_id: selectedAgent,
+        agent_profile_id: selectedDigitalEmployee ? null : selectedAgent,
         digital_employee_id: selectedDigitalEmployee || null,
         org_mode: Boolean(effectiveOrgId),
         org_id: effectiveOrgId,

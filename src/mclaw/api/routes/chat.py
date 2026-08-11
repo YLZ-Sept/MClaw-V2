@@ -3205,11 +3205,14 @@ async def chat(request: Request, body: ChatRequest):
         body.endpoint_policy = "prefer"
 
     # 数字员工：LLM 意图分析路由到最合适的 Agent（异步）
-    if getattr(body, "digital_employee_id", None) and not body.agent_profile_id:
+    _de_id = getattr(body, "digital_employee_id", None)
+    logger.info(f"[Chat API] digital_employee_id={_de_id!r} agent_profile_id={body.agent_profile_id!r}")
+    if _de_id and not body.agent_profile_id:
         from mclaw.digital_employee.manager import get_digital_employee_manager
         try:
             dem = get_digital_employee_manager()
-            routed_id, reason = await dem.route_async(body.digital_employee_id, body.message or "")
+            routed_id, reason = await dem.route_async(_de_id, body.message or "")
+            logger.info(f"[Chat API] 路由结果: routed_id={routed_id!r} reason={reason}")
             if routed_id:
                 body.agent_profile_id = routed_id
                 logger.info(f"[Chat API] 数字员工路由: {reason}")
