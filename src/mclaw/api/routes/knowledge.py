@@ -32,11 +32,13 @@ router = APIRouter(prefix="/api/knowledge", tags=["知识库"])
 class CreateCollectionRequest(BaseModel):
     name: str
     description: str = ""
+    is_public: bool = False
 
 
 class UpdateCollectionRequest(BaseModel):
     name: str | None = None
     description: str | None = None
+    is_public: bool | None = None
 
 
 class ImportUrlRequest(BaseModel):
@@ -53,6 +55,9 @@ class CollectionResponse(BaseModel):
     id: str
     name: str
     description: str
+    workspace_id: str = "default"
+    owner_id: str = ""
+    is_public: bool = False
     created_at: float
     updated_at: float
     doc_count: int
@@ -132,42 +137,109 @@ def set_knowledge_manager(km: KnowledgeManager) -> None:
     _knowledge_manager = km
 
 
+# ── 权限辅助 ─────────────────────────────────────────────────────────────────
+
+def _current_owner(request: Request) -> tuple[str, str]:
+    """从请求中提取 (user_id, workspace_id)"""
+    user_id = (
+        request.headers.get("X-Mclaw-User")
+        or getattr(request.state, "user_id", None)
+        or "admin"
+    )
+    workspace_id = (
+        request.headers.get("X-Mclaw-Workspace")
+        or getattr(request.state, "workspace_id", None)
+        or "default"
+    )
+    return user_id, workspace_id
+
+
+def _is_admin(request: Request, user_id: str) -> bool:
+    """检查用户是否为管理员"""
+    try:
+        wac = request.app.state.web_access_config
+        return wac.is_admin(user_id) if wac else False
+    except Exception:
+        return False
+
+
+def _check_collection_access(
+    coll: dict | None,
+    user_id: str,
+    _is_admin_flag: bool,
+    require_write: bool = False,
+) -> None:
+    """校验 collection 访问权限，无权限时抛 403/404"""
+    if coll is None:
+        raise HTTPException(status_code=404, detail="Collection 不存在")
+    owner = coll.get("owner_id", "")
+    is_public = bool(coll.get("is_public", 0))
+
+    if _is_admin_flag or owner == user_id:
+        return  # owner + admin 全权限
+    if require_write:
+        raise HTTPException(status_code=403, detail="无权修改此知识库")
+    if not is_public:
+        raise HTTPException(status_code=404, detail="Collection 不存在")
+
+
+
 # ── Collection 路由 ────────────────────────────────────────────────────────────
 
 @router.get("/collections", response_model=list[CollectionResponse])
-async def list_collections():
-    """列出所有 collections"""
+async def list_collections(request: Request):
+    """列出当前工作区的 collections"""
     km = get_knowledge_manager()
-    return [c.to_dict() for c in km.list_collections()]
+    user_id, workspace_id = _current_owner(request)
+    return [c.to_dict() for c in km.list_collections(workspace_id)]
 
 
 @router.post("/collections", response_model=CollectionResponse, status_code=201)
-async def create_collection(body: CreateCollectionRequest):
+async def create_collection(request: Request, body: CreateCollectionRequest):
     """创建新的 collection"""
     km = get_knowledge_manager()
     if not body.name.strip():
         raise HTTPException(status_code=400, detail="Collection 名称不能为空")
-    coll = km.create_collection(body.name.strip(), body.description.strip())
+    user_id, workspace_id = _current_owner(request)
+    coll = km.create_collection(
+        body.name.strip(), body.description.strip(),
+        workspace_id=workspace_id, owner_id=user_id,
+        is_public=body.is_public,
+    )
     return coll.to_dict()
 
 
 @router.get("/collections/{collection_id}", response_model=CollectionResponse)
-async def get_collection(collection_id: str):
+async def get_collection(request: Request, collection_id: str):
     """获取 collection 详情"""
     km = get_knowledge_manager()
     coll = km.get_collection(collection_id)
+    user_id, _ws = _current_owner(request)
+    _check_collection_access(coll.to_dict() if coll else None, user_id,
+                             _is_admin(request, user_id))
     if coll is None:
         raise HTTPException(status_code=404, detail="Collection 不存在")
     return coll.to_dict()
 
 
 @router.put("/collections/{collection_id}", response_model=CollectionResponse)
-async def update_collection(collection_id: str, body: UpdateCollectionRequest):
+async def update_collection(request: Request, collection_id: str, body: UpdateCollectionRequest):
     """更新 collection"""
     km = get_knowledge_manager()
+    coll = km.get_collection(collection_id)
+    user_id, _ws = _current_owner(request)
+    _check_collection_access(coll.to_dict() if coll else None, user_id,
+                             _is_admin(request, user_id), require_write=True)
     ok = km.update_collection(collection_id, body.name, body.description)
-    if not ok:
+    if not ok and body.is_public is None:
         raise HTTPException(status_code=400, detail="无更新内容")
+    # 更新 is_public
+    if body.is_public is not None:
+        conn = km._get_conn()
+        conn.execute("UPDATE kb_collections SET is_public = ? WHERE id = ?",
+                     (int(body.is_public), collection_id))
+        conn.commit()
+        conn.close()
     coll = km.get_collection(collection_id)
     if coll is None:
         raise HTTPException(status_code=404, detail="Collection 不存在")
@@ -175,11 +247,13 @@ async def update_collection(collection_id: str, body: UpdateCollectionRequest):
 
 
 @router.delete("/collections/{collection_id}", response_model=DeleteResponse)
-async def delete_collection(collection_id: str):
+async def delete_collection(request: Request, collection_id: str):
     """删除 collection 及其所有文档、chunks、向量"""
     km = get_knowledge_manager()
-    if km.get_collection(collection_id) is None:
-        raise HTTPException(status_code=404, detail="Collection 不存在")
+    coll = km.get_collection(collection_id)
+    user_id, _ws = _current_owner(request)
+    _check_collection_access(coll.to_dict() if coll else None, user_id,
+                             _is_admin(request, user_id), require_write=True)
     deleted = km.delete_collection(collection_id)
     return DeleteResponse(ok=True, deleted_chunks=deleted)
 
@@ -196,11 +270,13 @@ async def get_collection_stats(collection_id: str):
 # ── Document 路由 ──────────────────────────────────────────────────────────────
 
 @router.get("/collections/{collection_id}/documents", response_model=list[DocResponse])
-async def list_documents(collection_id: str):
+async def list_documents(request: Request, collection_id: str):
     """列出 collection 中的文档"""
     km = get_knowledge_manager()
-    if km.get_collection(collection_id) is None:
-        raise HTTPException(status_code=404, detail="Collection 不存在")
+    coll = km.get_collection(collection_id)
+    user_id, _ws = _current_owner(request)
+    _check_collection_access(coll.to_dict() if coll else None, user_id,
+                             _is_admin(request, user_id))
     return [d.to_dict() for d in km.list_documents(collection_id)]
 
 
@@ -208,9 +284,10 @@ async def list_documents(collection_id: str):
 async def upload_document(request: Request, collection_id: str, file: UploadFile = File(...)):
     """上传文档到 collection"""
     km = get_knowledge_manager()
-    user_id = getattr(request.state, "user_id", "") or "admin"
-    if km.get_collection(collection_id) is None:
-        raise HTTPException(status_code=404, detail="Collection 不存在")
+    user_id, _ws = _current_owner(request)
+    coll = km.get_collection(collection_id)
+    _check_collection_access(coll.to_dict() if coll else None, user_id,
+                             _is_admin(request, user_id), require_write=True)
 
     if not file.filename:
         raise HTTPException(status_code=400, detail="文件名不能为空")
@@ -257,9 +334,10 @@ async def upload_document(request: Request, collection_id: str, file: UploadFile
 async def import_url(request: Request, collection_id: str, body: ImportUrlRequest):
     """从 URL 导入网页内容"""
     km = get_knowledge_manager()
-    user_id = getattr(request.state, "user_id", "") or "admin"
-    if km.get_collection(collection_id) is None:
-        raise HTTPException(status_code=404, detail="Collection 不存在")
+    user_id, _ws = _current_owner(request)
+    coll = km.get_collection(collection_id)
+    _check_collection_access(coll.to_dict() if coll else None, user_id,
+                             _is_admin(request, user_id), require_write=True)
 
     if not body.url.strip().startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="URL 必须以 http:// 或 https:// 开头")
@@ -295,32 +373,34 @@ async def list_document_chunks(doc_id: str):
 
 @router.delete("/documents/{doc_id}", response_model=DeleteResponse)
 async def delete_document(request: Request, doc_id: str):
-    """删除文档及其 chunks 和向量（上传者或管理员可删）"""
+    """删除文档及其 chunks 和向量（集合 owner 或管理员可删）"""
     km = get_knowledge_manager()
-    user_id = getattr(request.state, "user_id", "") or "admin"
+    user_id, _ws = _current_owner(request)
     doc = km.get_document(doc_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="文档不存在")
 
-    # Permission check: uploader or admin
-    uploader = doc.uploaded_by if hasattr(doc, 'uploaded_by') else ""
-    if uploader and uploader != user_id:
-        # Check if current user is admin
-        from mclaw.api.auth import WebAccessConfig
-        wac = getattr(request.app.state, "web_access_config", None)
-        if wac and not wac.is_admin(user_id):
-            raise HTTPException(status_code=403, detail="只有上传者或管理员可以删除文档")
+    # 校验 collection 写权限（修复：空 uploader 不再绕过检查）
+    coll = km.get_collection(doc.collection_id)
+    _check_collection_access(coll.to_dict() if coll else None, user_id,
+                             _is_admin(request, user_id), require_write=True)
 
     deleted = km.delete_document(doc_id)
     return DeleteResponse(ok=True, deleted_chunks=deleted)
 
 
 @router.post("/documents/{doc_id}/reindex", response_model=DocResponse)
-async def reindex_document(doc_id: str):
+async def reindex_document(request: Request, doc_id: str):
     """重新索引文档"""
     km = get_knowledge_manager()
-    if km.get_document(doc_id) is None:
+    doc = km.get_document(doc_id)
+    if doc is None:
         raise HTTPException(status_code=404, detail="文档不存在")
+
+    user_id, _ws = _current_owner(request)
+    coll = km.get_collection(doc.collection_id)
+    _check_collection_access(coll.to_dict() if coll else None, user_id,
+                             _is_admin(request, user_id), require_write=True)
 
     try:
         doc = km.reindex_document(doc_id)
@@ -334,15 +414,22 @@ async def reindex_document(doc_id: str):
 # ── Search 路由 ────────────────────────────────────────────────────────────────
 
 @router.post("/search", response_model=list[SearchResultResponse])
-async def search_knowledge(body: SearchRequest):
+async def search_knowledge(request: Request, body: SearchRequest):
     """混合搜索知识库（BM25 + 向量 + RRF 融合）"""
     km = get_knowledge_manager()
+    user_id, workspace_id = _current_owner(request)
+    is_admin_flag = _is_admin(request, user_id)
 
     if not body.query.strip():
         raise HTTPException(status_code=400, detail="搜索查询不能为空")
 
     if body.top_k < 1 or body.top_k > 100:
         raise HTTPException(status_code=400, detail="top_k 必须在 1-100 之间")
+
+    # 如果指定了 collection，校验访问权限
+    if body.collection_id:
+        coll = km.get_collection(body.collection_id)
+        _check_collection_access(coll.to_dict() if coll else None, user_id, is_admin_flag)
 
     results = km.search_with_chunks(
         query=body.query.strip(),

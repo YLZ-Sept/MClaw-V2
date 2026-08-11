@@ -503,6 +503,9 @@ class KnowledgeManager:
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 description TEXT DEFAULT '',
+                workspace_id TEXT DEFAULT 'default',
+                owner_id TEXT DEFAULT '',
+                is_public INTEGER DEFAULT 0,
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL
             );
@@ -555,6 +558,12 @@ class KnowledgeManager:
             conn.execute("ALTER TABLE kb_documents ADD COLUMN uploaded_by TEXT DEFAULT ''")
         except sqlite3.OperationalError:
             pass  # column already exists
+        # Migration: add workspace/owner/public to collections (P1 multi-tenancy)
+        for col, default in [("workspace_id", "'default'"), ("owner_id", "''"), ("is_public", "0")]:
+            try:
+                conn.execute(f"ALTER TABLE kb_collections ADD COLUMN {col} TEXT DEFAULT {default}")
+            except sqlite3.OperationalError:
+                pass
         conn.commit()
         conn.close()
         logger.info(f"[KnowledgeManager] SQLite 初始化完成: {self._db_path}")
@@ -639,37 +648,57 @@ class KnowledgeManager:
 
     # ── Collection CRUD ─────────────────────────────────────────────────────
 
-    def create_collection(self, name: str, description: str = "") -> KnowledgeCollection:
+    def create_collection(self, name: str, description: str = "",
+                          workspace_id: str = "default", owner_id: str = "",
+                          is_public: bool = False) -> KnowledgeCollection:
         now = time.time()
         coll = KnowledgeCollection(
             name=name,
             description=description,
+            workspace_id=workspace_id,
+            owner_id=owner_id,
+            is_public=is_public,
             created_at=now,
             updated_at=now,
         )
         conn = self._get_conn()
         conn.execute(
-            "INSERT INTO kb_collections (id, name, description, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (coll.id, coll.name, coll.description, coll.created_at, coll.updated_at),
+            "INSERT INTO kb_collections (id, name, description, workspace_id, "
+            "owner_id, is_public, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (coll.id, coll.name, coll.description, coll.workspace_id,
+             coll.owner_id, int(coll.is_public), coll.created_at, coll.updated_at),
         )
         conn.commit()
         conn.close()
-        logger.info(f"[KnowledgeManager] 创建 collection: {coll.name} ({coll.id})")
+        logger.info(f"[KnowledgeManager] 创建 collection: {coll.name} ({coll.id}) ws={workspace_id}")
         return coll
 
-    def list_collections(self) -> list[KnowledgeCollection]:
+    def list_collections(self, workspace_id: str | None = None) -> list[KnowledgeCollection]:
         conn = self._get_conn()
-        rows = conn.execute(
-            "SELECT c.*, "
-            "  (SELECT COUNT(*) FROM kb_documents WHERE collection_id = c.id) AS doc_count, "
-            "  (SELECT COUNT(*) FROM kb_chunks WHERE collection_id = c.id) AS chunk_count "
-            "FROM kb_collections c ORDER BY c.updated_at DESC"
-        ).fetchall()
+        if workspace_id:
+            rows = conn.execute(
+                "SELECT c.*, "
+                "  (SELECT COUNT(*) FROM kb_documents WHERE collection_id = c.id) AS doc_count, "
+                "  (SELECT COUNT(*) FROM kb_chunks WHERE collection_id = c.id) AS chunk_count "
+                "FROM kb_collections c WHERE c.workspace_id = ? ORDER BY c.updated_at DESC",
+                (workspace_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT c.*, "
+                "  (SELECT COUNT(*) FROM kb_documents WHERE collection_id = c.id) AS doc_count, "
+                "  (SELECT COUNT(*) FROM kb_chunks WHERE collection_id = c.id) AS chunk_count "
+                "FROM kb_collections c ORDER BY c.updated_at DESC"
+            ).fetchall()
         conn.close()
+        # sqlite3.Row 不支持 .get()，用 dict(r) 转换
         return [
             KnowledgeCollection(
                 id=r["id"], name=r["name"], description=r["description"],
+                workspace_id=dict(r).get("workspace_id", "default"),
+                owner_id=dict(r).get("owner_id", ""),
+                is_public=bool(dict(r).get("is_public", 0)),
                 created_at=r["created_at"], updated_at=r["updated_at"],
                 doc_count=r["doc_count"], chunk_count=r["chunk_count"],
             )
@@ -688,10 +717,14 @@ class KnowledgeManager:
         conn.close()
         if r is None:
             return None
+        d = dict(r)
         return KnowledgeCollection(
-            id=r["id"], name=r["name"], description=r["description"],
-            created_at=r["created_at"], updated_at=r["updated_at"],
-            doc_count=r["doc_count"], chunk_count=r["chunk_count"],
+            id=d["id"], name=d["name"], description=d["description"],
+            workspace_id=d.get("workspace_id", "default"),
+            owner_id=d.get("owner_id", ""),
+            is_public=bool(d.get("is_public", 0)),
+            created_at=d["created_at"], updated_at=d["updated_at"],
+            doc_count=d["doc_count"], chunk_count=d["chunk_count"],
         )
 
     def update_collection(self, collection_id: str, name: str | None = None, description: str | None = None) -> bool:

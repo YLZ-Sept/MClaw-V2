@@ -77,6 +77,9 @@ class KnowledgeCollection:
     id: str = field(default_factory=_short_uuid)
     name: str = ""
     description: str = ""
+    workspace_id: str = "default"
+    owner_id: str = ""
+    is_public: bool = False
     created_at: float = 0.0
     updated_at: float = 0.0
     doc_count: int = 0
@@ -87,6 +90,9 @@ class KnowledgeCollection:
             "id": self.id,
             "name": self.name,
             "description": self.description,
+            "workspace_id": self.workspace_id,
+            "owner_id": self.owner_id,
+            "is_public": self.is_public,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "doc_count": self.doc_count,
@@ -99,6 +105,9 @@ class KnowledgeCollection:
             id=d.get("id", _short_uuid()),
             name=d.get("name", ""),
             description=d.get("description", ""),
+            workspace_id=d.get("workspace_id", "default"),
+            owner_id=d.get("owner_id", ""),
+            is_public=d.get("is_public", False),
             created_at=d.get("created_at", 0.0),
             updated_at=d.get("updated_at", 0.0),
             doc_count=d.get("doc_count", 0),
