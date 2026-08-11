@@ -834,8 +834,14 @@ async def create_agent_profile(body: ProfileCreateRequest):
 
     store = get_profile_store()
 
+    # 如果 ID 已存在，自动追加数字后缀
+    original_id = body.id
+    suffix = 1
+    while store.exists(body.id) and suffix < 100:
+        body.id = f"{original_id}-{suffix}"
+        suffix += 1
     if store.exists(body.id):
-        raise HTTPException(status_code=400, detail=f"Profile '{body.id}' already exists")
+        raise HTTPException(status_code=400, detail=f"Profile '{original_id}' already exists")
 
     for field_name in ("tools_mode", "mcp_mode", "plugins_mode"):
         _validate_profile_list_mode(field_name, getattr(body, field_name))
