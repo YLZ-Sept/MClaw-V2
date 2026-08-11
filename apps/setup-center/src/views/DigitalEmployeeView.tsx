@@ -222,8 +222,19 @@ export function DigitalEmployeeView() {
               <Input value={desc} onChange={e => setDesc(e.target.value)} placeholder="描述这个数字员工的职责" />
             </div>
             <div>
-              <label className="text-xs font-medium">图标 (Emoji)</label>
-              <Input value={icon} onChange={e => setIcon(e.target.value)} placeholder="🤖" className="w-20" />
+              <label className="text-xs font-medium mb-1 block">图标</label>
+              <div className="flex flex-wrap gap-1 mb-2">
+                {["🤖","👩‍💼","👨‍💻","🧑‍🔧","👩‍🔬","🧑‍🏫","👩‍💻","🧑‍⚖️","👨‍🚀","👩‍🎨","🧑‍🌾","👩‍⚕️","🧑‍🚒","👨‍🏭","🧑‍🎓","👩‍🏫","🧑‍💼","👨‍🔧","👩‍🚀","🧑‍🎤","🦾","🧠","💼","📊","📝","🔍","⚙️","💡","🎯","🚀"].map(emoji => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => setIcon(emoji)}
+                    className={`text-xl p-1 rounded ${icon === emoji ? "bg-primary/20 ring-1 ring-primary" : "hover:bg-muted"}`}
+                    title={emoji}
+                  >{emoji}</button>
+                ))}
+              </div>
+              <Input value={icon} onChange={e => setIcon(e.target.value)} placeholder="或直接输入 emoji" className="w-32 text-sm" />
             </div>
             <div>
               <label className="text-xs font-medium mb-1 block">

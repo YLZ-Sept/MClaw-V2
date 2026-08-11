@@ -1176,6 +1176,8 @@ export function ChatView({
   const [selectedEndpointPolicy, setSelectedEndpointPolicy] = useState<EndpointPolicy>("prefer");
   const [selectedDigitalEmployee, setSelectedDigitalEmployee] = useState<string>("");
   const [digitalEmployees, setDigitalEmployees] = useState<any[]>([]);
+  const [deMenuOpen, setDeMenuOpen] = useState(false);
+  const deMenuRef = useRef<HTMLDivElement | null>(null);
 
   // 加载数字员工列表
   useEffect(() => {
@@ -8151,32 +8153,36 @@ export function ChatView({
             <div className="chatInputTop" data-testid="chat-input-pickers">
               {/* 数字员工选择器 */}
               {digitalEmployees.length > 0 && (
-                <div className="chatPickerGroup">
+                <div className="chatPickerGroup" ref={deMenuRef}>
                   <button
                     data-slot="chat-picker"
                     type="button"
                     className="chatModelPickerBtn"
-                    style={{ fontSize: 11 }}
-                    onClick={() => setSelectedDigitalEmployee(selectedDigitalEmployee ? "" : (digitalEmployees[0]?.id || ""))}
-                    title={selectedDigitalEmployee ? "已选数字员工，点击取消" : "点击选择数字员工"}
+                    onClick={() => setDeMenuOpen(v => !v)}
                   >
-                    <span className="chatModelPickerLabel" style={{ opacity: selectedDigitalEmployee ? 1 : 0.5 }}>
+                    <span className="chatModelPickerLabel">
                       {selectedDigitalEmployee
                         ? `👤 ${digitalEmployees.find(d => d.id === selectedDigitalEmployee)?.name || "数字员工"}`
                         : "👤 数字员工"}
                     </span>
+                    <IconChevronDown size={12} />
                   </button>
-                  {digitalEmployees.length > 1 && (
-                    <div className="chatModelMenu" style={{ display: selectedDigitalEmployee ? "none" : "block", position: "absolute", top: "100%", left: 0, zIndex: 50, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, minWidth: 180, maxHeight: 200, overflow: "auto" }}>
+                  {deMenuOpen && (
+                    <div className="chatModelMenu">
+                      <div
+                        className={`chatModelMenuItem ${!selectedDigitalEmployee ? "chatModelMenuItemActive" : ""}`}
+                        onClick={() => { setSelectedDigitalEmployee(""); setDeMenuOpen(false); }}
+                      >
+                        <span>🤖</span> 不使用数字员工
+                      </div>
                       {digitalEmployees.map((de: any) => (
                         <div
                           key={de.id}
-                          className="chatModelMenuItem"
-                          onClick={() => { setSelectedDigitalEmployee(de.id); }}
-                          style={{ fontSize: 12 }}
+                          className={`chatModelMenuItem ${selectedDigitalEmployee === de.id ? "chatModelMenuItemActive" : ""}`}
+                          onClick={() => { setSelectedDigitalEmployee(de.id); setDeMenuOpen(false); }}
                         >
                           <span>{de.icon || "🤖"}</span> {de.name}
-                          <span style={{ fontSize: 10, opacity: 0.5, marginLeft: "auto" }}>{de.agents?.length || 0} agents</span>
+                          <span style={{ fontSize: 10, opacity: 0.5, marginLeft: "auto" }}>{de.agents?.length || 0} 个Agent</span>
                         </div>
                       ))}
                     </div>
