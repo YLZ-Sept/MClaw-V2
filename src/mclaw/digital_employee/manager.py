@@ -126,26 +126,162 @@ class DigitalEmployeeManager:
         query: str,
     ) -> tuple[str | None, str]:
         """
-        根据用户 query 路由到最合适的 Agent。
+        根据用户 query 路由到最合适的 Agent（同步版本，仅关键词）。
 
         返回 (profile_id, reason)。
-        当前实现：关键词匹配 + 优先级排序。
         """
         emp = self._employees.get(emp_id)
         if not emp or not emp.agents:
             return None, "数字员工无可用 Agent"
 
         if emp.routing_mode == "manual":
-            # 手动模式：返回优先级最高的
             best = min(emp.agents, key=lambda a: a.priority)
             return best.profile_id, f"手动模式 → {best.role_label or best.profile_id}"
 
-        # 自动模式：加载 AgentProfile 信息做匹配
+        return self._keyword_route(emp, query)
+
+    async def route_async(
+        self,
+        emp_id: str,
+        query: str,
+    ) -> tuple[str | None, str]:
+        """
+        异步路由：先尝试 LLM 意图分析，失败则回退关键词。
+        """
+        emp = self._employees.get(emp_id)
+        if not emp or not emp.agents:
+            return None, "数字员工无可用 Agent"
+
+        if emp.routing_mode == "manual":
+            best = min(emp.agents, key=lambda a: a.priority)
+            return best.profile_id, f"手动模式 → {best.role_label or best.profile_id}"
+
+        # 尝试 LLM 路由
+        llm_result = await self._llm_route_async(emp, query)
+        if llm_result[0] is not None:
+            return llm_result
+
+        # 回退关键词
+        return self._keyword_route(emp, query)
+
+    async def _llm_route_async(
+        self, emp: "DigitalEmployee", query: str
+    ) -> tuple[str | None, str]:
+        """使用 compiler 模型分析意图并路由（异步）"""
+        try:
+            from mclaw.agents.profile import get_profile_store
+
+            store = get_profile_store()
+            agent_lines: list[str] = []
+            for i, a in enumerate(emp.agents):
+                profile = store.get(a.profile_id)
+                if profile is None:
+                    continue
+                name = a.role_label or profile.name or a.profile_id
+                desc = (profile.description or "")[:80]
+                skills = ", ".join((profile.skills or [])[:5])
+                agent_lines.append(
+                    f"{i}: id={a.profile_id[:8]} name={name}"
+                    + (f" desc={desc}" if desc else "")
+                    + (f" skills={skills}" if skills else "")
+                )
+
+            if not agent_lines:
+                return None, ""
+
+            prompt = (
+                "你是一个路由助手。根据用户的问题，选择最合适的 Agent。\n"
+                "只回复 Agent 编号（一个数字），不要其他内容。\n\n"
+                "可用 Agent:\n" + "\n".join(agent_lines) + "\n\n"
+                f"用户问题: {query}\n\n"
+                "最合适的 Agent 编号:"
+            )
+
+            # 直接调用 compiler LLM
+            response = await self._call_compiler(prompt, max_tokens=10)
+            if not response:
+                return None, ""
+
+            response = response.strip()
+            try:
+                idx = int(response.split()[0])
+                if 0 <= idx < len(emp.agents):
+                    agent = emp.agents[idx]
+                    reason = f"LLM 路由 → {agent.role_label or agent.profile_id[:8]}"
+                    logger.info(f"[DigitalEmployee] {reason} query={query[:50]}")
+                    return agent.profile_id, reason
+            except (ValueError, IndexError):
+                pass
+
+        except Exception as e:
+            logger.debug(f"[DigitalEmployee] LLM 路由失败: {e}")
+
+        return None, ""
+
+    async def _call_compiler(self, prompt: str, max_tokens: int = 50) -> str | None:
+        """调用 compiler 端点"""
+        try:
+            import json
+            import os
+
+            import httpx
+
+            # 读取 compiler 端点配置
+            config_path = None
+            from mclaw.config import settings
+            config_path = settings.project_root / "data" / "llm_endpoints.json"
+
+            if config_path and config_path.exists():
+                config = json.loads(config_path.read_text(encoding="utf-8"))
+                compiler_eps = config.get("compiler_endpoints", [])
+                if not compiler_eps:
+                    # 回退到第一个 chat endpoint
+                    compiler_eps = config.get("endpoints", [])[:1]
+
+                if compiler_eps:
+                    ep = compiler_eps[0]
+                    api_key = os.environ.get(ep.get("api_key_env", ""), "")
+                    if not api_key:
+                        # 尝试从主 endpoint 获取
+                        for main_ep in config.get("endpoints", []):
+                            key = os.environ.get(main_ep.get("api_key_env", ""), "")
+                            if key:
+                                api_key = key
+                                break
+
+                    async with httpx.AsyncClient(timeout=15.0) as client:
+                        resp = await client.post(
+                            f"{ep['base_url']}/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {api_key}",
+                                "Content-Type": "application/json",
+                            },
+                            json={
+                                "model": ep["model"],
+                                "messages": [{"role": "user", "content": prompt}],
+                                "max_tokens": max_tokens,
+                                "temperature": 0.0,
+                            },
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            content = data["choices"][0]["message"]["content"]
+                            return content.strip() if content else None
+                        else:
+                            logger.debug(f"[DigitalEmployee] Compiler API error: {resp.status_code}")
+        except Exception as e:
+            logger.debug(f"[DigitalEmployee] _call_compiler failed: {e}")
+
+        return None
+
+    def _keyword_route(
+        self, emp: "DigitalEmployee", query: str
+    ) -> tuple[str | None, str]:
+        """关键词匹配路由（回退方案）"""
         from mclaw.agents.profile import get_profile_store
 
         store = get_profile_store()
         scored: list[tuple[int, EmployeeAgent, str]] = []
-
         query_lower = query.lower()
 
         for agent in emp.agents:
@@ -158,25 +294,15 @@ class DigitalEmployeeManager:
             profile_desc = (profile.description or "").lower()
             role_label = (agent.role_label or "").lower()
 
-            # 角色标签匹配
             if role_label and any(w in query_lower for w in role_label.split()):
                 score += 30
-
-            # Agent 名称匹配
             if profile_name and profile_name in query_lower:
                 score += 20
-
-            # 描述匹配（词级别）
             desc_words = set(profile_desc.split())
             query_words = set(query_lower.split())
-            overlap = desc_words & query_words
-            score += len(overlap) * 3
-
-            # 角色标签词匹配
+            score += len(desc_words & query_words) * 3
             label_words = set(role_label.split())
             score += len(label_words & query_words) * 5
-
-            # 优先级加成（priority 越小越好 → 分数越高）
             score += (10 - min(agent.priority, 10)) * 2
 
             scored.append((score, agent, profile_name))
@@ -186,8 +312,7 @@ class DigitalEmployeeManager:
 
         scored.sort(key=lambda x: x[0], reverse=True)
         best_score, best_agent, best_name = scored[0]
-
-        reason = f"路由到 {best_agent.role_label or best_name} (score={best_score})"
+        reason = f"关键词路由 → {best_agent.role_label or best_name} (score={best_score})"
         logger.info(f"[DigitalEmployee] {reason} query={query[:50]}")
         return best_agent.profile_id, reason
 
