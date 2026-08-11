@@ -511,7 +511,7 @@ export function KnowledgeBaseView({ serviceRunning, apiBaseUrl }: Props) {
                 id="kb-file-input"
                 type="file"
                 multiple
-                accept=".pdf,.md,.txt,.docx,.html,.htm,.xlsx,.xls,.csv"
+                accept=".pdf,.md,.txt,.doc,.docx,.html,.htm,.xlsx,.xls,.csv"
                 className="hidden"
                 onChange={(e) => doUploadFiles(e.target.files)}
               />

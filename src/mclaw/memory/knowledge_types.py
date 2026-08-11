@@ -34,6 +34,7 @@ class DocFileType(str, Enum):
     MARKDOWN = "md"
     TEXT = "txt"
     DOCX = "docx"
+    DOC = "doc"
     HTML = "html"
     XLSX = "xlsx"
     XLS = "xls"
@@ -47,6 +48,7 @@ EXTENSION_MAP: dict[str, DocFileType] = {
     ".md": DocFileType.MARKDOWN,
     ".txt": DocFileType.TEXT,
     ".docx": DocFileType.DOCX,
+    ".doc": DocFileType.DOC,
     ".html": DocFileType.HTML,
     ".htm": DocFileType.HTML,
     ".xlsx": DocFileType.XLSX,
@@ -60,6 +62,7 @@ FILETYPE_LABELS: dict[DocFileType, str] = {
     DocFileType.MARKDOWN: "Markdown",
     DocFileType.TEXT: "TXT",
     DocFileType.DOCX: "Word",
+    DocFileType.DOC: "Word",
     DocFileType.HTML: "HTML",
     DocFileType.XLSX: "Excel",
     DocFileType.XLS: "Excel",

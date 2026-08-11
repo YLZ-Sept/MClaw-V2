@@ -115,6 +115,87 @@ def _pdf_ocr_fallback(file_path: Path) -> str:
     return ""
 
 
+def _extract_doc_text(file_path: Path) -> str:
+    """从旧版 .doc (Word 97-2003) 文件中提取文本"""
+    # 方法 1: olefile 解析 OLE 二进制格式
+    try:
+        import olefile
+        import struct
+
+        ole = olefile.OleFileIO(str(file_path))
+        if not ole.exists("WordDocument"):
+            raise ValueError("不是有效的 .doc 文件：缺少 WordDocument 流")
+
+        word_stream = ole.openstream("WordDocument").read()
+
+        # 读取 FIB (File Information Block) 确定文本编码和位置
+        # https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-doc/cc3f69a5
+        flags = struct.unpack_from("<H", word_stream, 0x000A)[0]
+        fComplex = bool(flags & 0x0200)
+
+        if fComplex:
+            # 复杂格式：文本存在 Table 流中
+            # fcClx: file offset of Clx in table stream
+            fcClx = struct.unpack_from("<I", word_stream, 0x01A2)[0]
+            lcbClx = struct.unpack_from("<I", word_stream, 0x01A6)[0]
+
+            table_stream_name = "1Table" if ole.exists("1Table") else "0Table"
+            if ole.exists(table_stream_name):
+                table_stream = ole.openstream(table_stream_name).read()
+                clx = table_stream[fcClx:fcClx + lcbClx]
+
+                # Prc 数据在最后一个 Clx 条目之后
+                pos = 0
+                while pos < len(clx):
+                    entry_type = clx[pos]
+                    if entry_type == 0x01:  # Prc
+                        cb = struct.unpack_from("<H", clx, pos + 1)[0]
+                        # 跳过 Prc 到达文本
+                        text_offset = pos + 3 + cb
+                        raw_text = clx[text_offset:]
+                        ole.close()
+                        # 尝试 Unicode 解码
+                        try:
+                            return raw_text.decode("utf-16-le", errors="ignore").replace("\x00", "").strip()
+                        except Exception:
+                            return raw_text.decode("cp1252", errors="ignore").strip()
+                    elif entry_type == 0x02:  # Pcdt
+                        _lcb = struct.unpack_from("<I", clx, pos + 1)[0]
+                        pos += 5 + _lcb
+                    else:
+                        break
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning(f"[DOC] olefile 解析失败: {e}")
+
+    # 方法 2: python-docx 对 .doc 不支持，直接尝试读裸字节
+    try:
+        raw = file_path.read_bytes()
+        # 尝试 UTF-16LE
+        try:
+            text = raw.decode("utf-16-le", errors="ignore")
+            # 过滤掉过多的不可打印字符
+            printable = "".join(c for c in text if c.isprintable() or c in "\n\r\t")
+            if len(printable) > 100:
+                return printable.strip()
+        except Exception:
+            pass
+        # 尝试 ASCII / Latin-1
+        text = raw.decode("latin-1", errors="ignore")
+        import re
+        words = re.findall(r"[\x20-\x7E一-鿿　-〿＀-￯]{3,}", text)
+        if words:
+            return " ".join(words)
+    except Exception as e:
+        logger.warning(f"[DOC] 原始读取失败: {e}")
+
+    raise ImportError(
+        "无法解析 .doc 文件。请安装 olefile 并将文件转为 .docx 格式后重试: "
+        "pip install olefile"
+    )
+
+
 def _extract_text(file_path: Path, file_type: DocFileType) -> str:
     """从文件中提取纯文本"""
     if file_type == DocFileType.TEXT or file_type == DocFileType.MARKDOWN:
@@ -163,6 +244,9 @@ def _extract_text(file_path: Path, file_type: DocFileType) -> str:
             raise ImportError(
                 "DOCX 解析需要安装 python-docx: pip install python-docx"
             )
+
+    if file_type == DocFileType.DOC:
+        return _extract_doc_text(file_path)
 
     if file_type == DocFileType.HTML:
         try:
