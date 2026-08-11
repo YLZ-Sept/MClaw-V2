@@ -244,11 +244,6 @@ async def upload_document(request: Request, collection_id: str, file: UploadFile
             pass
         raise HTTPException(status_code=500, detail=f"文档索引失败: {e}")
 
-    # Clean up temp file after successful ingestion
-    try:
-        tmp_path.unlink(missing_ok=True)
-    except Exception:
-        pass
     return doc.to_dict()
 
 
