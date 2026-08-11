@@ -972,8 +972,13 @@ class KnowledgeManager:
                 raise ValueError("URL 文档缺少 source_url")
             text = _extract_text_from_url(url)
         elif doc.file_path:
+            file_path = Path(doc.file_path)
+            if not file_path.exists():
+                raise FileNotFoundError(
+                    f"文档文件已丢失: {file_path.name}，请删除此记录后重新上传"
+                )
             file_type = DocFileType(doc.file_type) if doc.file_type in [e.value for e in DocFileType] else DocFileType.TEXT
-            text = _extract_text(Path(doc.file_path), file_type)
+            text = _extract_text(file_path, file_type)
         else:
             raise ValueError(f"无法定位文档内容: {doc_id}")
 
