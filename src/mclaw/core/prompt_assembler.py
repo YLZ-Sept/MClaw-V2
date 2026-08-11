@@ -85,6 +85,7 @@ class PromptAssembler:
         intent_tool_hints: list[str] | None = None,
         agent_voice: str = "",
         identity_dir: Path | None = None,
+        knowledge_collections: list[str] | None = None,
     ) -> str:
         """
         使用编译管线构建系统提示词 (v2) - 异步版本。
@@ -143,7 +144,7 @@ class PromptAssembler:
             include_project_guidelines=include_project_guidelines,
             intent_tool_hints=intent_tool_hints,
             agent_voice=agent_voice,
-            knowledge_collections=kwargs.get("knowledge_collections"),
+            knowledge_collections=knowledge_collections,
         )
 
     def _build_compiled_sync(
