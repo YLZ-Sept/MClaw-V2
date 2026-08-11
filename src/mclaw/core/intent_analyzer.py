@@ -134,7 +134,7 @@ INTENT_ANALYZER_SYSTEM = """\
 
 intent: task=需实际操作外部系统；query=无工具知识问答；chat=闲聊；follow_up=追问/修改上轮结果；command=/指令。
 task_type: question|action|creation|analysis|reminder|compound|other。
-tool_hints: File System|Browser|Web Search|IM Channel|Desktop|Agent|Organization|Config。
+tool_hints: File System|Browser|Web Search|Knowledge|IM Channel|Desktop|Agent|Organization|Config。
 capability_scope: none|files|web|browser|plugin|skill|mcp|im|desktop|org|code。
 
 每次必须输出：

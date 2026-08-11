@@ -985,6 +985,12 @@ class Agent:
         """
         self._agent_profile = profile
         self._agent_profile_id = getattr(profile, "id", "default") or "default"
+        # 绑定了知识库：自动将 knowledge_search 加入 discovered_tools
+        kb_collections = getattr(profile, "knowledge_collections", []) or []
+        if kb_collections:
+            _discovered = getattr(self, "_discovered_tools", None)
+            if _discovered is not None:
+                _discovered.add("knowledge_search")
         self._runtime_env_mode = getattr(profile, "runtime_env_mode", "shared") or "shared"
         self._runtime_env_dependencies = list(
             getattr(profile, "runtime_env_dependencies", []) or []
@@ -2724,6 +2730,13 @@ class Agent:
         """构建系统提示词（统一使用编译管线 v2）。"""
         return self._build_system_prompt_compiled_sync(task_description, session_type=session_type)
 
+    def _get_bound_knowledge_collections(self) -> list[str]:
+        """获取当前 agent 绑定的知识库集合 ID 列表"""
+        profile = getattr(self, "_agent_profile", None)
+        if profile and hasattr(profile, "knowledge_collections"):
+            return getattr(profile, "knowledge_collections", []) or []
+        return []
+
     def _prepare_prompt_identity_dir(self) -> Path:
         """Return an identity dir whose files match the active Identity object.
 
@@ -2829,6 +2842,7 @@ class Agent:
             is_sub_agent=self._is_sub_agent_call,
             agent_voice=self._resolve_agent_voice(),
             identity_dir=identity_dir,
+            knowledge_collections=self._get_bound_knowledge_collections(),
         )
         if self._custom_prompt_suffix:
             prompt += f"\n\n{self._custom_prompt_suffix}"

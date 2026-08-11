@@ -143,6 +143,7 @@ class PromptAssembler:
             include_project_guidelines=include_project_guidelines,
             intent_tool_hints=intent_tool_hints,
             agent_voice=agent_voice,
+            knowledge_collections=kwargs.get("knowledge_collections"),
         )
 
     def _build_compiled_sync(
@@ -153,6 +154,7 @@ class PromptAssembler:
         is_sub_agent: bool = False,
         agent_voice: str = "",
         identity_dir: Path | None = None,
+        knowledge_collections: list[str] | None = None,
     ) -> str:
         """同步版本：启动时构建初始系统提示词"""
         from ..prompt.budget import BudgetConfig
@@ -184,4 +186,5 @@ class PromptAssembler:
             persona_manager=self._persona_manager,
             is_sub_agent=is_sub_agent,
             agent_voice=agent_voice,
+            knowledge_collections=knowledge_collections,
         )

@@ -349,6 +349,7 @@ def build_system_prompt(
     include_project_guidelines: bool | None = None,
     intent_tool_hints: list[str] | None = None,
     agent_voice: str = "",
+    knowledge_collections: list[str] | None = None,
 ) -> str:
     """
     组装系统提示词
@@ -644,6 +645,15 @@ def build_system_prompt(
             )
         if memory_section:
             developer_parts.append(memory_section)
+
+        # 知识库自动检索（绑定的 knowledge_collections）
+        if knowledge_collections:
+            kb_section = _build_knowledge_section(
+                task_description=task_description,
+                knowledge_collections=knowledge_collections,
+            )
+            if kb_section:
+                developer_parts.append(kb_section)
 
     # 11. User 层（仅 FULL 模式）
     user_core_section = _build_user_core_profile_section(
@@ -1783,6 +1793,60 @@ def _is_short_chitchat(text: str | None) -> bool:
     if normalized in _SHORT_CHITCHAT_TRIGGERS:
         return True
     return False
+
+
+def _build_knowledge_section(
+    task_description: str,
+    knowledge_collections: list[str] | None = None,
+    max_chunks: int = 3,
+    max_chars: int = 2000,
+) -> str:
+    """自动搜索绑定的知识库并将相关 chunk 注入 prompt"""
+    # 如果没传 collections，尝试从 agent profile 获取
+    if not knowledge_collections:
+        try:
+            from mclaw.api.routes.knowledge import get_knowledge_manager as _get_km
+            km = _get_km()
+            if km and hasattr(km, "_last_agent_collections"):
+                knowledge_collections = km._last_agent_collections
+        except Exception:
+            pass
+    if not knowledge_collections:
+        return ""
+
+    try:
+        from mclaw.api.routes.knowledge import get_knowledge_manager as _get_km
+        km = _get_km()
+
+        all_chunks: list[tuple[float, str, str]] = []  # (score, text, source)
+        for cid in knowledge_collections:
+            try:
+                results = km.search_with_chunks(query=task_description, collection_id=cid, top_k=2)
+                for r in results:
+                    score = r.get("score", 0)
+                    chunk = r.get("chunk", {})
+                    content = chunk.get("content", "")
+                    filename = chunk.get("metadata", {}).get("filename", "未知文档")
+                    if content.strip():
+                        all_chunks.append((score, content.strip(), filename))
+            except Exception:
+                continue
+
+        if not all_chunks:
+            return ""
+
+        all_chunks.sort(key=lambda x: x[0], reverse=True)
+        selected = all_chunks[:max_chunks]
+
+        parts = ["## 知识库检索（自动匹配）\n"]
+        for _i, (_score, text, source) in enumerate(selected, 1):
+            truncated = text[:max(max_chars // 2, 200)] + ("..." if len(text) > max(max_chars // 2, 200) else "")
+            parts.append(f"[来源: {source}] {truncated}")
+
+        return "\n".join(parts)[:max_chars]
+    except Exception as e:
+        logger.debug(f"[Knowledge] 自动检索跳过: {e}")
+        return ""
 
 
 def _build_memory_section(
