@@ -23,5 +23,6 @@ continues to apply to third-party material.
 | [imxv/pretty-mermaid-skills](https://github.com/imxv/pretty-mermaid-skills) | See upstream | `pretty-mermaid` |
 | [daymade/claude-code-skills](https://github.com/daymade/claude-code-skills) | See upstream | `ppt-creator` |
 | [apify/agent-skills](https://github.com/apify/agent-skills) | See upstream | `apify-scraper` |
+| [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) | See upstream | `agent-browser` |
 
-Last reviewed: July 2026.
+Last reviewed: August 2026.

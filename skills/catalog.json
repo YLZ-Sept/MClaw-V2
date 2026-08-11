@@ -61,7 +61,8 @@
         "superpowers-verification",
         "superpowers-writing-plans",
         "web-artifacts-builder",
-        "webapp-testing"
+        "webapp-testing",
+        "agent-browser"
       ]
     },
     {
