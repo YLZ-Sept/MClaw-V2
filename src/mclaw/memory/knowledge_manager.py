@@ -1295,17 +1295,23 @@ class KnowledgeManager:
         collection_id: str | None = None,
         top_k: int = 10,
     ) -> list[SearchResult]:
-        """搜索并填充完整的 chunk 内容"""
+        """搜索并填充完整的 chunk 内容（含来源文件名）"""
         results = self.search(query, collection_id, top_k)
         conn = self._get_conn()
 
         filled: list[SearchResult] = []
         for r in results:
             row = conn.execute(
-                "SELECT * FROM kb_chunks WHERE id = ?", (r.chunk.id,)
+                "SELECT c.*, d.filename AS doc_filename "
+                "FROM kb_chunks c JOIN kb_documents d ON d.id = c.doc_id "
+                "WHERE c.id = ?",
+                (r.chunk.id,),
             ).fetchone()
             if row:
                 r.chunk = _chunk_from_row(row)
+                doc_filename = dict(row).get("doc_filename", "")
+                if doc_filename and r.chunk.metadata is not None:
+                    r.chunk.metadata["filename"] = doc_filename
                 filled.append(r)
 
         conn.close()

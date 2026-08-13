@@ -1823,10 +1823,10 @@ def _build_knowledge_section(
             try:
                 results = km.search_with_chunks(query=task_description, collection_id=cid, top_k=2)
                 for r in results:
-                    score = r.get("score", 0)
-                    chunk = r.get("chunk", {})
-                    content = chunk.get("content", "")
-                    filename = chunk.get("metadata", {}).get("filename", "未知文档")
+                    score = r.score
+                    chunk = r.chunk
+                    content = chunk.content or ""
+                    filename = (chunk.metadata or {}).get("filename", "未知文档")
                     if content.strip():
                         all_chunks.append((score, content.strip(), filename))
             except Exception:

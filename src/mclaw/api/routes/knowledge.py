@@ -193,6 +193,11 @@ def _check_collection_access(
         raise HTTPException(status_code=404, detail="Collection 不存在")
 
 
+def _require_collection_exists(coll) -> None:
+    """知识库为公共资源：只校验 collection 存在，不再做 owner/admin 隔离。"""
+    if coll is None:
+        raise HTTPException(status_code=404, detail="Collection 不存在")
+
 
 # ── Collection 路由 ────────────────────────────────────────────────────────────
 
@@ -229,11 +234,7 @@ async def get_collection(request: Request, collection_id: str):
     """获取 collection 详情"""
     km = get_knowledge_manager()
     coll = km.get_collection(collection_id)
-    user_id, _ws = _current_owner(request)
-    _check_collection_access(coll.to_dict() if coll else None, user_id,
-                             _is_admin(request, user_id))
-    if coll is None:
-        raise HTTPException(status_code=404, detail="Collection 不存在")
+    _require_collection_exists(coll)
     return coll.to_dict()
 
 
@@ -242,9 +243,7 @@ async def update_collection(request: Request, collection_id: str, body: UpdateCo
     """更新 collection"""
     km = get_knowledge_manager()
     coll = km.get_collection(collection_id)
-    user_id, _ws = _current_owner(request)
-    _check_collection_access(coll.to_dict() if coll else None, user_id,
-                             _is_admin(request, user_id), require_write=True)
+    _require_collection_exists(coll)
     ok = km.update_collection(collection_id, body.name, body.description)
     if not ok and body.is_public is None:
         raise HTTPException(status_code=400, detail="无更新内容")
@@ -266,9 +265,7 @@ async def delete_collection(request: Request, collection_id: str):
     """删除 collection 及其所有文档、chunks、向量"""
     km = get_knowledge_manager()
     coll = km.get_collection(collection_id)
-    user_id, _ws = _current_owner(request)
-    _check_collection_access(coll.to_dict() if coll else None, user_id,
-                             _is_admin(request, user_id), require_write=True)
+    _require_collection_exists(coll)
     deleted = km.delete_collection(collection_id)
     return DeleteResponse(ok=True, deleted_chunks=deleted)
 
@@ -293,9 +290,7 @@ async def list_documents(
     """列出 collection 中的文档（分页）"""
     km = get_knowledge_manager()
     coll = km.get_collection(collection_id)
-    user_id, _ws = _current_owner(request)
-    _check_collection_access(coll.to_dict() if coll else None, user_id,
-                             _is_admin(request, user_id))
+    _require_collection_exists(coll)
     items_list, total = km.list_documents(collection_id, offset=offset, limit=limit)
     return {"items": [d.to_dict() for d in items_list], "total": total}
 
@@ -306,8 +301,7 @@ async def upload_document(request: Request, collection_id: str, file: UploadFile
     km = get_knowledge_manager()
     user_id, _ws = _current_owner(request)
     coll = km.get_collection(collection_id)
-    _check_collection_access(coll.to_dict() if coll else None, user_id,
-                             _is_admin(request, user_id), require_write=True)
+    _require_collection_exists(coll)
 
     if not file.filename:
         raise HTTPException(status_code=400, detail="文件名不能为空")
@@ -356,8 +350,7 @@ async def import_url(request: Request, collection_id: str, body: ImportUrlReques
     km = get_knowledge_manager()
     user_id, _ws = _current_owner(request)
     coll = km.get_collection(collection_id)
-    _check_collection_access(coll.to_dict() if coll else None, user_id,
-                             _is_admin(request, user_id), require_write=True)
+    _require_collection_exists(coll)
 
     if not body.url.strip().startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="URL 必须以 http:// 或 https:// 开头")
@@ -395,15 +388,12 @@ async def list_document_chunks(doc_id: str):
 async def delete_document(request: Request, doc_id: str):
     """删除文档及其 chunks 和向量（集合 owner 或管理员可删）"""
     km = get_knowledge_manager()
-    user_id, _ws = _current_owner(request)
     doc = km.get_document(doc_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="文档不存在")
 
-    # 校验 collection 写权限（修复：空 uploader 不再绕过检查）
     coll = km.get_collection(doc.collection_id)
-    _check_collection_access(coll.to_dict() if coll else None, user_id,
-                             _is_admin(request, user_id), require_write=True)
+    _require_collection_exists(coll)
 
     deleted = km.delete_document(doc_id)
     return DeleteResponse(ok=True, deleted_chunks=deleted)
@@ -417,10 +407,8 @@ async def reindex_document(request: Request, doc_id: str):
     if doc is None:
         raise HTTPException(status_code=404, detail="文档不存在")
 
-    user_id, _ws = _current_owner(request)
     coll = km.get_collection(doc.collection_id)
-    _check_collection_access(coll.to_dict() if coll else None, user_id,
-                             _is_admin(request, user_id), require_write=True)
+    _require_collection_exists(coll)
 
     try:
         doc = km.reindex_document(doc_id)
@@ -437,8 +425,6 @@ async def reindex_document(request: Request, doc_id: str):
 async def search_knowledge(request: Request, body: SearchRequest):
     """混合搜索知识库（BM25 + 向量 + RRF 融合）"""
     km = get_knowledge_manager()
-    user_id, workspace_id = _current_owner(request)
-    is_admin_flag = _is_admin(request, user_id)
 
     if not body.query.strip():
         raise HTTPException(status_code=400, detail="搜索查询不能为空")
@@ -446,10 +432,10 @@ async def search_knowledge(request: Request, body: SearchRequest):
     if body.top_k < 1 or body.top_k > 100:
         raise HTTPException(status_code=400, detail="top_k 必须在 1-100 之间")
 
-    # 如果指定了 collection，校验访问权限
+    # 如果指定了 collection，校验存在性
     if body.collection_id:
         coll = km.get_collection(body.collection_id)
-        _check_collection_access(coll.to_dict() if coll else None, user_id, is_admin_flag)
+        _require_collection_exists(coll)
 
     results = km.search_with_chunks(
         query=body.query.strip(),
