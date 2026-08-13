@@ -96,6 +96,7 @@ class SessionUiStateRequest(BaseModel):
     org_mode: bool = Field(False, alias="orgMode")
     org_id: str | None = Field(None, alias="orgId", max_length=128)
     org_node_id: str | None = Field(None, alias="orgNodeId", max_length=128)
+    agent_profile_id: str | None = Field(None, alias="agentProfileId", max_length=128)
 
 
 class SessionCreateRequest(BaseModel):
@@ -1016,11 +1017,22 @@ async def update_session_ui_state(
         org_id=body.org_id,
         org_node_id=body.org_node_id,
     )
-    session_manager.mark_dirty()
-    try:
-        await asyncio.to_thread(session_manager.persist_summary, session)
-    except Exception as exc:
-        logger.warning("[Sessions API] Failed to persist UI state: %s", exc)
+    agent_profile_id = (body.agent_profile_id or "").strip()
+    if agent_profile_id:
+        # Agent 选择是会话级状态（存于 context），必须完整持久化 context + catalog，
+        # 不能用 persist_summary（那只更新 catalog 轻量投影，不落 context.agent_profile_id）。
+        session.context.agent_profile_id = agent_profile_id
+        session_manager.mark_dirty()
+        try:
+            await asyncio.to_thread(session_manager.persist)
+        except Exception as exc:
+            logger.warning("[Sessions API] Failed to persist agent profile: %s", exc)
+    else:
+        session_manager.mark_dirty()
+        try:
+            await asyncio.to_thread(session_manager.persist_summary, session)
+        except Exception as exc:
+            logger.warning("[Sessions API] Failed to persist UI state: %s", exc)
     return {"ok": True}
 
 

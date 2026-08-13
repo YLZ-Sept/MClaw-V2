@@ -1984,6 +1984,9 @@ export function ChatView({
     }
   }, [serviceRunning, historyPage, apiBaseUrl, mapBackendHistoryToMessages]);
 
+  // 记录上一次的 activeConvId，用于「只在真正切换对话时才恢复该对话的 Agent/端点/组织选择」，
+  // 避免 hydrateConversationMessages 等依赖变化导致 effect 重跑时覆盖用户当前的选择。
+  const prevActiveConvIdForSwitchRef = useRef(activeConvId);
   useEffect(() => {
     if (!activeConvId) {
       setMessages([]);
@@ -2008,17 +2011,20 @@ export function ChatView({
       setDisplaySubAgentTasks([]);
     }
 
-    convSwitchScrollRef.current = true;
-    const conv = conversations.find((c) => c.id === activeConvId);
-    const agentId = conv?.agentProfileId || "default";
-    isConvSwitchRef.current = true;
-    setSelectedAgent(agentId);
-    setSelectedEndpoint(conv?.endpointId || "auto");
-    setSelectedEndpointPolicy(conv?.endpointPolicy || "prefer");
-    isOrgConvSwitchRef.current = true;
-    setOrgMode(Boolean(conv?.orgMode && conv?.orgId));
-    setSelectedOrgId(conv?.orgId || null);
-    setSelectedOrgNodeId(conv?.orgNodeId || null);
+    if (prevActiveConvIdForSwitchRef.current !== activeConvId) {
+      prevActiveConvIdForSwitchRef.current = activeConvId;
+      convSwitchScrollRef.current = true;
+      const conv = conversations.find((c) => c.id === activeConvId);
+      const agentId = conv?.agentProfileId || "default";
+      isConvSwitchRef.current = true;
+      setSelectedAgent(agentId);
+      setSelectedEndpoint(conv?.endpointId || "auto");
+      setSelectedEndpointPolicy(conv?.endpointPolicy || "prefer");
+      isOrgConvSwitchRef.current = true;
+      setOrgMode(Boolean(conv?.orgMode && conv?.orgId));
+      setSelectedOrgId(conv?.orgId || null);
+      setSelectedOrgNodeId(conv?.orgNodeId || null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- conversations 故意排除：
     // 此 effect 语义是"切换对话时加载消息"，不应因 messageCount/title 等元数据变更而重新 hydrate，
     // 否则流结束后 setConversations 更新 messageCount 会触发竞态覆盖。
@@ -2309,7 +2315,15 @@ export function ChatView({
       if (current?.agentProfileId === selectedAgent) return prev;
       return prev.map((c) => c.id === convId ? { ...c, agentProfileId: selectedAgent } : c);
     });
-  }, [activeConvId, selectedAgent]);
+    // 同步 agent 到后端 session，避免后续从后端拉会话列表时用 default 覆盖
+    if (serviceRunning) {
+      safeFetch(`${apiBaseUrl}/api/sessions/${encodeURIComponent(convId)}/ui-state`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentProfileId: selectedAgent }),
+      }).catch(() => {});
+    }
+  }, [activeConvId, selectedAgent, serviceRunning, apiBaseUrl]);
 
   // Sync selectedEndpoint/selectedEndpointPolicy → current conversation's model selection.
   const prevSelectedEndpointRef = useRef({ selectedEndpoint, selectedEndpointPolicy });
