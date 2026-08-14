@@ -1529,6 +1529,22 @@ class MessageGateway:
         platform = re.sub(r"[^A-Za-z0-9_-]+", "_", session.channel.split(":", 1)[0])[:20]
         return f"im_{platform}_{digest}"
 
+    def _agent_profile_display_name(self, profile_id: str | None) -> str | None:
+        """Resolve an agent profile id to its display name (None if unknown)."""
+        if not profile_id:
+            return None
+        try:
+            from mclaw.agents.profile import get_profile_store
+
+            profile = get_profile_store().get(profile_id)
+            if profile is not None:
+                name = getattr(profile, "name", "") or ""
+                if name:
+                    return name
+        except Exception:
+            pass
+        return None
+
     def _format_im_mirror_label(self, session: Session) -> str:
         platform = (session.channel or "im").split(":", 1)[0]
         platform_label = {
@@ -1544,7 +1560,15 @@ class MessageGateway:
             "onebot_reverse": "OneBot",
             "whatsapp": "WhatsApp",
         }.get(platform.lower(), platform)
-        chat_label = session.chat_name or session.display_name or session.chat_id or "会话"
+        # Prefer the conversation partner's name (group name / fetched nickname).
+        # When it's missing — e.g. WeChat private chats without a fetched
+        # nickname — fall back to the bound agent's display name instead of the
+        # raw chat_id, so the mirrored desktop conversation stays identifiable.
+        chat_label = session.chat_name or session.display_name
+        if not chat_label:
+            chat_label = self._agent_profile_display_name(
+                getattr(getattr(session, "context", None), "agent_profile_id", None)
+            ) or session.chat_id or "会话"
         chat_type = "群聊" if session.chat_type == "group" else "私聊"
         return f"{platform_label} · {chat_type} · {chat_label}"
 
@@ -1568,6 +1592,13 @@ class MessageGateway:
             return
         if session.channel in _NOOP_CHANNELS:
             return
+        try:
+            from ..config import settings
+
+            if not getattr(settings, "im_mirror_to_desktop_enabled", True):
+                return
+        except Exception:
+            pass
 
         mirror_id = self._desktop_mirror_id_for_im(session)
         label = self._format_im_mirror_label(session)
@@ -6071,6 +6102,33 @@ class MessageGateway:
             return bool(result)
         return result is not None
 
+    def _resolve_session_user_id(self, channel: str, chat_id: str) -> str:
+        """Resolve the real (non-system) user_id for a channel/chat_id pair.
+
+        Proactive/system sends default to ``user_id="system"``, which would
+        otherwise create a spurious "system" session that surfaces in the UI
+        as a duplicate conversation bound to the default agent. Look up the
+        real user_id from the session manager so these messages land in the
+        correct conversation instead.
+        """
+        session_manager = getattr(self, "session_manager", None)
+        if session_manager is None:
+            return "system"
+        try:
+            for session in session_manager.list_sessions():
+                if getattr(session, "channel", None) != channel:
+                    continue
+                if getattr(session, "chat_id", None) != chat_id:
+                    continue
+                uid = getattr(session, "user_id", None)
+                if uid and str(uid) not in ("system", "default", ""):
+                    return str(uid)
+        except Exception as exc:
+            logger.debug(
+                "Failed to resolve session user_id for %s/%s: %s", channel, chat_id, exc
+            )
+        return "system"
+
     async def send_text_reliably(
         self,
         channel: str,
@@ -6105,10 +6163,13 @@ class MessageGateway:
 
         if delivered and record_to_session and self.session_manager:
             try:
+                record_user_id = user_id
+                if record_user_id == "system":
+                    record_user_id = self._resolve_session_user_id(channel, chat_id)
                 self.session_manager.add_message(
                     channel=channel,
                     chat_id=chat_id,
-                    user_id=user_id,
+                    user_id=record_user_id,
                     role="system",
                     content=text,
                     source="gateway.send_text_reliably",
@@ -6173,10 +6234,13 @@ class MessageGateway:
             # 记录到 session 历史
             if record_to_session and self.session_manager:
                 try:
+                    record_user_id = user_id
+                    if record_user_id == "system":
+                        record_user_id = self._resolve_session_user_id(channel, chat_id)
                     self.session_manager.add_message(
                         channel=channel,
                         chat_id=chat_id,
-                        user_id=user_id,
+                        user_id=record_user_id,
                         role="system",  # 系统发送的消息
                         content=text,
                         source="gateway.send",

@@ -741,6 +741,11 @@ class Settings(BaseSettings):
     # IM 多 Bot 配置（多Agent模式下支持同一通道类型多个Bot实例）
     im_bots: list[dict] = Field(default_factory=list)
 
+    im_mirror_to_desktop_enabled: bool = Field(
+        default=True,
+        description="是否把 IM 通道会话镜像到桌面「聊天」列表（False 时 IM 会话仅出现在消息模块）",
+    )
+
     # === 人格系统配置 ===
     persona_name: str = Field(
         default="default",
