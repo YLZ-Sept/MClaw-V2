@@ -1371,13 +1371,13 @@ async def list_session_file_tree(
     parent: str = Query("", max_length=4096),
     limit: int = Query(500, ge=1, le=500),
     channel: str = "desktop",
-    user_id: str = "",  # resolved below
 ):
     """List one directory level inside a conversation's immutable directory."""
     _validate_id(conversation_id, "conversation_id")
     session_manager = getattr(request.app.state, "session_manager", None)
     if not session_manager:
         raise HTTPException(status_code=503, detail="Session manager unavailable")
+    user_id = getattr(request.state, "user_id", None) or "desktop_user"
     session = session_manager.get_session(
         channel=channel,
         chat_id=conversation_id,
