@@ -131,7 +131,25 @@ def _extract_doc_text(file_path: Path) -> str:
         # 读取 FIB (File Information Block) 确定文本编码和位置
         # https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-doc/cc3f69a5
         flags = struct.unpack_from("<H", word_stream, 0x000A)[0]
-        fComplex = bool(flags & 0x0200)
+        # MS-DOC §2.5.1: FIB.fComplex 是位 0x0004（fWhichTblStm 才是 0x0200）。
+        # 旧代码误用 0x0200，导致 fComplex 恒为 False，复杂文档走 fcMin/fcMac 直读
+        # 仍可拿到大部分文本，但会漏掉 piece table 才有的字符合并/乱序段落。
+        fComplex = bool(flags & 0x0004)
+
+        # 主路径：fcMin/fcMac 直读（简单格式必然正确；复杂格式的 fcMin/fcMac
+        # 同样覆盖主文本区）。WPS 生成的 .doc 在 piece table 上不兼容标准，
+        # 直读是更稳妥的兜底。
+        fcMin = struct.unpack_from("<I", word_stream, 0x0018)[0]
+        fcMac = struct.unpack_from("<I", word_stream, 0x001C)[0]
+        if fcMac > fcMin and fcMac <= len(word_stream):
+            main_text = word_stream[fcMin:fcMac].decode("utf-16-le", errors="replace")
+            # 质量检查：可读字符占比（中文/ASCII/常用标点/换行）
+            import re as _re
+            readable = _re.findall(r"[\u4e00-\u9fff\uff00-\uffef\x20-\x7e\r\n\t]", main_text)
+            ratio = len(readable) / max(len(main_text), 1)
+            if ratio > 0.7:
+                ole.close()
+                return main_text.replace("\x07", "\t").strip()
 
         if fComplex:
             # 复杂格式：文本存在 Table 流中
@@ -144,26 +162,43 @@ def _extract_doc_text(file_path: Path) -> str:
                 table_stream = ole.openstream(table_stream_name).read()
                 clx = table_stream[fcClx:fcClx + lcbClx]
 
-                # Prc 数据在最后一个 Clx 条目之后
+                # 解析 Clx：Prc (0x01) 携带 PlcPcd（piece table），
+                # Pcdt (0x02) 是字符属性描述，跳过。
+                # PlcPcd 布局: (n+1) 个 CP + n 个 PCD(8B)，n = (len-4)//12
                 pos = 0
+                prc = None
                 while pos < len(clx):
                     entry_type = clx[pos]
                     if entry_type == 0x01:  # Prc
                         cb = struct.unpack_from("<H", clx, pos + 1)[0]
-                        # 跳过 Prc 到达文本
-                        text_offset = pos + 3 + cb
-                        raw_text = clx[text_offset:]
-                        ole.close()
-                        # 尝试 Unicode 解码
-                        try:
-                            return raw_text.decode("utf-16-le", errors="ignore").replace("\x00", "").strip()
-                        except Exception:
-                            return raw_text.decode("cp1252", errors="ignore").strip()
+                        prc = clx[pos + 3:pos + 3 + cb]
+                        pos += 3 + cb
                     elif entry_type == 0x02:  # Pcdt
                         _lcb = struct.unpack_from("<I", clx, pos + 1)[0]
                         pos += 5 + _lcb
                     else:
                         break
+
+                if prc and len(prc) > 4:
+                    n_pieces = (len(prc) - 4) // 12
+                    cps = struct.unpack_from("<%dI" % (n_pieces + 1), prc, 0)
+                    data_stream = ole.openstream("Data").read() if ole.exists("Data") else b""
+                    parts: list[str] = []
+                    for i in range(n_pieces):
+                        pcd_off = (n_pieces + 1) * 4 + i * 8
+                        fc_raw = struct.unpack_from("<I", prc, pcd_off)[0]
+                        compressed = bool(fc_raw & 0x40000000)
+                        fc = fc_raw & 0x3FFFFFFF
+                        nchars = cps[i + 1] - cps[i]
+                        if compressed:
+                            # 8-bit ANSI (cp1252)，位于 Data 流
+                            parts.append(data_stream[fc:fc + nchars].decode("cp1252", errors="replace"))
+                        else:
+                            # 16-bit UTF-16LE，位于 WordDocument 流
+                            parts.append(word_stream[fc:fc + nchars * 2].decode("utf-16-le", errors="replace"))
+                    ole.close()
+                    if parts:
+                        return "".join(parts).replace("\x07", "\t").strip()
     except ImportError:
         pass
     except Exception as e:
@@ -1098,6 +1133,10 @@ class KnowledgeManager:
             if not url:
                 raise ValueError("URL 文档缺少 source_url")
             text = _extract_text_from_url(url)
+            if not text.strip():
+                raise ValueError(
+                    f"无法抓取 URL 内容（{url}），该链接可能已失效、需要登录或返回空页面"
+                )
         elif doc.file_path:
             file_path = Path(doc.file_path)
             if not file_path.exists():

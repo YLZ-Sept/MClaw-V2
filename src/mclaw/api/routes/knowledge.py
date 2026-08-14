@@ -20,7 +20,7 @@ from typing import Any
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 
-from mclaw.memory.knowledge_manager import KnowledgeManager
+from mclaw.memory.knowledge_manager import KnowledgeManager, _extract_text_from_url
 from mclaw.memory.knowledge_types import DocStatus
 
 logger = logging.getLogger(__name__)
@@ -356,7 +356,13 @@ async def import_url(request: Request, collection_id: str, body: ImportUrlReques
         raise HTTPException(status_code=400, detail="URL 必须以 http:// 或 https:// 开头")
 
     try:
+        # 先抓取验证内容非空（URL 导入走 `_extract_text_from_url`，与 ingest_url 一致）
+        text = _extract_text_from_url(body.url.strip())
+        if not text.strip():
+            raise ValueError("网页内容为空，可能无法访问或需要登录")
         doc = km.ingest_url(collection_id, body.url.strip(), uploaded_by=user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"URL 导入失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"URL 导入失败: {e}")
