@@ -54,177 +54,242 @@ export function LoginView({
   const serverDisplay = apiBaseUrl ? apiBaseUrl.replace(/^https?:\/\//, "") : "";
 
   return (
-    <div style={{
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      height: "100vh",
-      width: "100vw",
-      background: "linear-gradient(135deg, var(--bg, #f8fafc) 0%, var(--panel, #e2e8f0) 100%)",
-      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-      color: "var(--text, #334155)",
-      padding: 32,
-      paddingTop: IS_CAPACITOR ? "max(32px, env(safe-area-inset-top))" : 32,
-      boxSizing: "border-box",
-    }}>
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          background: "var(--panel2, #fff)",
-          borderRadius: 16,
-          boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
-          padding: "40px 48px",
-          maxWidth: 400,
-          width: "100%",
-          textAlign: "center",
-        }}
-      >
-        <img
-          src={logoUrl}
-          alt="Mclaw"
-          style={{ width: 56, height: 56, margin: "0 auto 12px", borderRadius: 12, display: "block" }}
-        />
-        <h2 style={{
-          margin: "0 0 8px",
-          fontSize: 20,
-          fontWeight: 600,
-          color: "var(--text, #1e293b)",
-        }}>
-          Mclaw V2
-        </h2>
+    <>
+      <style>{`
+        .login-screen {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          width: 100vw;
+          padding: 32px;
+          padding-top: max(32px, env(safe-area-inset-top));
+          box-sizing: border-box;
+          overflow: hidden;
+          background:
+            radial-gradient(1200px 800px at 12% -12%, rgba(99,102,241,0.22), transparent 60%),
+            radial-gradient(1000px 720px at 112% 112%, rgba(168,85,247,0.20), transparent 62%),
+            linear-gradient(160deg, #070a14 0%, #0d1220 45%, #141129 100%);
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+          color: #e6e9f2;
+        }
+        .login-glow {
+          position: absolute;
+          border-radius: 50%;
+          filter: blur(90px);
+          opacity: 0.5;
+          pointer-events: none;
+        }
+        .login-glow-a { width: 420px; height: 420px; background: rgba(99,102,241,0.35); top: -120px; left: -80px; }
+        .login-glow-b { width: 360px; height: 360px; background: rgba(168,85,247,0.30); bottom: -120px; right: -60px; }
 
-        {/* Server address display for Capacitor */}
-        {IS_CAPACITOR && serverDisplay && (
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-            marginBottom: 16, padding: "6px 12px", borderRadius: 8,
-            background: "var(--bg, #f1f5f9)", fontSize: 12, color: "var(--text3, #64748b)",
-          }}>
-            <IconLink size={13} style={{ opacity: 0.6, flexShrink: 0 }} />
-            <span style={{ fontFamily: "monospace", wordBreak: "break-all" }}>{serverDisplay}</span>
+        .login-card {
+          position: relative;
+          z-index: 1;
+          width: 100%;
+          max-width: 400px;
+          padding: 44px 44px 40px;
+          box-sizing: border-box;
+          text-align: center;
+          border-radius: 22px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.09);
+          backdrop-filter: blur(18px);
+          -webkit-backdrop-filter: blur(18px);
+          box-shadow: 0 24px 70px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06);
+        }
+
+        .login-logo-wrap {
+          position: relative;
+          width: 76px;
+          height: 76px;
+          margin: 0 auto 18px;
+        }
+        .login-logo {
+          width: 76px;
+          height: 76px;
+          border-radius: 18px;
+          display: block;
+          box-shadow: 0 8px 30px rgba(99,102,241,0.45);
+          border: 1px solid rgba(255,255,255,0.12);
+        }
+        .login-logo-wrap::after {
+          content: "";
+          position: absolute;
+          inset: -14px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(99,102,241,0.35), transparent 70%);
+          filter: blur(10px);
+          z-index: -1;
+        }
+
+        .login-title {
+          margin: 0;
+          font-size: 24px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+          color: #f4f6fb;
+        }
+        .login-subtitle {
+          margin: 8px 0 28px;
+          font-size: 13px;
+          color: rgba(230,233,242,0.55);
+          letter-spacing: 1px;
+        }
+
+        .login-field {
+          width: 100%;
+          padding: 12px 16px;
+          font-size: 15px;
+          border-radius: 12px;
+          border: 1px solid rgba(255,255,255,0.10);
+          background: rgba(255,255,255,0.05);
+          color: #e6e9f2;
+          outline: none;
+          box-sizing: border-box;
+          margin-bottom: 14px;
+          transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+        }
+        .login-field::placeholder { color: rgba(230,233,242,0.4); }
+        .login-field:focus {
+          border-color: rgba(129,140,248,0.7);
+          background: rgba(255,255,255,0.07);
+          box-shadow: 0 0 0 4px rgba(99,102,241,0.18);
+        }
+
+        .login-error {
+          background: rgba(244,63,94,0.12);
+          border: 1px solid rgba(244,63,94,0.25);
+          color: #fda4af;
+          border-radius: 12px;
+          padding: 10px 14px;
+          font-size: 13px;
+          margin-bottom: 16px;
+          text-align: left;
+          white-space: pre-line;
+          line-height: 1.6;
+        }
+
+        .login-btn {
+          width: 100%;
+          border: none;
+          border-radius: 12px;
+          padding: 13px 0;
+          font-size: 15px;
+          font-weight: 600;
+          letter-spacing: 1px;
+          color: #fff;
+          cursor: pointer;
+          background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+          box-shadow: 0 8px 24px rgba(99,102,241,0.35);
+          transition: transform 0.12s, box-shadow 0.2s, opacity 0.15s;
+        }
+        .login-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 12px 30px rgba(99,102,241,0.5);
+        }
+        .login-btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+        .login-btn:disabled {
+          cursor: wait;
+          opacity: 0.65;
+          background: linear-gradient(135deg, #475569 0%, #334155 100%);
+          box-shadow: none;
+        }
+
+        .login-link {
+          width: 100%;
+          margin-top: 14px;
+          background: none;
+          border: 1px solid rgba(255,255,255,0.10);
+          border-radius: 12px;
+          padding: 11px 0;
+          font-size: 14px;
+          color: rgba(230,233,242,0.65);
+          cursor: pointer;
+          transition: border-color 0.15s, color 0.15s;
+        }
+        .login-link:hover {
+          border-color: rgba(129,140,248,0.6);
+          color: #c7d2fe;
+        }
+
+        .login-server {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          margin-bottom: 18px;
+          padding: 8px 12px;
+          border-radius: 10px;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.08);
+          font-size: 12px;
+          color: rgba(230,233,242,0.55);
+        }
+      `}</style>
+
+      <div className="login-screen">
+        <div className="login-glow login-glow-a" />
+        <div className="login-glow login-glow-b" />
+
+        <form className="login-card" onSubmit={handleSubmit}>
+          <div className="login-logo-wrap">
+            <img className="login-logo" src={logoUrl} alt="MClaw" />
           </div>
-        )}
+          <h2 className="login-title">MClaw V2</h2>
+          <p className="login-subtitle">{t("brand.sub")}</p>
 
-        {error && (
-          <div style={{
-            background: "var(--error-bg, #fef2f2)",
-            color: "var(--error, #dc2626)",
-            borderRadius: 8,
-            padding: "8px 12px",
-            fontSize: 13,
-            marginBottom: 16,
-            textAlign: "left",
-            whiteSpace: "pre-line",
-            lineHeight: 1.6,
-          }}>
-            {error}
-          </div>
-        )}
+          {/* Server address display for Capacitor */}
+          {IS_CAPACITOR && serverDisplay && (
+            <div className="login-server">
+              <IconLink size={13} style={{ opacity: 0.7, flexShrink: 0 }} />
+              <span style={{ fontFamily: "monospace", wordBreak: "break-all" }}>{serverDisplay}</span>
+            </div>
+          )}
 
-        <input
-          type="text"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder={t("login.usernamePlaceholder")}
-          autoFocus
-          autoComplete="username"
-          disabled={loading}
-          style={{
-            width: "100%",
-            padding: "10px 14px",
-            fontSize: 15,
-            borderRadius: 10,
-            border: "1px solid var(--line, #e2e8f0)",
-            background: "var(--bg, #f8fafc)",
-            color: "var(--text, #1e293b)",
-            outline: "none",
-            boxSizing: "border-box",
-            marginBottom: 12,
-            transition: "border-color 0.15s",
-          }}
-          onFocus={(e) => { e.target.style.borderColor = "var(--primary, #2563eb)"; }}
-          onBlur={(e) => { e.target.style.borderColor = "var(--line, #e2e8f0)"; }}
-        />
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder={t("login.passwordPlaceholder")}
-          disabled={loading}
-          style={{
-            width: "100%",
-            padding: "10px 14px",
-            fontSize: 15,
-            borderRadius: 10,
-            border: "1px solid var(--line, #e2e8f0)",
-            background: "var(--bg, #f8fafc)",
-            color: "var(--text, #1e293b)",
-            outline: "none",
-            boxSizing: "border-box",
-            marginBottom: 16,
-            transition: "border-color 0.15s",
-          }}
-          onFocus={(e) => { e.target.style.borderColor = "var(--primary, #2563eb)"; }}
-          onBlur={(e) => { e.target.style.borderColor = "var(--line, #e2e8f0)"; }}
-        />
+          {error && <div className="login-error">{error}</div>}
 
-        <button
-          type="submit"
-          disabled={loading || !username.trim() || !password.trim()}
-          style={{
-            width: "100%",
-            background: loading
-              ? "var(--text3, #94a3b8)"
-              : "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
-            color: "#fff",
-            border: "none",
-            borderRadius: 10,
-            padding: "10px 0",
-            fontSize: 15,
-            fontWeight: 600,
-            cursor: loading ? "wait" : "pointer",
-            boxShadow: "0 2px 8px rgba(37,99,235,0.3)",
-            transition: "transform 0.1s, opacity 0.15s",
-            opacity: loading || !password.trim() ? 0.7 : 1,
-          }}
-          onMouseDown={(e) => { if (!loading) (e.target as HTMLButtonElement).style.transform = "scale(0.97)"; }}
-          onMouseUp={(e) => { (e.target as HTMLButtonElement).style.transform = ""; }}
-        >
-          {loading ? t("login.loggingIn") : t("login.submit")}
-        </button>
+          <input
+            className="login-field"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder={t("login.usernamePlaceholder")}
+            autoFocus
+            autoComplete="username"
+            disabled={loading}
+          />
+          <input
+            className="login-field"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder={t("login.passwordPlaceholder")}
+            disabled={loading}
+          />
 
-        {/* Switch server button for Capacitor */}
-        {onSwitchServer && (
           <button
-            type="button"
-            onClick={onSwitchServer}
-            style={{
-              width: "100%",
-              marginTop: 12,
-              background: "none",
-              border: "1px solid var(--line, #e2e8f0)",
-              borderRadius: 10,
-              padding: "9px 0",
-              fontSize: 14,
-              color: "var(--text3, #64748b)",
-              cursor: "pointer",
-              transition: "border-color 0.15s, color 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              (e.target as HTMLButtonElement).style.borderColor = "var(--primary, #2563eb)";
-              (e.target as HTMLButtonElement).style.color = "var(--primary, #2563eb)";
-            }}
-            onMouseLeave={(e) => {
-              (e.target as HTMLButtonElement).style.borderColor = "var(--line, #e2e8f0)";
-              (e.target as HTMLButtonElement).style.color = "var(--text3, #64748b)";
-            }}
+            className="login-btn"
+            type="submit"
+            disabled={loading || !username.trim() || !password.trim()}
           >
-            {t("login.switchServer", { defaultValue: "切换 / 添加服务器" })}
+            {loading ? t("login.loggingIn") : t("login.submit")}
           </button>
-        )}
 
-      </form>
-    </div>
+          {/* Switch server button for Capacitor */}
+          {onSwitchServer && (
+            <button
+              className="login-link"
+              type="button"
+              onClick={onSwitchServer}
+            >
+              {t("login.switchServer", { defaultValue: "切换 / 添加服务器" })}
+            </button>
+          )}
+        </form>
+      </div>
+    </>
   );
 }
