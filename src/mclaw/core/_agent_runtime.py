@@ -1342,7 +1342,7 @@ class Agent:
             # 启动记忆会话（sub-agent 独享 session_id，但底层 store 通常
             # 仍是主 Agent 的，除非 factory 后续 apply 了 memory_isolation）。
             session_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + str(uuid.uuid4())[:8]
-            self.memory_manager.start_session(session_id)
+            self.memory_manager.start_session(session_id, user_id="system")
             self._current_session_id = session_id
             if hasattr(self, "_memory_handler"):
                 self._memory_handler.reset_guide()
@@ -1405,7 +1405,7 @@ class Agent:
 
         # 启动记忆会话
         session_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + str(uuid.uuid4())[:8]
-        self.memory_manager.start_session(session_id)
+        self.memory_manager.start_session(session_id, user_id="system")
         self._current_session_id = session_id
         if hasattr(self, "_memory_handler"):
             self._memory_handler.reset_guide()
