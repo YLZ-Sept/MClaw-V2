@@ -248,10 +248,19 @@ def download_url(url: str, dest: Path) -> None:
             dest.write_bytes(resp.read())
 
 
+# 本机 ffprobe.exe 已损坏（运行即卡死）。改用 ffmpeg.exe 解析的包装器脚本，
+# 模拟 ffprobe 的 duration 与 stream JSON 两种输出。
+_FFPROBE_WRAPPER = r"C:\Users\Mr-Yang\.mclaw\data\temp\ffprobe-wrapper\ffprobe.py"
+
+
+def _ffprobe_cmd() -> list[str]:
+    return [sys.executable, _FFPROBE_WRAPPER]
+
+
 def ffprobe_duration(path: Path) -> float:
     out = run_subprocess(
         [
-            "ffprobe",
+            *_ffprobe_cmd(),
             "-v",
             "error",
             "-show_entries",
@@ -268,7 +277,7 @@ def ffprobe_duration(path: Path) -> float:
 def ffprobe_json(path: Path) -> dict[str, Any]:
     out = run_subprocess(
         [
-            "ffprobe",
+            *_ffprobe_cmd(),
             "-v",
             "error",
             "-select_streams",
@@ -810,7 +819,8 @@ def main() -> None:
     args = parser.parse_args()
 
     require_bin("ffmpeg")
-    require_bin("ffprobe")
+    if not Path(_FFPROBE_WRAPPER).is_file():
+        raise SystemExit(f"缺少 ffprobe 包装器: {_FFPROBE_WRAPPER}")
 
     root = resolve_chan_skills_dir()
     inp = Path(args.input).resolve()
