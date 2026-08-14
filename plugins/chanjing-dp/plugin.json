@@ -1,0 +1,48 @@
+{
+  "id": "chanjing-dp",
+  "name": "Chanjing Digital Human",
+  "version": "0.1.0",
+  "type": "python",
+  "entry": "plugin.py",
+  "description": "Text-to-speech and digital-human talking-video generation via the Chanjing AI open platform.",
+  "display_name_zh": "数字人",
+  "display_name_en": "Digital Human",
+  "description_i18n": {
+    "zh": "通过蝉镜 AI 开放平台生成语音（TTS）与数字人口播视频",
+    "en": "Generate TTS audio and digital-human talking videos via the Chanjing AI open platform."
+  },
+  "icon": "icon.svg",
+  "author": "Mclaw",
+  "category": "creative",
+  "tags": ["video", "tts", "digital-human", "chanjing", "avatar"],
+  "permissions": [
+    "tools.register",
+    "hooks.basic",
+    "config.read",
+    "config.write",
+    "data.own"
+  ],
+  "requires": {
+    "mclaw": ">=1.27.0",
+    "plugin_api": "~2",
+    "sdk": ">=0.7.0,<0.8.0"
+  },
+  "provides": {
+    "tools": [
+      "chanjing_list_audio",
+      "chanjing_list_dp",
+      "chanjing_tts_create",
+      "chanjing_tts_status",
+      "chanjing_video_create",
+      "chanjing_video_status"
+    ]
+  },
+  "tool_classes": {
+    "chanjing_list_audio": "readonly_scoped",
+    "chanjing_list_dp": "readonly_scoped",
+    "chanjing_tts_create": "network_out",
+    "chanjing_tts_status": "readonly_scoped",
+    "chanjing_video_create": "network_out",
+    "chanjing_video_status": "readonly_scoped"
+  }
+}
