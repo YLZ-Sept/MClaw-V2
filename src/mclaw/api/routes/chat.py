@@ -1495,7 +1495,7 @@ async def _stream_chat(
                 session = session_manager.get_session(
                     channel="desktop",
                     chat_id=conversation_id,
-                    user_id=_chat_user(request),
+                    user_id=_chat_user(http_request),
                     create_if_missing=True,
                 )
                 if session:
