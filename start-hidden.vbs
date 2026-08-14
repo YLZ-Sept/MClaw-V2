@@ -6,7 +6,7 @@ dir = fso.GetParentFolderName(WScript.ScriptFullName)
 q = Chr(34)
 
 ' Stop any existing instance first (avoids port 18900 conflict)
-shell.Run "cmd /c " & q & dir & "\stop.bat" & q, 0, True
+shell.Run q & dir & "\stop.bat" & q, 0, True
 
 ' Launch Mclaw server hidden; console output goes to logs\mclaw-console.log
 ' (NOT logs\mclaw.log — that file is owned by Mclaw's own RotatingFileHandler,
