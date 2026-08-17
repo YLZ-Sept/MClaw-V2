@@ -724,12 +724,12 @@ def _cleanup_chat_runtime_state(request: Request, conversation_id: str) -> None:
         pass
 
 
-async def _broadcast_chat_event(event: str, data: dict) -> None:
-    """Broadcast a chat event via WebSocket to all connected clients."""
+async def _broadcast_chat_event(event: str, data: dict, user_id: str | None = None) -> None:
+    """Broadcast a chat event via WebSocket, optionally scoped to one user."""
     try:
         from .websocket import broadcast_event
 
-        await broadcast_event(event, data)
+        await broadcast_event(event, data, user_id=user_id)
     except Exception:
         pass
 
@@ -2240,6 +2240,7 @@ async def _stream_chat(
                         "last_message_preview": _full_reply[:100],
                         "timestamp": time.time(),
                     },
+                    user_id=_chat_user(http_request) if http_request else None,
                 )
 
         # v1.27.14 (plan: v1.28, S1.6): mark turn finished so subsequent

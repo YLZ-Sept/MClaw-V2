@@ -5237,6 +5237,7 @@ function MainApp() {
               endpoints={chatEndpoints}
               visible={view === "chat"}
               multiAgentEnabled={multiAgentEnabled}
+              currentUser={currentUser}
               currentWorkspaceId={currentWorkspaceId}
               feedbackModalOpen={bugReportOpen}
               onOpenFeedback={(prefill) => {

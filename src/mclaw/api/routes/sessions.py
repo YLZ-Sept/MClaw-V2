@@ -54,12 +54,12 @@ def _session_user(request: Request) -> str:
     return getattr(request.state, "user_id", None) or "desktop_user"
 
 
-async def _broadcast_session_event(event: str, data: dict) -> None:
-    """Broadcast a session lifecycle event via WebSocket."""
+async def _broadcast_session_event(event: str, data: dict, user_id: str | None = None) -> None:
+    """Broadcast a session lifecycle event via WebSocket, scoped to the owner."""
     try:
         from .websocket import broadcast_event
 
-        await broadcast_event(event, data)
+        await broadcast_event(event, data, user_id=user_id)
     except Exception:
         pass
 
@@ -262,6 +262,7 @@ def _session_list_item(
 
     return {
         "id": session.chat_id,
+        "userId": getattr(session, "user_id", "") or "",
         "title": title or "对话",
         "titleGenerated": title_generated,
         "titleManuallySet": title_manually_set,
@@ -974,6 +975,7 @@ async def create_session(
             "conversation_id": conversation_id,
             **summary,
         },
+        user_id=getattr(session, "user_id", "") or None,
     )
     return {
         "ok": True,
@@ -1093,6 +1095,7 @@ async def update_session_title(
             "conversation_id": conversation_id,
             **summary,
         },
+        user_id=getattr(session, "user_id", "") or None,
     )
     return {"ok": True, **summary}
 
@@ -1146,6 +1149,7 @@ async def update_session_pin(
             "conversation_id": conversation_id,
             **summary,
         },
+        user_id=getattr(session, "user_id", "") or None,
     )
     return {"ok": True, **summary}
 
@@ -1555,6 +1559,7 @@ async def delete_session(
             {
                 "conversation_id": conversation_id,
             },
+            user_id=user_id,
         )
     else:
         logger.debug(f"[Sessions] Session not found for deletion: {session_key}")
@@ -1759,6 +1764,7 @@ async def generate_title(request: Request, body: GenerateTitleRequest):
                 await _broadcast_session_event(
                     "chat:title_update",
                     event_payload,
+                    user_id=getattr(session, "user_id", "") or None,
                 )
             else:
                 logger.info(

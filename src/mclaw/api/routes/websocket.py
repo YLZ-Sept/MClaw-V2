@@ -27,30 +27,44 @@ class ConnectionManager:
     """Manages active WebSocket connections and broadcasts events."""
 
     def __init__(self) -> None:
-        self._connections: list[tuple[WebSocket, bool]] = []  # (ws, is_local)
+        self._connections: list[tuple[WebSocket, bool, str]] = []  # (ws, is_local, user_id)
         self._lock = asyncio.Lock()
 
-    async def connect(self, ws: WebSocket, *, is_local: bool = False) -> None:
+    async def connect(self, ws: WebSocket, *, is_local: bool = False, user_id: str = "") -> None:
         await ws.accept()
         async with self._lock:
-            self._connections.append((ws, is_local))
+            self._connections.append((ws, is_local, user_id))
         logger.debug(
-            "WebSocket client connected (local=%s, total: %d)", is_local, len(self._connections)
+            "WebSocket client connected (local=%s, user=%s, total: %d)",
+            is_local,
+            user_id or "-",
+            len(self._connections),
         )
 
     async def disconnect(self, ws: WebSocket) -> None:
         async with self._lock:
-            self._connections = [(c, loc) for c, loc in self._connections if c is not ws]
+            self._connections = [
+                (c, loc, uid) for c, loc, uid in self._connections if c is not ws
+            ]
         logger.debug("WebSocket client disconnected (total: %d)", len(self._connections))
 
-    async def broadcast(self, event: str, data: Any = None) -> None:
-        """Send an event to all connected clients concurrently."""
+    async def broadcast(self, event: str, data: Any = None, *, user_id: str | None = None) -> None:
+        """Send an event to connected clients, optionally scoped to one user.
+
+        ``user_id=None`` (default) broadcasts to every connection — for global
+        events such as ``security:death_switch``. When set, only connections
+        belonging to that user receive the event.
+        """
         if not self._connections:
             return
         message = json.dumps({"event": event, "data": data, "ts": time.time()}, ensure_ascii=False)
 
         async with self._lock:
             connections = list(self._connections)
+
+        targets = [
+            ws for ws, _loc, uid in connections if user_id is None or uid == user_id
+        ]
 
         async def _safe_send(ws: WebSocket) -> WebSocket | None:
             try:
@@ -60,7 +74,7 @@ class ConnectionManager:
             return None
 
         results = await asyncio.gather(
-            *[_safe_send(ws) for ws, _loc in connections],
+            *[_safe_send(ws) for ws in targets],
             return_exceptions=True,
         )
 
@@ -69,15 +83,15 @@ class ConnectionManager:
             dead_set = {id(ws) for ws in dead}
             async with self._lock:
                 self._connections = [
-                    (c, loc) for c, loc in self._connections if id(c) not in dead_set
+                    (c, loc, uid) for c, loc, uid in self._connections if id(c) not in dead_set
                 ]
 
     async def disconnect_remote_clients(self) -> int:
         """Close all non-local WebSocket connections (e.g. after password change)."""
         to_close: list[WebSocket] = []
         async with self._lock:
-            to_close = [ws for ws, is_local in self._connections if not is_local]
-            self._connections = [(ws, loc) for ws, loc in self._connections if loc]
+            to_close = [ws for ws, is_local, _uid in self._connections if not is_local]
+            self._connections = [(ws, loc, uid) for ws, loc, uid in self._connections if loc]
         for ws in to_close:
             try:
                 await ws.send_text(json.dumps({"event": "session_invalidated", "ts": time.time()}))
@@ -111,8 +125,13 @@ def _is_local_ws(ws: WebSocket) -> bool:
     return False
 
 
-def _authenticate_ws(ws: WebSocket, config: WebAccessConfig) -> bool:
-    """Authenticate WebSocket connection via query param or local access."""
+def _authenticate_ws(ws: WebSocket, config: WebAccessConfig) -> str | None:
+    """Authenticate WebSocket connection and return the bound user_id.
+
+    Returns the authenticated user_id (``"desktop_user"`` for local exempt
+    connections, matching the HTTP middleware fallback), or ``None`` when the
+    connection must be rejected.
+    """
     # Local connections are exempt — same logic as HTTP middleware:
     # direct local connections (no X-Forwarded-For) bypass auth even with
     # trust_proxy; proxy-forwarded ones must provide a valid token.
@@ -121,26 +140,27 @@ def _authenticate_ws(ws: WebSocket, config: WebAccessConfig) -> bool:
 
         trust_proxy = os.environ.get("TRUST_PROXY", "").lower() in ("1", "true", "yes")
         if not trust_proxy or not ws.headers.get("x-forwarded-for"):
-            return True
+            return "desktop_user"
 
     # Check token from query params
     token = ws.query_params.get("token", "")
     if token and config.validate_access_token(token):
-        return True
+        return config.get_token_subject(token) or "desktop_user"
 
-    return False
+    return None
 
 
 @router.websocket("/ws/events")
 async def ws_events(ws: WebSocket):
     config: WebAccessConfig = ws.app.state.web_access_config
 
-    if not _authenticate_ws(ws, config):
+    user_id = _authenticate_ws(ws, config)
+    if user_id is None:
         await ws.close(code=4001, reason="Authentication required")
         return
 
     is_local = _is_local_ws(ws)
-    await manager.connect(ws, is_local=is_local)
+    await manager.connect(ws, is_local=is_local, user_id=user_id)
     try:
         # Send initial connection confirmation
         await ws.send_text(
@@ -174,12 +194,15 @@ async def ws_events(ws: WebSocket):
         await manager.disconnect(ws)
 
 
-async def broadcast_event(event: str, data: Any = None) -> None:
+async def broadcast_event(event: str, data: Any = None, *, user_id: str | None = None) -> None:
     """Convenience function to broadcast events from anywhere in the codebase.
 
     Cross-loop safe: when called from the engine loop (e.g. OrgRuntime),
     the actual WebSocket send is scheduled in the API loop where the
     connections live.
+
+    ``user_id`` scopes delivery to one user's connections; ``None`` broadcasts
+    to everyone (global events).
     """
     from mclaw.core.engine_bridge import fire_in_api, get_api_loop
 
@@ -189,10 +212,10 @@ async def broadcast_event(event: str, data: Any = None) -> None:
         except RuntimeError:
             current = None
         if current is not get_api_loop():
-            fire_in_api(manager.broadcast(event, data))
+            fire_in_api(manager.broadcast(event, data, user_id=user_id))
             return
 
-    await manager.broadcast(event, data)
+    await manager.broadcast(event, data, user_id=user_id)
 
 
 def fire_event(event: str, data: Any = None) -> bool:

@@ -998,6 +998,7 @@ export function ChatView({
   onOpenFeedback,
   envDraft = {},
   setEnvDraft,
+  currentUser = "",
 }: {
   serviceRunning: boolean;
   endpoints: EndpointSummary[];
@@ -1010,6 +1011,7 @@ export function ChatView({
   onOpenFeedback?: (prefill: FeedbackPrefill) => void;
   envDraft?: EnvMap;
   setEnvDraft?: (updater: (prev: EnvMap) => EnvMap) => void;
+  currentUser?: string;
 }) {
   // multiAgentEnabled is currently observed by App but not consumed inside ChatView
   // (single-agent only); accept the prop for forward compat to avoid runtime warnings.
@@ -2757,6 +2759,9 @@ export function ChatView({
     return onWsEvent((event, data) => {
       const d = data as Record<string, unknown> | null;
       if (!d) return;
+      // 多用户隔离兜底：事件若带 userId 且与当前登录用户不符，则忽略
+      const eventUserId = (d.userId as string) || (d.user_id as string) || "";
+      if (eventUserId && currentUser && eventUserId !== currentUser) return;
       const convId = d.conversation_id as string | undefined;
       if (!convId) return;
 
@@ -2861,7 +2866,7 @@ export function ChatView({
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBaseUrl, getClientId, activateConversation]);
+  }, [apiBaseUrl, getClientId, activateConversation, currentUser]);
 
   // ── Read-only protection state initialization + WS listener ──
   useEffect(() => {
