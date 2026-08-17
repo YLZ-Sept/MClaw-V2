@@ -96,6 +96,18 @@ const PROVIDER_UI: Record<string, ProviderUIConfig> = {
     envPlaceholder: "sk-...",
     recommended: true, // 国内推荐
   },
+  baidu_qianfan: {
+    envKey: "BAIDU_QIANFAN_API_KEY",
+    envType: "password",
+    envPlaceholder: "bce-v3/...",
+    envHelp: "国内免费 100 次/天",
+  },
+  bytedance: {
+    envKey: "BYTEDANCE_SEARCH_API_KEY",
+    envType: "password",
+    envPlaceholder: "火山引擎 API Key",
+    envHelp: "国内免费 500 次/月",
+  },
   tavily: {
     envKey: "TAVILY_API_KEY",
     envType: "password",

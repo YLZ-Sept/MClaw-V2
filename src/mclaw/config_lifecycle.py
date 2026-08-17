@@ -112,6 +112,8 @@ _IMMEDIATE_FIELDS = frozenset(
         "tavily_api_key",
         "jina_api_key",
         "searxng_base_url",
+        "bytedance_search_api_key",
+        "baidu_qianfan_api_key",
     }
 )
 

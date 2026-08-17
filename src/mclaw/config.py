@@ -431,6 +431,20 @@ class Settings(BaseSettings):
             "需开启 server.formats.json 才能返回 JSON"
         ),
     )
+    bytedance_search_api_key: str = Field(
+        default="",
+        description=(
+            "火山引擎·豆包搜索 API Key（国内免费 500 次/月，"
+            "申请：https://console.volcengine.com/search-infinity/api-key）"
+        ),
+    )
+    baidu_qianfan_api_key: str = Field(
+        default="",
+        description=(
+            "百度千帆 AppBuilder API Key（国内免费 100 次/天，"
+            "申请：https://qianfan.cloud.baidu.com/）"
+        ),
+    )
 
     allow_parallel_tools_with_interrupt_checks: bool = Field(
         default=False,
