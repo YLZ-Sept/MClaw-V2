@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -9,11 +10,33 @@ const isCapBuild = buildTarget === "capacitor";
 const isRemoteBuild = isWebBuild || isCapBuild;
 
 // P-RC-2 commit P2.8: stable build identifier embedded into the
-// bundle. CI sets VITE_BUILD_ID to a short SHA / timestamp; in dev
-// we fall back to a unique-per-process value so HMR reloads still
-// show the same id within a session and differ between server
-// restarts.
-const buildId = process.env.VITE_BUILD_ID || `dev-${Date.now().toString(36)}`;
+// bundle. CI sets VITE_BUILD_ID to a short SHA / timestamp.
+//
+// Local fallback (no VITE_BUILD_ID):
+// - `vite build` sets NODE_ENV=production: read the version from
+//   package.json so the bundle id matches the backend `mclaw`
+//   package version. A `dev-...` id is always reported as outdated
+//   by the backend's `is_frontend_bundle_outdated` rule, which would
+//   trip `/api/health` `frontend_bundle.outdated` after every
+//   `npm run build:web`.
+// - `vite` (serve) sets NODE_ENV=development: keep the `dev-<ts>`
+//   sentinel so HMR reloads show a stable id within a session and
+//   StaleBundleBanner short-circuits on the `dev-` prefix.
+function readPackageVersion(): string {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(path.resolve(__dirname, "package.json"), "utf-8"),
+    ) as { version?: string };
+    return pkg.version || "";
+  } catch {
+    return "";
+  }
+}
+
+const buildId =
+  process.env.VITE_BUILD_ID ||
+  (process.env.NODE_ENV === "production" ? readPackageVersion() : "") ||
+  `dev-${Date.now().toString(36)}`;
 
 function tauriStubPlugin(): Plugin {
   const prefix = "@tauri-apps/";
