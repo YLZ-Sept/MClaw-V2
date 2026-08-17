@@ -303,6 +303,9 @@ def _extract_text(file_path: Path, file_type: DocFileType) -> str:
     if file_type in (DocFileType.XLSX, DocFileType.XLS):
         return _extract_excel(file_path, file_type)
 
+    if file_type in (DocFileType.PPTX, DocFileType.PPT):
+        return _extract_pptx(file_path, file_type)
+
     if file_type == DocFileType.CSV:
         return file_path.read_text(encoding="utf-8", errors="replace")
 
@@ -350,6 +353,34 @@ def _extract_excel(file_path: Path, file_type: DocFileType) -> str:
             raise ImportError(
                 "Excel(.xls) 解析需要安装 xlrd: pip install xlrd"
             )
+
+
+def _extract_pptx(file_path: Path, file_type: DocFileType) -> str:
+    """从 PowerPoint 文件提取文本（每页一个 section，含文本框与表格）。"""
+    if file_type == DocFileType.PPT:
+        raise ImportError(".ppt 旧格式暂不支持，请转为 .pptx 后重试")
+
+    try:
+        from pptx import Presentation
+
+        prs = Presentation(str(file_path))
+        parts: list[str] = []
+        for i, slide in enumerate(prs.slides, 1):
+            parts.append(f"=== 第 {i} 页 ===")
+            for shape in slide.shapes:
+                if getattr(shape, "has_text_frame", False):
+                    for para in shape.text_frame.paragraphs:
+                        text = "".join(run.text for run in para.runs)
+                        if text.strip():
+                            parts.append(text)
+                if getattr(shape, "has_table", False):
+                    for row in shape.table.rows:
+                        parts.append("\t".join(cell.text for cell in row.cells))
+        return "\n".join(parts)
+    except ImportError:
+        raise ImportError(
+            "PPTX 解析需要安装 python-pptx: pip install python-pptx"
+        )
 
 
 def _extract_text_from_url(url: str) -> str:

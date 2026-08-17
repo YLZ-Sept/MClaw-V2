@@ -38,6 +38,8 @@ class DocFileType(str, Enum):
     HTML = "html"
     XLSX = "xlsx"
     XLS = "xls"
+    PPTX = "pptx"
+    PPT = "ppt"
     CSV = "csv"
     URL = "url"
 
@@ -53,6 +55,8 @@ EXTENSION_MAP: dict[str, DocFileType] = {
     ".htm": DocFileType.HTML,
     ".xlsx": DocFileType.XLSX,
     ".xls": DocFileType.XLS,
+    ".pptx": DocFileType.PPTX,
+    ".ppt": DocFileType.PPT,
     ".csv": DocFileType.CSV,
 }
 
@@ -66,6 +70,8 @@ FILETYPE_LABELS: dict[DocFileType, str] = {
     DocFileType.HTML: "HTML",
     DocFileType.XLSX: "Excel",
     DocFileType.XLS: "Excel",
+    DocFileType.PPTX: "PowerPoint",
+    DocFileType.PPT: "PowerPoint",
     DocFileType.CSV: "CSV",
     DocFileType.URL: "URL",
 }

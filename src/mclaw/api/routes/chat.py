@@ -2280,7 +2280,7 @@ def _org_file_attachments_to_chat_attachments(attachments: list[dict]) -> list[d
         seen.add(key)
         name = str(att.get("filename") or Path(file_path).name or "file")
         suffix = Path(name).suffix.lower()
-        att_type = "document" if suffix in {".doc", ".docx", ".pdf", ".md", ".txt"} else "file"
+        att_type = "document" if suffix in {".doc", ".docx", ".pdf", ".md", ".txt", ".xlsx", ".xls", ".pptx", ".ppt"} else "file"
         converted.append(
             ChatAttachmentRecord.model_validate(
                 {
@@ -2345,6 +2345,20 @@ def _enrich_org_content_with_attachments(content: str, attachments: list | None)
                     )
             elif suffix == ".pdf" or (mime and "pdf" in mime):
                 parts.append(f"\n[附件: {name} (PDF), 本地路径: {local_path}]")
+            elif suffix in MessageGateway._OFFICE_DOC_EXTENSIONS:
+                try:
+                    from mclaw.memory.knowledge_types import EXTENSION_MAP
+                    from mclaw.memory.knowledge_manager import _extract_text
+
+                    _ft = EXTENSION_MAP.get(suffix)
+                    if _ft is not None:
+                        file_content = _extract_text(fpath, _ft)
+                        parts.append(f"\n\n--- 文件: {name} ---\n{file_content}\n--- 文件结束 ---")
+                    else:
+                        parts.append(f"\n[附件: {name} ({mime or suffix}), 本地路径: {local_path}]")
+                except Exception:
+                    logger.warning(f"Failed to extract office doc for org content: {local_path}")
+                    parts.append(f"\n[附件: {name} ({mime or suffix}), 本地路径: {local_path}]")
             else:
                 parts.append(f"\n[附件: {name} ({mime or suffix}), 本地路径: {local_path}]")
         except Exception:

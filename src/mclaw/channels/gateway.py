@@ -5044,6 +5044,11 @@ class MessageGateway:
 
     _TEXT_FILE_SIZE_LIMIT = 512 * 1024  # 512 KB
 
+    # Office 文档：正文需要专门解析（复用知识库的 _extract_text）
+    _OFFICE_DOC_EXTENSIONS = frozenset(
+        (".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt")
+    )
+
     @staticmethod
     def _extract_text_file_content(message: "UnifiedMessage") -> str:
         """Extract readable text content from downloaded file attachments.
@@ -5080,6 +5085,30 @@ class MessageGateway:
                         )
                 elif suffix == ".pdf" or "pdf" in mime:
                     parts.append(f"\n[附件: {_fname} (PDF), 本地路径: {fil.local_path}]")
+                elif suffix in MessageGateway._OFFICE_DOC_EXTENSIONS:
+                    _fpath = Path(fil.local_path)
+                    try:
+                        from mclaw.memory.knowledge_types import EXTENSION_MAP
+                        from mclaw.memory.knowledge_manager import _extract_text
+
+                        _ft = EXTENSION_MAP.get(suffix)
+                        if _ft is not None:
+                            _content = _extract_text(_fpath, _ft)
+                            parts.append(
+                                f"\n\n--- 文件: {_fname} ---\n{_content}\n--- 文件结束 ---"
+                            )
+                            logger.info(
+                                f"Office doc injected: {fil.local_path} ({len(_content)} chars)"
+                            )
+                        else:
+                            parts.append(
+                                f"\n[附件: {_fname} ({mime or suffix}), 本地路径: {fil.local_path}]"
+                            )
+                    except Exception as e:
+                        logger.warning(f"Failed to extract office doc {fil.local_path}: {e}")
+                        parts.append(
+                            f"\n[附件: {_fname} ({mime or suffix}), 本地路径: {fil.local_path}]"
+                        )
                 else:
                     parts.append(
                         f"\n[附件: {_fname} ({mime or suffix}), 本地路径: {fil.local_path}]"

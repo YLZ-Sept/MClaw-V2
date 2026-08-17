@@ -511,6 +511,19 @@ function _hasOwn(record: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(record, key);
 }
 
+// Office 文档 MIME 判定：.docx/.doc/.xlsx/.xls/.pptx/.ppt
+const _OFFICE_DOC_MIME_SET = new Set<string>([
+  "application/msword",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-powerpoint",
+]);
+function _isOfficeDocMime(mime: string): boolean {
+  return (
+    _OFFICE_DOC_MIME_SET.has(mime) ||
+    mime.startsWith("application/vnd.openxmlformats-officedocument.")
+  );
+}
+
 function _timestampMs(value: unknown, fallback = Date.now()): number {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : fallback;
@@ -6422,7 +6435,7 @@ export function ChatView({
     for (const file of Array.from(files)) {
       const uploadId = genId();
       const att: ChatAttachment = {
-        type: file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "voice" : file.type === "application/pdf" ? "document" : "file",
+        type: file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "voice" : file.type === "application/pdf" || _isOfficeDocMime(file.type) ? "document" : "file",
         name: file.name,
         size: file.size,
         mimeType: file.type,
@@ -6584,6 +6597,12 @@ export function ChatView({
       aac: "audio/aac", flac: "audio/flac", ogg: "audio/ogg", opus: "audio/opus",
       pdf: "application/pdf", txt: "text/plain", md: "text/plain",
       json: "application/json", csv: "text/csv",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      doc: "application/msword",
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      xls: "application/vnd.ms-excel",
+      pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      ppt: "application/vnd.ms-powerpoint",
       zip: "application/zip", rar: "application/vnd.rar", "7z": "application/x-7z-compressed",
       tar: "application/x-tar", gz: "application/gzip",
     };
@@ -6599,6 +6618,7 @@ export function ChatView({
       const isVideo = videoExts.has(ext);
       const isAudio = audioExts.has(ext);
       const isPdf = ext === "pdf";
+      const isOfficeDoc = ["docx", "doc", "xlsx", "xls", "pptx", "ppt"].includes(ext);
       const mimeType = mimeMap[ext] || "application/octet-stream";
 
       let info: { size: number; isFile: boolean; isDirectory: boolean };
@@ -6634,7 +6654,7 @@ export function ChatView({
           ? "video"
           : isAudio
             ? "voice"
-            : isPdf
+            : isPdf || isOfficeDoc
               ? "document"
               : "file";
       const att: ChatAttachment = {
@@ -6825,7 +6845,7 @@ export function ChatView({
         ? "video"
         : mime.startsWith("audio/")
           ? "voice"
-          : mime === "application/pdf"
+          : mime === "application/pdf" || _isOfficeDocMime(mime)
             ? "document"
             : "file";
     setPendingAttachments((prev) => {
@@ -8383,7 +8403,7 @@ export function ChatView({
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">{t("chat.attach")}</TooltipContent>
                 </Tooltip>
-                <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,audio/*,.pdf,.txt,.md,.py,.js,.ts,.json,.csv" style={{ display: "none" }} onChange={handleFileSelect} />
+                <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,audio/*,.pdf,.txt,.md,.py,.js,.ts,.json,.csv,.docx,.doc,.xlsx,.xls,.pptx,.ppt" style={{ display: "none" }} onChange={handleFileSelect} />
 
                 <Tooltip>
                   <TooltipTrigger asChild>
