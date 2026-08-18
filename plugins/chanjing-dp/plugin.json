@@ -23,7 +23,7 @@
     "data.own"
   ],
   "requires": {
-    "mclaw": ">=1.27.0",
+    "mclaw": ">=1.2.0",
     "plugin_api": "~2",
     "sdk": ">=0.7.0,<0.8.0"
   },

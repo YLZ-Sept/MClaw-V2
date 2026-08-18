@@ -318,7 +318,7 @@ class CookiesVault:
     so the UI can show a yellow warn.
     """
 
-    KEYRING_SERVICE = .mclaw-idea-research"
+    KEYRING_SERVICE = ".mclaw-idea-research"
     KEYRING_KEY = "cookies-master"
     SCHEMA_SQL = (
         "CREATE TABLE IF NOT EXISTS cookies_vault ("
