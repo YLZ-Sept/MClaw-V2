@@ -523,6 +523,7 @@ function MainApp() {
   const multiAgentEnabled = true;
   const [storeVisible, setStoreVisible] = useState(() => localStorage.getItem("mclaw_storeVisible") === "true");
   const [currentUser, setCurrentUser] = useState("");
+  const [currentUserIsAdmin, setCurrentUserIsAdmin] = useState(false);
   const fetchCurrentUser = useCallback(async () => {
     try {
       const token = localStorage.getItem("mclaw_access_token");
@@ -532,6 +533,7 @@ function MainApp() {
       if (resp.ok) {
         const data = await resp.json();
         if (data.username) setCurrentUser(data.username);
+        setCurrentUserIsAdmin(!!data.is_admin);
       }
     } catch { /* */ }
   }, []);
@@ -551,6 +553,7 @@ function MainApp() {
     }
     keysToRemove.forEach((k) => localStorage.removeItem(k));
     setCurrentUser("");
+    setCurrentUserIsAdmin(false);
     setWebAuthed(false);
   }, []);
   const transitionToView = useCallback((nextView: ViewId) => {
@@ -3434,6 +3437,7 @@ function MainApp() {
         refreshAll={refreshAll}
         restartService={restartService}
         setView={navigateToView}
+        isAdmin={currentUserIsAdmin}
       />
     );
   }

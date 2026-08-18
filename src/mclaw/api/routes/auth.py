@@ -8,7 +8,6 @@ GET  /api/auth/check           — check current auth status
 GET  /api/auth/setup-status    — whether first-run Setup flow is required
 POST /api/auth/setup           — initial password assignment (loopback only)
 POST /api/auth/change-password — change password (local: no current pw; remote: needs current)
-GET  /api/auth/password-hint   — get password hint (local only)
 """
 
 from __future__ import annotations
@@ -317,6 +316,7 @@ async def check_auth(request: Request, response: Response):
                 "authenticated": True,
                 "method": "token",
                 "username": username,
+                "is_admin": config.is_admin(username),
                 "password_user_set": config.password_user_set,
             }
 
@@ -325,11 +325,13 @@ async def check_auth(request: Request, response: Response):
     if cookie:
         payload = config.validate_refresh_token(cookie)
         if payload:
+            username = payload.get("sub", "desktop_user")
             return {
                 "authenticated": True,
                 "method": "refresh_cookie",
                 "needs_refresh": True,
-                "username": payload.get("sub", "desktop_user"),
+                "username": username,
+                "is_admin": config.is_admin(username),
                 "password_user_set": config.password_user_set,
             }
 
@@ -404,16 +406,18 @@ async def change_password(request: Request):
 
 
 def _require_admin(request: Request) -> str:
-    """Require admin auth. Returns the admin username. Raises 403 if not admin."""
+    """Require admin auth. Returns the admin username. Raises 403 if not admin.
+
+    Relies on ``request.state.user_id``, which the auth middleware sets after
+    authenticating the caller (Bearer / query token / X-API-Key). There is
+    deliberately no localhost bypass: user management is admin-only regardless
+    of source IP.
+    """
     config = _get_config(request)
-    if is_trusted_local(request):
-        return "admin"
-    auth_header = request.headers.get("authorization", "")
-    if auth_header.startswith("Bearer "):
-        username = config.get_token_subject(auth_header[7:]) or ""
-        if config.is_admin(username):
-            return username
-    raise JSONException(403, "Admin access required (local or admin token)")
+    username = getattr(request.state, "user_id", "") or ""
+    if username and config.is_admin(username):
+        return username
+    raise JSONException(403, "Admin access required (admin token)")
 
 
 class JSONException(Exception):
@@ -496,16 +500,21 @@ async def reset_user_password(request: Request, username: str):
     return {"status": "ok"}
 
 
-# ── GET /api/auth/password-hint (local only) ──
-
-
-@router.get("/password-hint")
-async def password_hint(request: Request):
-    if not _is_local_from_real_ip(request):
-        return JSONResponse(
-            status_code=403,
-            content={"detail": "Password hint only available from localhost"},
-        )
-
+@router.post("/users/{username}/role")
+async def set_user_role(request: Request, username: str):
+    """Change a user's role (admin only)."""
+    try:
+        _require_admin(request)
+    except JSONException as e:
+        return JSONResponse(status_code=e.status, content={"detail": e.detail})
     config = _get_config(request)
-    return {"hint": config.password_hint}
+    body = await _parse_body(request)
+    role = body.get("role", "")
+    if role not in ("admin", "user"):
+        return JSONResponse(status_code=400, content={"detail": "角色必须是 admin 或 user"})
+    try:
+        config.set_role(username.strip().lower(), role)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+    logger.info("Admin changed role of user '%s' to '%s'", username, role)
+    return {"status": "ok", "username": username, "role": role}

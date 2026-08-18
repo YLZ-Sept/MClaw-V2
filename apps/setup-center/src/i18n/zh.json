@@ -2542,7 +2542,15 @@
     "newPassword": "新密码",
     "userCreated": "用户已创建",
     "userDeleteConfirm": "确定删除用户 {{username}}？",
-    "userPasswordReset": "密码已重置"
+    "userPasswordReset": "密码已重置",
+    "userPasswordTooShort": "密码至少 8 位",
+    "userPasswordAllDigits": "密码不能全是数字",
+    "userPasswordAllLetters": "密码不能全是字母",
+    "userPasswordInvalid": "密码格式无效",
+    "userRoleChanged": "角色已更新",
+    "userAdminRequired": "您没有管理员权限，请联系管理员操作",
+    "userPasswordHint": "至少 8 位，不能全是数字或字母",
+    "userPasswordValid": "符合要求"
   },
   "pluginApp": {
     "loadingTitle": "正在加载 {{name}}…",

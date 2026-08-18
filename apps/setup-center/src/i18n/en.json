@@ -2542,7 +2542,15 @@
     "newPassword": "New Password",
     "userCreated": "User created",
     "userDeleteConfirm": "Delete user {{username}}?",
-    "userPasswordReset": "Password reset"
+    "userPasswordReset": "Password reset",
+    "userPasswordTooShort": "Password must be at least 8 characters",
+    "userPasswordAllDigits": "Password cannot be all digits",
+    "userPasswordAllLetters": "Password cannot be all letters",
+    "userPasswordInvalid": "Invalid password",
+    "userRoleChanged": "Role updated",
+    "userAdminRequired": "You don't have admin permission. Please contact an administrator.",
+    "userPasswordHint": "At least 8 characters, not all digits or letters",
+    "userPasswordValid": "Meets requirements"
   },
   "pluginApp": {
     "loadingTitle": "Loading {{name}}…",

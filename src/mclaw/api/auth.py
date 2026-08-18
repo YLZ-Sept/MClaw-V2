@@ -299,6 +299,31 @@ class WebAccessConfig:
         """Admin resets any user's password (no old password needed)."""
         self.change_password(username, new_password)
 
+    def set_role(self, username: str, role: str) -> None:
+        """Change a user's role ('admin' or 'user'). Refuses to demote the last admin.
+
+        Authorization checks read the role from the live registry (see
+        :meth:`is_admin`), not from the access token's embedded claims, so a
+        role change takes effect immediately. We deliberately do NOT bump
+        ``token_version`` here (unlike ``remove_user`` / ``change_password``):
+        that would invalidate every user's session for a purely administrative
+        role tweak.
+        """
+        username = username.strip().lower()
+        if username not in self._users:
+            raise ValueError(f"用户 '{username}' 不存在")
+        if role not in ("admin", "user"):
+            raise ValueError("角色必须是 admin 或 user")
+        if self._users[username].get("role", "user") == role:
+            return
+        if self._users[username].get("role", "user") == "admin" and role == "user":
+            admins = [n for n, info in self._users.items() if info.get("role") == "admin"]
+            if len(admins) <= 1:
+                raise ValueError("不能降级最后一个管理员")
+        self._data["users"][username]["role"] = role
+        self._data["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        self._save()
+
     def clear_password(self) -> None:
         self._data.pop("users", None)
         self._data["users"] = {}

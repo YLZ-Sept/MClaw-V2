@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { safeFetch } from "../providers";
@@ -8,21 +8,8 @@ import { Input } from "@/components/ui/input";
 
 export function WebPasswordManager({ apiBase }: { apiBase: string }) {
   const { t } = useTranslation();
-  const [hint, setHint] = useState<string | null>(null);
   const [newPw, setNewPw] = useState("");
   const [isBusy, setIsBusy] = useState(false);
-
-  const loadHint = useCallback(async () => {
-    try {
-      const res = await safeFetch(`${apiBase}/api/auth/password-hint`);
-      const data = await res.json();
-      setHint(data.hint || "—");
-    } catch {
-      setHint(null);
-    }
-  }, [apiBase]);
-
-  useEffect(() => { loadHint(); }, [loadHint]);
 
   const doChangePassword = async (password: string) => {
     const loadingId = toast.loading(t("common.loading"));
@@ -35,7 +22,6 @@ export function WebPasswordManager({ apiBase }: { apiBase: string }) {
       });
       toast.success(t("adv.webPasswordChanged"));
       setNewPw("");
-      await loadHint();
     } catch (e) {
       toast.error(String(e));
     } finally {
@@ -64,12 +50,6 @@ export function WebPasswordManager({ apiBase }: { apiBase: string }) {
 
   return (
     <div className="flex flex-col gap-2.5">
-      {hint !== null && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground min-w-[80px]">{t("adv.webPasswordCurrent")}:</span>
-          <code className="px-2 py-0.5 bg-muted/40 rounded text-sm tracking-wide">{hint}</code>
-        </div>
-      )}
       {generatedPw && (
         <div className="flex items-center gap-2 text-sm px-2.5 py-1.5 rounded-md border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30">
           <span className="text-green-600 dark:text-green-400 font-medium whitespace-nowrap">{t("adv.webPasswordGenerated", { defaultValue: "新密码" })}:</span>

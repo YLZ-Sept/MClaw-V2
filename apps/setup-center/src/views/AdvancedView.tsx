@@ -16,7 +16,6 @@ import { notifySuccess, notifyError, notifyLoading, dismissLoading } from "../ut
 import { FieldText, FieldBool, FieldSelect } from "../components/EnvFields";
 import { Section } from "../components/Section";
 import { WebPasswordManager } from "../components/WebPasswordManager";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,19 +61,54 @@ export interface AdvancedViewProps {
   refreshAll: () => Promise<void>;
   restartService: () => Promise<void>;
   setView: (view: ViewId) => void;
+  isAdmin: boolean;
 }
 
 // ── User Management (inline component) ────────────────────────────────────
 
-function UserManagementSection({ apiBaseUrl }: { apiBaseUrl: string }) {
+// Client-side password strength check — mirrors the backend rules in
+// mclaw.api.routes.auth:_validate_password_strength (≥8 chars, not all
+// digits, not all letters) so users get immediate feedback before the
+// request is ever sent.
+function passwordValidationKey(pw: string): string | null {
+  if (pw.length < 8) return "adv.userPasswordTooShort";
+  if (/^\d+$/u.test(pw)) return "adv.userPasswordAllDigits";
+  if (/^\p{L}+$/u.test(pw)) return "adv.userPasswordAllLetters";
+  return null;
+}
+
+function UserManagementSection({ apiBaseUrl, isAdmin }: { apiBaseUrl: string; isAdmin: boolean }) {
   const { t } = useTranslation();
   const [users, setUsers] = useState<{ username: string; role: string }[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const [newUser, setNewUser] = useState("");
   const [newPass, setNewPass] = useState("");
+  const [newRole, setNewRole] = useState("user");
   const [resetUser, setResetUser] = useState<string | null>(null);
   const [resetPass, setResetPass] = useState("");
   const [msg, setMsg] = useState("");
+
+  // Map backend error codes (kebab-case identifiers) to localized messages.
+  // safeFetch already throws the backend `detail` string as the error message,
+  // so unknown values fall through and are shown verbatim.
+  const localizedError = (detail: unknown): string => {
+    const s = String(detail ?? "");
+    switch (s) {
+      case "password_too_short": return t("adv.userPasswordTooShort");
+      case "password_all_digits": return t("adv.userPasswordAllDigits");
+      case "password_all_letters": return t("adv.userPasswordAllLetters");
+      case "password_invalid": return t("adv.userPasswordInvalid");
+      case "Admin access required (admin token)": return t("adv.userAdminRequired");
+      default: return s;
+    }
+  };
+
+  // Guard for admin-only actions: non-admin users get a "contact admin" hint
+  // instead of hitting the (now role-gated) backend endpoint.
+  const requireAdmin = (): boolean => {
+    if (!isAdmin) { setMsg(t("adv.userAdminRequired")); return false; }
+    return true;
+  };
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -87,42 +121,64 @@ function UserManagementSection({ apiBaseUrl }: { apiBaseUrl: string }) {
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
   const doAdd = async () => {
+    if (!requireAdmin()) return;
     if (!newUser.trim() || !newPass.trim()) return;
+    const pwKey = passwordValidationKey(newPass);
+    if (pwKey) { setMsg(t(pwKey)); return; }
     try {
-      const resp = await safeFetch(`${apiBaseUrl}/api/auth/users`, {
+      await safeFetch(`${apiBaseUrl}/api/auth/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: newUser.trim(), password: newPass }),
+        body: JSON.stringify({ username: newUser.trim(), password: newPass, role: newRole }),
       });
-      if (resp.ok) { setAddOpen(false); setNewUser(""); setNewPass(""); fetchUsers(); setMsg(t("adv.userCreated")); }
-      else { const d = await resp.json().catch(() => ({})); setMsg((d as any).detail || "Error"); }
-    } catch { setMsg("Network error"); }
+      setAddOpen(false); setNewUser(""); setNewPass(""); setNewRole("user"); fetchUsers(); setMsg(t("adv.userCreated"));
+    } catch (e) { setMsg(localizedError(e instanceof Error ? e.message : e)); }
   };
 
   const doDelete = async (username: string) => {
+    if (!requireAdmin()) return;
     if (!confirm(t("adv.userDeleteConfirm", { username }))) return;
     try {
-      const resp = await safeFetch(`${apiBaseUrl}/api/auth/users/${encodeURIComponent(username)}`, { method: "DELETE" });
-      if (resp.ok) fetchUsers();
-      else { const d = await resp.json().catch(() => ({})); setMsg((d as any).detail || "Error"); }
-    } catch { setMsg("Network error"); }
+      await safeFetch(`${apiBaseUrl}/api/auth/users/${encodeURIComponent(username)}`, { method: "DELETE" });
+      fetchUsers();
+    } catch (e) { setMsg(localizedError(e instanceof Error ? e.message : e)); }
   };
 
   const doReset = async () => {
+    if (!requireAdmin()) return;
     if (!resetUser || !resetPass.trim()) return;
+    const pwKey = passwordValidationKey(resetPass);
+    if (pwKey) { setMsg(t(pwKey)); return; }
     try {
-      const resp = await safeFetch(`${apiBaseUrl}/api/auth/users/${encodeURIComponent(resetUser)}/reset-password`, {
+      await safeFetch(`${apiBaseUrl}/api/auth/users/${encodeURIComponent(resetUser)}/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ new_password: resetPass }),
       });
-      if (resp.ok) { setResetUser(null); setResetPass(""); setMsg(t("adv.userPasswordReset")); }
-      else { const d = await resp.json().catch(() => ({})); setMsg((d as any).detail || "Error"); }
-    } catch { setMsg("Network error"); }
+      setResetUser(null); setResetPass(""); setMsg(t("adv.userPasswordReset"));
+    } catch (e) { setMsg(localizedError(e instanceof Error ? e.message : e)); }
   };
+
+  const doChangeRole = async (username: string, role: string) => {
+    if (!requireAdmin()) return;
+    try {
+      await safeFetch(`${apiBaseUrl}/api/auth/users/${encodeURIComponent(username)}/role`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      fetchUsers(); setMsg(t("adv.userRoleChanged"));
+    } catch (e) { setMsg(localizedError(e instanceof Error ? e.message : e)); }
+  };
+
+  const newPassError = newPass ? passwordValidationKey(newPass) : null;
+  const resetPassError = resetPass ? passwordValidationKey(resetPass) : null;
 
   return (
     <div className="space-y-2">
+      {!isAdmin && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">{t("adv.userAdminRequired")}</p>
+      )}
       {/* User list */}
       <div className="rounded-md border">
         <table className="w-full text-sm">
@@ -134,27 +190,36 @@ function UserManagementSection({ apiBaseUrl }: { apiBaseUrl: string }) {
             </tr>
           </thead>
           <tbody>
-            {users.map((u) => (
-              <tr key={u.username} className="border-b last:border-0">
-                <td className="px-3 py-1.5 font-medium">{u.username}</td>
-                <td className="px-3 py-1.5">
-                  <Badge variant={u.role === "admin" ? "default" : "outline"} className="text-[10px]">
-                    {u.role === "admin" ? t("adv.roleAdmin") : t("adv.roleUser")}
-                  </Badge>
-                </td>
-                <td className="px-3 py-1.5 text-right">
-                  <Button size="sm" variant="ghost" className="h-7 text-xs"
-                    onClick={() => { setResetUser(u.username); setResetPass(""); }}>
-                    {t("adv.resetPassword")}
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-7 text-xs text-red-500"
-                    onClick={() => doDelete(u.username)}
-                    disabled={users.length <= 1}>
-                    {t("common.delete")}
-                  </Button>
-                </td>
-              </tr>
-            ))}
+            {users.map((u) => {
+              const isLastAdmin = u.role === "admin" && users.filter((x) => x.role === "admin").length <= 1;
+              return (
+                <tr key={u.username} className="border-b last:border-0">
+                  <td className="px-3 py-1.5 font-medium">{u.username}</td>
+                  <td className="px-3 py-1.5">
+                    <Select value={u.role} onValueChange={(v) => doChangeRole(u.username, v)}>
+                      <SelectTrigger className="h-7 w-24 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="user" disabled={isLastAdmin}>{t("adv.roleUser")}</SelectItem>
+                        <SelectItem value="admin">{t("adv.roleAdmin")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </td>
+                  <td className="px-3 py-1.5 text-right">
+                    <Button size="sm" variant="ghost" className="h-7 text-xs"
+                      onClick={() => { setResetUser(u.username); setResetPass(""); }}>
+                      {t("adv.resetPassword")}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs text-red-500"
+                      onClick={() => doDelete(u.username)}
+                      disabled={users.length <= 1}>
+                      {t("common.delete")}
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -165,52 +230,83 @@ function UserManagementSection({ apiBaseUrl }: { apiBaseUrl: string }) {
 
       {/* Add user */}
       {!addOpen ? (
-        <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
+        <Button size="sm" variant="outline" onClick={() => { if (requireAdmin()) setAddOpen(true); }}>
           + {t("adv.addUser")}
         </Button>
       ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            placeholder={t("adv.userName")}
-            value={newUser}
-            onChange={(e) => setNewUser(e.target.value)}
-            className="w-32 h-8 text-xs"
-          />
-          <Input
-            type="password"
-            placeholder={t("adv.userPassword")}
-            value={newPass}
-            onChange={(e) => setNewPass(e.target.value)}
-            className="w-32 h-8 text-xs"
-          />
-          <Button size="sm" onClick={doAdd} disabled={!newUser.trim() || !newPass.trim()} className="h-8 text-xs">
-            {t("common.save")}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => { setAddOpen(false); setNewUser(""); setNewPass(""); }} className="h-8 text-xs">
-            {t("common.cancel")}
-          </Button>
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              placeholder={t("adv.userName")}
+              value={newUser}
+              onChange={(e) => setNewUser(e.target.value)}
+              className="w-32 h-8 text-xs"
+            />
+            <Input
+              type="password"
+              placeholder={t("adv.userPassword")}
+              value={newPass}
+              onChange={(e) => setNewPass(e.target.value)}
+              className="w-32 h-8 text-xs"
+            />
+            <Select value={newRole} onValueChange={setNewRole}>
+              <SelectTrigger className="h-8 w-24 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">{t("adv.roleUser")}</SelectItem>
+                <SelectItem value="admin">{t("adv.roleAdmin")}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button size="sm" onClick={doAdd} disabled={!newUser.trim() || !newPass.trim() || !!newPassError} className="h-8 text-xs">
+              {t("common.save")}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => { setAddOpen(false); setNewUser(""); setNewPass(""); setNewRole("user"); }} className="h-8 text-xs">
+              {t("common.cancel")}
+            </Button>
+          </div>
+          {newPass ? (
+            newPassError ? (
+              <p className="text-[11px] text-red-500">{t(newPassError)}</p>
+            ) : (
+              <p className="text-[11px] text-green-600">{t("adv.userPasswordValid")}</p>
+            )
+          ) : (
+            <p className="text-[11px] text-muted-foreground">{t("adv.userPasswordHint")}</p>
+          )}
         </div>
       )}
 
       {/* Reset password dialog */}
       {resetUser && (
-        <div className="flex flex-wrap items-center gap-2 mt-2 p-2 rounded-md border bg-muted/30">
-          <span className="text-xs text-muted-foreground">
-            {t("adv.resetPasswordFor", { username: resetUser })}
-          </span>
-          <Input
-            type="password"
-            placeholder={t("adv.newPassword")}
-            value={resetPass}
-            onChange={(e) => setResetPass(e.target.value)}
-            className="w-32 h-8 text-xs"
-          />
-          <Button size="sm" onClick={doReset} disabled={!resetPass.trim()} className="h-8 text-xs">
-            {t("common.save")}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setResetUser(null)} className="h-8 text-xs">
-            {t("common.cancel")}
-          </Button>
+        <div className="mt-2 p-2 rounded-md border bg-muted/30">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {t("adv.resetPasswordFor", { username: resetUser })}
+            </span>
+            <Input
+              type="password"
+              placeholder={t("adv.newPassword")}
+              value={resetPass}
+              onChange={(e) => setResetPass(e.target.value)}
+              className="w-32 h-8 text-xs"
+            />
+            <Button size="sm" onClick={doReset} disabled={!resetPass.trim() || !!resetPassError} className="h-8 text-xs">
+              {t("common.save")}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setResetUser(null)} className="h-8 text-xs">
+              {t("common.cancel")}
+            </Button>
+          </div>
+          {resetPass ? (
+            resetPassError ? (
+              <p className="text-[11px] text-red-500 mt-1">{t(resetPassError)}</p>
+            ) : (
+              <p className="text-[11px] text-green-600 mt-1">{t("adv.userPasswordValid")}</p>
+            )
+          ) : (
+            <p className="text-[11px] text-muted-foreground mt-1">{t("adv.userPasswordHint")}</p>
+          )}
         </div>
       )}
     </div>
@@ -227,6 +323,7 @@ export function AdvancedView(props: AdvancedViewProps) {
     backendBootPhase, onOpenRuntimeEnvironment,
     askConfirm,
     refreshAll, restartService, setView,
+    isAdmin,
   } = props;
 
   const { t } = useTranslation();
@@ -819,7 +916,7 @@ export function AdvancedView(props: AdvancedViewProps) {
       {/* ── Card 4: 用户管理 ── */}
       <div className="card" style={{ marginTop: 10 }}>
         <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{t("adv.userManagementTitle")}</h3>
-        <UserManagementSection apiBaseUrl={shouldUseHttpApi() ? httpApiBase() : ""} />
+        <UserManagementSection apiBaseUrl={shouldUseHttpApi() ? httpApiBase() : ""} isAdmin={isAdmin} />
       </div>
 
       {/* ── Card 5: 数据与备份 ── */}
