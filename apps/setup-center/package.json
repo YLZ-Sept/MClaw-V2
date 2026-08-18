@@ -1,7 +1,7 @@
 {
   "name": "mclaw-setup-center",
   "private": true,
-  "version": "1.27.37",
+  "version": "1.2.0",
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {

@@ -1,6 +1,6 @@
 [project]
 name = "mclaw"
-version = "1.27.37"
+version = "1.2.0"
 description = "Mclaw - 云南米贝科技全能自进化AI Agent，永不放弃"
 readme = "README.md"
 license = { text = "AGPL-3.0-only" }

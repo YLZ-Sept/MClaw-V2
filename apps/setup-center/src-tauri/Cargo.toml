@@ -1,6 +1,6 @@
 [package]
 name = "mclaw-setup-center"
-version = "1.27.37"
+version = "1.2.0"
 description = "Mclaw Setup Center"
 authors = ["Mclaw"]
 license = "AGPL-3.0-only"
