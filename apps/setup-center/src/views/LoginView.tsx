@@ -238,7 +238,7 @@ export function LoginView({
           <div className="login-logo-wrap">
             <img className="login-logo" src={logoUrl} alt="MClaw" />
           </div>
-          <h2 className="login-title">MClaw V2</h2>
+          <h2 className="login-title">{t("brand.title")}</h2>
           <p className="login-subtitle">{t("brand.sub")}</p>
 
           {/* Server address display for Capacitor */}
