@@ -454,5 +454,4 @@ _archive/
 
 # 本地模型与交付物（不进仓库）
 .models/
-deliverables/mibei_ai_ops/
-deliverables/*.docx
+deliverables/
