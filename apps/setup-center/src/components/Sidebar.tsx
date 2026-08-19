@@ -55,6 +55,11 @@ function StepDot({ stepId: sid }: { stepId: StepId }) {
 type NavGroupId = "capabilities" | "apps" | "monitor" | "multiAgent" | "store";
 const GROUP_ICON_SIZE = 16;
 
+// Kill-switch for the sidebar "Apps" group (Plugin 2.0 UI apps). Hiding it
+// only removes the sidebar entries — the plugins' tools/routes/hooks keep
+// running. Flip to `true` to restore the group.
+const SHOW_APPS_GROUP = false;
+
 const BETA_SUP = <sup style={{ fontSize: 9, color: "var(--primary, #3b82f6)", fontWeight: 600 }}>Beta</sup>;
 
 function NavGroupHeader({
@@ -144,7 +149,7 @@ export function Sidebar({
   // plugin UI routes. Use sparse startup retries as a fallback; the main
   // trigger is the backend-ready event dispatched after /api/health succeeds.
   useEffect(() => {
-    if (!httpApiBase || !serviceRunning) { setPluginApps([]); return; }
+    if (!SHOW_APPS_GROUP || !httpApiBase || !serviceRunning) { setPluginApps([]); return; }
     let cancelled = false;
     const retryDelays = [2_000, 8_000, 20_000, 60_000, 120_000];
     const timers = new Set<ReturnType<typeof setTimeout>>();
@@ -279,8 +284,8 @@ export function Sidebar({
           </div>
         )}
 
-        {/* ── Group: Apps (Plugin 2.0 UI plugins) ── */}
-        {pluginApps.length > 0 && (
+        {/* ── Group: Apps (Plugin 2.0 UI plugins) — gated by SHOW_APPS_GROUP ── */}
+        {SHOW_APPS_GROUP && pluginApps.length > 0 && (
           <>
             <NavGroupHeader collapsed={collapsed} icon={<IconLayoutGrid size={GROUP_ICON_SIZE} />} label={t("sidebar.groupApps", "Apps")} expanded={appsExpanded} onToggle={() => toggleGroup("apps")} />
             {(collapsed || appsExpanded) && (
