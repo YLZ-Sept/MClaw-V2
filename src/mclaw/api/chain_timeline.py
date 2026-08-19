@@ -34,6 +34,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ..utils.credential_redact import redact_credentials
+
 # Per-entry content caps (characters).
 _THINKING_CAP = 1500
 _TEXT_CAP = 2000
@@ -51,6 +53,17 @@ _MAX_ENTRIES_PER_GROUP = 80
 _MAX_TOTAL_CHARS = 48_000
 
 
+def _redact_any(value: Any) -> Any:
+    """Recursively redact secret-like strings in a tool-args payload."""
+    if isinstance(value, str):
+        return redact_credentials(value)
+    if isinstance(value, dict):
+        return {k: _redact_any(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact_any(v) for v in value]
+    return value
+
+
 def _bound_args(args: Any) -> dict:
     """Return a size-bounded copy of a tool's args dict for persistence.
 
@@ -65,8 +78,8 @@ def _bound_args(args: Any) -> dict:
     except Exception:
         return {}
     if len(dumped) <= _ARGS_CAP:
-        return args
-    return {"_preview": dumped[:_ARGS_CAP], "_truncated": True}
+        return _redact_any(args)
+    return {"_preview": redact_credentials(dumped)[:_ARGS_CAP], "_truncated": True}
 
 
 def _bound_config_hint(event: dict) -> dict:
@@ -223,7 +236,7 @@ class ChainTimelineBuilder:
                     if isinstance(dur, (int, float)) and dur:
                         self._current["durationMs"] = int(dur)
             elif etype == "chain_text":
-                content = str(event.get("content", ""))
+                content = redact_credentials(str(event.get("content", "")))
                 if content:
                     self._append_entry({"kind": "text", "content": content[:_TEXT_CAP]})
             elif etype == "tool_call_start":
@@ -246,7 +259,7 @@ class ChainTimelineBuilder:
                         "kind": "tool_end",
                         "toolId": tool_id,
                         "tool": event.get("tool") or "",
-                        "result": str(event.get("result", ""))[:_RESULT_CAP],
+                        "result": redact_credentials(str(event.get("result", "")))[:_RESULT_CAP],
                         "status": status,
                     }
                 )

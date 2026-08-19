@@ -6842,6 +6842,7 @@ class Agent:
         空字符串表示无工具调用。
         """
         from ._tool_runtime import save_overflow, smart_truncate
+        from ..utils.credential_redact import redact_credentials
 
         trace = (
             getattr(self, "_last_finalized_trace", None)
@@ -6873,7 +6874,7 @@ class Agent:
                     param_budget = max(80, per_tool_budget // 2 // max(len(items), 1))
                     kv = {}
                     for k, v in items:
-                        val_str = str(v)
+                        val_str = redact_credentials(str(v))
                         val_truncated, _ = smart_truncate(
                             val_str, param_budget, save_full=False, label="param"
                         )
@@ -6884,7 +6885,9 @@ class Agent:
                 is_error = False
                 for tr in it.get("tool_results", []):
                     if tr.get("tool_use_id") == tc.get("id", ""):
-                        raw = str(tr.get("result_content", tr.get("result_preview", "")))
+                        raw = redact_credentials(
+                            str(tr.get("result_content", tr.get("result_preview", "")))
+                        )
                         is_error = tr.get("is_error", False)
                         if self._is_internal_tool_control_message(raw):
                             result_hint = ""
@@ -7003,18 +7006,24 @@ class Agent:
         """
         if not react_trace:
             return None
+        from ..utils.credential_redact import redact_credentials
+
         summaries = []
         for t in react_trace:
             results_by_id: dict[str, str] = {}
             for tr in t.get("tool_results", []):
                 tid = tr.get("tool_use_id", "")
                 if tid:
-                    results_by_id[tid] = str(tr.get("result_content", ""))[:120]
+                    results_by_id[tid] = redact_credentials(
+                        str(tr.get("result_content", ""))
+                    )[:120]
             tools = []
             for tc in t.get("tool_calls", []):
                 tool_entry: dict = {
                     "name": tc.get("name", ""),
-                    "input_preview": str(tc.get("input", tc.get("input_preview", "")))[:80],
+                    "input_preview": redact_credentials(
+                        str(tc.get("input", tc.get("input_preview", "")))
+                    )[:80],
                 }
                 tc_id = tc.get("id", "")
                 if tc_id and tc_id in results_by_id:

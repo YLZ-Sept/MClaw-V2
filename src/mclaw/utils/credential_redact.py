@@ -13,6 +13,9 @@ _CREDENTIAL_PATTERNS = [
         re.compile(r'(?i)(api[_-]?key|apikey)\s*[=:]\s*["\']?([a-zA-Z0-9_\-]{20,})["\']?'),
         r"\1=[REDACTED]",
     ),
+    # "sk-" prefixed API keys (DeepSeek `sk-<hex>`, DashScope `sk-ws-*.…` with dots).
+    # 通用 api_key 规则的值字符集不含 `.`，故 DashScope 带点密钥会漏网，这里单独兜底。
+    (re.compile(r"\bsk-[A-Za-z0-9][A-Za-z0-9._-]{15,}"), "[REDACTED]"),
     # Bearer tokens
     (re.compile(r"(?i)(bearer\s+)([a-zA-Z0-9_\-\.]{20,})"), r"\1[REDACTED]"),
     # Authorization headers
