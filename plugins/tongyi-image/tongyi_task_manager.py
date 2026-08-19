@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 import time
@@ -34,14 +35,25 @@ class TaskManager:
     def __init__(self, db_path: str | Path):
         self._db_path = str(db_path)
         self._db: aiosqlite.Connection | None = None
+        self._init_lock = asyncio.Lock()
 
     async def init(self) -> None:
-        self._db = await aiosqlite.connect(self._db_path)
-        self._db.row_factory = aiosqlite.Row
-        await self._db.execute("PRAGMA journal_mode=WAL")
-        await self._db.execute("PRAGMA synchronous=NORMAL")
-        await self._create_tables()
-        await self._seed_config()
+        async with self._init_lock:
+            if self._db is not None:
+                return
+            self._db = await aiosqlite.connect(self._db_path)
+            self._db.row_factory = aiosqlite.Row
+            await self._db.execute("PRAGMA journal_mode=WAL")
+            await self._db.execute("PRAGMA synchronous=NORMAL")
+            await self._create_tables()
+            await self._seed_config()
+
+    async def _ensure_init(self) -> None:
+        """Lazily (re)open the SQLite connection if it was closed or never
+        opened — e.g. after a plugin hot-reload where ``on_unload`` closed it
+        and ``on_load``'s async init may not have run yet."""
+        if self._db is None:
+            await self.init()
 
     async def close(self) -> None:
         if self._db:
@@ -49,7 +61,7 @@ class TaskManager:
             self._db = None
 
     async def _create_tables(self) -> None:
-        assert self._db
+        await self._ensure_init()
         await self._db.executescript("""
             CREATE TABLE IF NOT EXISTS tasks (
                 id TEXT PRIMARY KEY,
@@ -85,7 +97,7 @@ class TaskManager:
         await self._db.commit()
 
     async def _seed_config(self) -> None:
-        assert self._db
+        await self._ensure_init()
         for k, v in DEFAULT_CONFIG.items():
             await self._db.execute(
                 "INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v)
@@ -96,26 +108,26 @@ class TaskManager:
     # Config
     # ------------------------------------------------------------------
     async def get_config(self, key: str) -> str | None:
-        assert self._db
+        await self._ensure_init()
         cur = await self._db.execute("SELECT value FROM config WHERE key = ?", (key,))
         row = await cur.fetchone()
         return row["value"] if row else None
 
     async def get_all_config(self) -> dict[str, str]:
-        assert self._db
+        await self._ensure_init()
         cur = await self._db.execute("SELECT key, value FROM config")
         rows = await cur.fetchall()
         return {r["key"]: r["value"] for r in rows}
 
     async def set_config(self, key: str, value: str) -> None:
-        assert self._db
+        await self._ensure_init()
         await self._db.execute(
             "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", (key, value)
         )
         await self._db.commit()
 
     async def set_configs(self, updates: dict[str, str]) -> None:
-        assert self._db
+        await self._ensure_init()
         for k, v in updates.items():
             await self._db.execute(
                 "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", (k, v)
@@ -137,7 +149,7 @@ class TaskManager:
         status: str = "pending",
         image_urls: list[str] | None = None,
     ) -> dict:
-        assert self._db
+        await self._ensure_init()
         task_id = _short_id()
         now = _now_iso()
         await self._db.execute(
@@ -164,7 +176,7 @@ class TaskManager:
         return await self.get_task(task_id)  # type: ignore
 
     async def get_task(self, task_id: str) -> dict | None:
-        assert self._db
+        await self._ensure_init()
         cur = await self._db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
         row = await cur.fetchone()
         return self._row_to_dict(row) if row else None
@@ -191,7 +203,7 @@ class TaskManager:
     )
 
     async def update_task(self, task_id: str, **updates: Any) -> None:
-        assert self._db
+        await self._ensure_init()
         if not updates:
             return
         sets: list[str] = []
@@ -216,7 +228,7 @@ class TaskManager:
         await self._db.commit()
 
     async def delete_task(self, task_id: str) -> bool:
-        assert self._db
+        await self._ensure_init()
         cur = await self._db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
         await self._db.commit()
         return cur.rowcount > 0
@@ -229,7 +241,7 @@ class TaskManager:
         offset: int = 0,
         limit: int = 50,
     ) -> dict:
-        assert self._db
+        await self._ensure_init()
         where_clauses = []
         params: list[Any] = []
         if status:
@@ -251,7 +263,7 @@ class TaskManager:
         return {"tasks": [self._row_to_dict(r) for r in rows], "total": total}
 
     async def get_running_tasks(self) -> list[dict]:
-        assert self._db
+        await self._ensure_init()
         cur = await self._db.execute("SELECT * FROM tasks WHERE status IN ('pending', 'running')")
         rows = await cur.fetchall()
         return [self._row_to_dict(r) for r in rows]
