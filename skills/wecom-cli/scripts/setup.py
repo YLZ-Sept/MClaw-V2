@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """企业微信 wecom-cli 安装与初始化脚本。"""
 
+import os
 import shutil
 import subprocess
 import sys
@@ -12,7 +13,11 @@ def check_cmd(name: str) -> str | None:
 
 def run(cmd: list[str], check: bool = True) -> int:
     print(f"  → {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=False)
+    if os.name == "nt":
+        # Windows: npm/wecom-cli 都是 .cmd shim，需经 shell 执行
+        result = subprocess.run(subprocess.list2cmdline(cmd), shell=True)
+    else:
+        result = subprocess.run(cmd, capture_output=False)
     if check and result.returncode != 0:
         print(f"  ✗ 命令失败 (exit {result.returncode})", file=sys.stderr)
     return result.returncode
@@ -38,8 +43,8 @@ def main():
             sys.exit(1)
         print("✓ wecom-cli 安装完成")
 
-    print("\n○ 运行 wecom-cli init ...")
-    run(["wecom-cli", "init"], check=False)
+    print("\n○ 运行 wecom-cli auth init ...")
+    run(["wecom-cli", "auth", "init"], check=False)
 
     print("\n=== 安装完成 ===")
     print("使用 wecom_quick.py 快速调用企业微信 API")
