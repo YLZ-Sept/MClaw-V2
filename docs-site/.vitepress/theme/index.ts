@@ -33,7 +33,7 @@ export default {
         if (hash) {
           if (window.parent && window.parent !== window) {
             window.parent.postMessage(
-              { type: .mclaw-navigate", hash },
+              { type: "mclaw-navigate", hash },
               "*",
             );
           } else {
