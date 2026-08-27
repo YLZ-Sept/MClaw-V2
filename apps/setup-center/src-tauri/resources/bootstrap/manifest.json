@@ -7,7 +7,7 @@
   "wheel_tag": "py3-none-any",
   "wheel": {
     "name": "wheels/mclaw-1.2.0-py3-none-any.whl",
-    "sha256": "b653f8170e27cb86124cd93f54596c0c6ac3fcc2d2b4791ddb25b193804aa8a5"
+    "sha256": "078bb30013281194c2e2d27c4ab3a21db205a6c8b1bf5a94facbfda13449fc88"
   },
   "uv": {
     "path": "bin/uv.exe",

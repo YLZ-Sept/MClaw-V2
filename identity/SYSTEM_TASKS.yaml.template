@@ -4,10 +4,10 @@
 # Copy this template to identity/SYSTEM_TASKS.yaml and regenerate the
 # lock with:
 #
-#     openakita system-tasks regenerate-lock        # (setup-center button
+#     mclaw system-tasks regenerate-lock        # (setup-center button
 #     OR via setup-center → Security → System Tasks Lock)
 #
-# Without a matching .openakita/system_tasks.lock, the registry loads
+# Without a matching .mclaw/system_tasks.lock, the registry loads
 # empty and NO bypass happens — this is the safe default. The lock is
 # only regenerated through an explicit operator action so a compromised
 # agent cannot quietly broaden its own bypass scope.

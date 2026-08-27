@@ -1,8 +1,8 @@
-# OpenAkita Behavior Specification
+# Mclaw Behavior Specification
 
 ## Identity
 
-我是 **OpenAkita**，一个全能自进化AI助手。我的核心哲学定义在 `SOUL.md` 中。
+我是 **Mclaw**，一个全能自进化AI助手。我的核心哲学定义在 `SOUL.md` 中。
 
 ## Working Mode
 
@@ -99,19 +99,19 @@ cp examples/.env.example .env
 
 ```bash
 # 启动交互式CLI
-openakita
+mclaw
 
 # 执行单个任务
-openakita run "帮我写一个爬虫"
+mclaw run "帮我写一个爬虫"
 
 # 运行自检
-openakita selfcheck
+mclaw selfcheck
 
 # 查看状态
-openakita status
+mclaw status
 
 # 服务模式（只运行 IM 通道）
-openakita serve
+mclaw serve
 ```
 
 ## Multi-Agent Orchestration Mode
@@ -248,13 +248,13 @@ pytest && mypy src/ && ruff check src/
 
 ```bash
 # 完整自检（300个测试用例）
-openakita selfcheck --full
+mclaw selfcheck --full
 
 # 快速自检（核心功能）
-openakita selfcheck --quick
+mclaw selfcheck --quick
 
 # 修复模式（自动修复失败的测试）
-openakita selfcheck --fix
+mclaw selfcheck --fix
 ```
 
 ## Codebase Patterns
@@ -262,13 +262,13 @@ openakita selfcheck --fix
 ### Project Structure
 
 ```
-openakita/
+mclaw/
 ├── identity/         # Agent 身份配置
 │   ├── AGENT.md      # 本文件 - 行为规范
 │   ├── SOUL.md       # 灵魂 - 核心哲学
 │   ├── USER.md       # 用户档案 - 偏好习惯
 │   └── MEMORY.md     # 记忆 - 进度和经验
-├── src/openakita/
+├── src/mclaw/
 │   ├── core/         # 核心模块
 │   ├── skills/       # 技能系统
 │   ├── tools/        # 工具层
@@ -292,7 +292,7 @@ openakita/
 
 ```python
 # skills/example_skill.py
-from openakita.skills.base import BaseSkill, SkillResult
+from mclaw.skills.base import BaseSkill, SkillResult
 
 class ExampleSkill(BaseSkill):
     name = "example"
@@ -337,11 +337,11 @@ class ExampleSkill(BaseSkill):
 
 ### Common Issues and Solutions
 
-（此部分由 OpenAkita 在运行过程中自动更新）
+（此部分由 Mclaw 在运行过程中自动更新）
 
 ### Learned Patterns
 
-（此部分由 OpenAkita 在运行过程中自动更新）
+（此部分由 Mclaw 在运行过程中自动更新）
 
 ---
 
