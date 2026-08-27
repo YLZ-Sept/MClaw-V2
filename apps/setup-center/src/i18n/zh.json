@@ -2552,6 +2552,22 @@
     "userPasswordHint": "至少 8 位，不能全是数字或字母",
     "userPasswordValid": "符合要求"
   },
+  "changePassword": {
+    "title": "修改密码",
+    "description": "修改后所有已登录会话将失效，需重新登录",
+    "trigger": "改密",
+    "current": "当前密码",
+    "currentPlaceholder": "请输入当前密码",
+    "new": "新密码",
+    "newPlaceholder": "至少 8 位，不能全是数字或字母",
+    "confirm": "确认新密码",
+    "confirmPlaceholder": "再次输入新密码",
+    "currentRequired": "请输入当前密码",
+    "currentIncorrect": "当前密码不正确",
+    "mismatch": "两次输入的新密码不一致",
+    "changed": "密码已修改，请重新登录",
+    "submit": "确认修改"
+  },
   "pluginApp": {
     "loadingTitle": "正在加载 {{name}}…",
     "loadingSlow": "工作台应用启动较慢，请稍候…",

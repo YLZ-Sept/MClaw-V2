@@ -2552,6 +2552,22 @@
     "userPasswordHint": "At least 8 characters, not all digits or letters",
     "userPasswordValid": "Meets requirements"
   },
+  "changePassword": {
+    "title": "Change Password",
+    "description": "Changing your password invalidates all other sessions; you'll need to sign in again.",
+    "trigger": "Change",
+    "current": "Current password",
+    "currentPlaceholder": "Enter your current password",
+    "new": "New password",
+    "newPlaceholder": "At least 8 characters, not all digits or letters",
+    "confirm": "Confirm new password",
+    "confirmPlaceholder": "Re-enter the new password",
+    "currentRequired": "Please enter your current password",
+    "currentIncorrect": "Current password is incorrect",
+    "mismatch": "Passwords do not match",
+    "changed": "Password changed. Please sign in again.",
+    "submit": "Change password"
+  },
   "pluginApp": {
     "loadingTitle": "Loading {{name}}…",
     "loadingSlow": "Plugin is taking longer than expected…",

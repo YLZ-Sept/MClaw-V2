@@ -11,6 +11,7 @@ import {
 } from "../icons";
 import logoUrl from "../assets/logo-new.png";
 import { ReleaseNotesDialog, normalizeReleaseVersion } from "./ReleaseNotesDialog";
+import { ChangePasswordDialog } from "./ChangePasswordDialog";
 
 export type SidebarProps = {
   collapsed: boolean;
@@ -139,6 +140,7 @@ export function Sidebar({
 
   const [pluginApps, setPluginApps] = useState<PluginUIApp[]>([]);
   const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
+  const [changePwOpen, setChangePwOpen] = useState(false);
   const releaseNotesVersion = normalizeReleaseVersion(desktopVersion);
 
   // Refetch the Apps sidebar list. Triggered initially, when backend
@@ -454,18 +456,32 @@ export function Sidebar({
             {!collapsed && <span>{username}</span>}
           </span>
           {!collapsed && onLogout && (
-            <button
-              type="button"
-              onClick={onLogout}
-              title="退出登录"
-              style={{
-                fontSize: 11, color: "var(--muted)", opacity: 0.6,
-                background: "none", border: "none", cursor: "pointer",
-                padding: "2px 6px", borderRadius: 4,
-              }}
-            >
-              退出
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <button
+                type="button"
+                onClick={() => setChangePwOpen(true)}
+                title={t("changePassword.title")}
+                style={{
+                  fontSize: 11, color: "var(--muted)", opacity: 0.6,
+                  background: "none", border: "none", cursor: "pointer",
+                  padding: "2px 6px", borderRadius: 4,
+                }}
+              >
+                {t("changePassword.trigger")}
+              </button>
+              <button
+                type="button"
+                onClick={onLogout}
+                title="退出登录"
+                style={{
+                  fontSize: 11, color: "var(--muted)", opacity: 0.6,
+                  background: "none", border: "none", cursor: "pointer",
+                  padding: "2px 6px", borderRadius: 4,
+                }}
+              >
+                退出
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -474,6 +490,14 @@ export function Sidebar({
         <ReleaseNotesDialog
           version={releaseNotesVersion}
           onClose={() => setReleaseNotesOpen(false)}
+        />
+      )}
+
+      {changePwOpen && (
+        <ChangePasswordDialog
+          apiBase={httpApiBase ?? ""}
+          onClose={() => setChangePwOpen(false)}
+          onDone={() => { setChangePwOpen(false); onLogout?.(); }}
         />
       )}
     </aside>
