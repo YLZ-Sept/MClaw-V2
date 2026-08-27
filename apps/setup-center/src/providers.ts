@@ -1,7 +1,7 @@
 // ─── Provider-related utility functions for Setup Center ───
 
-import { IS_TAURI, proxyFetch } from "./platform";
-import { authFetch, isTauriRemoteMode } from "./platform/auth";
+import { proxyFetch } from "./platform";
+import { authFetch } from "./platform/auth";
 import type { ProviderInfo, ListedModel } from "./types";
 
 /** 判断服务商是否为本地服务（不需要真实 API Key） */
@@ -325,7 +325,9 @@ export async function fetchModelsDirectly(params: {
 /** Auth-aware fetch that preserves HTTP error responses for status-aware callers. */
 export async function safeFetchResponse(url: string, init?: RequestInit): Promise<Response> {
   const effectiveInit = init?.signal ? init : { ...init, signal: AbortSignal.timeout(10_000) };
-  const useAuth = !IS_TAURI || isTauriRemoteMode();
+  // All clients require auth now that the backend removed the localhost
+  // exemption — the Tauri desktop local mode must attach its token too.
+  const useAuth = true;
   let apiBase = "";
   if (useAuth && url.startsWith("http")) {
     try { apiBase = new URL(url).origin; } catch { /* relative url, keep "" */ }

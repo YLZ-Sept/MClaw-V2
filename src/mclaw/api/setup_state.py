@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .auth import WebAccessConfig, is_trusted_local
+from .auth import WebAccessConfig
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -36,21 +36,13 @@ def is_setup_complete(web_access: WebAccessConfig) -> bool:
 def should_require_setup(request: Request, web_access: WebAccessConfig) -> bool:
     """Return ``True`` when the caller must complete the Setup flow first.
 
-    Setup is required iff:
-
-    1. no password is currently stored, AND
-    2. the caller is **not** a trusted local connection.
-
-    Trusted local connections (direct loopback, ``TRUST_PROXY``-aware) are
-    exempted because they are typically the desktop GUI or operator-local
-    tooling on the same host — that's the only context in which it's safe to
-    let them set the password.
-
-    Mirror image used by the setup gate middleware as well as by
-    ``GET /api/auth/setup-status``. The result is symmetric: a request that
-    is ``trusted_local`` never sees the setup gate, even if no password is
-    set (so a fresh local install just works).
+    Setup is required whenever no password is currently stored, regardless of
+    whether the caller is a loopback/desktop connection.  Local requests are
+    no longer exempt: the desktop GUI must also complete first-run password
+    setup (it logs in with the same credentials afterwards).  This keeps the
+    setup gate symmetric with :mod:`mclaw.api.auth`, which removed the
+    localhost auth exemption.
     """
     if is_setup_complete(web_access):
         return False
-    return not is_trusted_local(request)
+    return True

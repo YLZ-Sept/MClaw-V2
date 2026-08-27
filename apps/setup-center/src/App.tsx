@@ -276,7 +276,9 @@ function MainApp() {
   // IS_LOCAL_WEB: hostname is 127.0.0.1/localhost/::1 — backend authenticates
   // by client IP, no tokens or round-trips needed.  This eliminates the entire
   // class of "checkAuth timeout → login page flash" bugs.
-  const needsRemoteAuth = (IS_WEB || IS_CAPACITOR) && true /* was !IS_LOCAL_WEB */;
+  // All platforms (web / capacitor / tauri) require remote auth now that the
+  // backend removed the localhost exemption (127.0.0.1 also needs a token).
+  const needsRemoteAuth = true;
   const [webAuthed, setWebAuthed] = useState(!needsRemoteAuth);
   const [authChecking, setAuthChecking] = useState(needsRemoteAuth);
   const [showPwBanner, setShowPwBanner] = useState(false);
@@ -313,7 +315,7 @@ function MainApp() {
       setAuthChecking(false);
       return;
     }
-    const apiBase = IS_CAPACITOR ? (getActiveServer()?.url || "") : "";
+    const apiBase = IS_CAPACITOR ? (getActiveServer()?.url || "") : (IS_TAURI ? "http://127.0.0.1:18900" : "");
     let cancelled = false;
     // Probe setup-status first: if the backend says setup is required we go
     // straight to SetupView and skip the (pointless) checkAuth round-trip.
@@ -4956,13 +4958,13 @@ function MainApp() {
 
   // ── First-run setup gate: show SetupView before LoginView ──
   // Triggered either by the startup setup-status probe or by a 428 from any
-  // subsequent fetch. Loopback callers never reach this branch because the
-  // backend's setup_state.should_require_setup returns False for them; the
-  // gate is for non-trusted-local sessions (Capacitor / LAN browser).
+  // subsequent fetch. All callers (including desktop loopback) reach this
+  // branch when no password is set — setup_state.should_require_setup no
+  // longer exempts loopback.
   if (setupRequired) {
     return (
       <SetupView
-        apiBaseUrl={IS_CAPACITOR ? apiBaseUrl : ""}
+        apiBaseUrl={IS_CAPACITOR ? apiBaseUrl : (IS_TAURI ? httpApiBase() : "")}
         onSetupSuccess={() => {
           installFetchInterceptor();
           webInitDone.current = false;
@@ -4979,7 +4981,7 @@ function MainApp() {
       return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: "var(--text3, #94a3b8)" }}>Loading...</div>;
     }
     return <LoginView
-      apiBaseUrl={IS_CAPACITOR ? apiBaseUrl : ""}
+      apiBaseUrl={IS_CAPACITOR ? apiBaseUrl : (IS_TAURI ? httpApiBase() : "")}
       onLoginSuccess={() => {
         // Clear chat cache from previous user
         const keysToRemove: string[] = [];
