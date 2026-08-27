@@ -1046,7 +1046,7 @@ for p in sys.path:
     if "site-packages" in low and any(marker in low for marker in bad_path_markers):
         fail("sys.path contains disallowed site-packages: " + str(p))
 
-for mod_name in ("mclaw", "yaml", "pydantic", "pydantic_core", "certifi"):
+for mod_name in ("mclaw", "yaml", "pydantic", "pydantic_core", "certifi", "mclaw.api.server"):
     try:
         mod = importlib.import_module(mod_name)
     except Exception as exc:

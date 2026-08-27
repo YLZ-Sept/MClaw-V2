@@ -84,8 +84,8 @@ pnpm-debug.log*
 dist/
 dist-cli/
 .vite/
-src/openakita/web/
-src/openakita/docs_dist/
+src/mclaw/web/
+src/mclaw/docs_dist/
 # Plugins ship their built UI as part of the distributable source —
 # exempt plugins/*/ui/dist/ from the global `dist/` rule above.
 !plugins/*/ui/dist/
@@ -101,9 +101,7 @@ apps/**/dist-web/
 apps/**/.vite/
 apps/**/src-tauri/target/
 apps/**/tsconfig.tsbuildinfo
-# Tauri resources - 构建产物，不应提交（保留 .gitkeep 使空目录入库）
-apps/setup-center/src-tauri/resources/openakita-server/*
-!apps/setup-center/src-tauri/resources/openakita-server/.gitkeep
+# Tauri resources - 构建产物，不应提交
 apps/setup-center/src-tauri/resources/modules/
 apps/setup-center/src-tauri/resources/bootstrap/bin/
 apps/setup-center/src-tauri/resources/bootstrap/wheels/
@@ -130,7 +128,7 @@ identity/personas/user_custom.md
 identity/runtime/
 
 # skills/ 目录全部是内置技能，需要被 git 完整跟踪。
-# 用户通过技能市场安装的技能存放在 ~/.openakita/workspaces/default/skills/，
+# 用户通过技能市场安装的技能存放在 ~/.mclaw/workspaces/default/skills/，
 # 不在仓库目录内，无需 ignore。
 
 # Archived plugins (not auto-loaded; not for GitHub)
@@ -187,7 +185,7 @@ indentity_compiler.txt
 *_report*.py
 create_report*.py
 fix_report.py
-!src/openakita/api/routes/bug_report.py
+!src/mclaw/api/routes/bug_report.py
 !plugins/**/test_report_*.py
 !plugins/**/report_generator.py
 !plugins/**/report_routes.py
@@ -215,8 +213,8 @@ generate_vision_tasks.py
 
 # Temporary documents
 Microsoft_BitNet_*.docx
-OPENAKITA_PROJECT_STATUS.txt
-openakita_project_summary.md
+MCLAW_PROJECT_STATUS.txt
+mclaw_project_summary.md
 CLASSIFICATION_SYSTEM.md
 classification_report.json
 skills_list.md
@@ -260,8 +258,8 @@ apps/setup-center/android/.gradle/
 apps/setup-center/android/app/src/main/assets/public/
 apps/setup-center/android/app/src/main/assets/capacitor.config.json
 $null
-OPENAKITA_RESEARCH_REPORT.md
-openakita-release.keystore
+MCLAW_RESEARCH_REPORT.md
+mclaw-release.keystore
 ppt_build/
 
 # Claude Code reference materials
@@ -283,7 +281,7 @@ botpy.log*
 .env.bak
 
 # SDK 暂存参考代码（README 明确写明零消费者、不参与打包与 CI）
-openakita-plugin-sdk/staging/
+mclaw-plugin-sdk/staging/
 
 # E2E 测试报告（手动/AI 生成的快照，pytest 只跑 .py，这些 .md 不参与 CI）
 tests/e2e/*.md

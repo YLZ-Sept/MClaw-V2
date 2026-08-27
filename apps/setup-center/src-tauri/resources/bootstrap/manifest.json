@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
   "app_name": "mclaw",
-  "app_version": "1.27.32",
+  "app_version": "1.2.0",
   "python_version": "3.11",
-  "python_abi": "cp311",
+  "python_abi": "cp312",
   "wheel_tag": "py3-none-any",
   "wheel": {
-    "name": "wheels/mclaw-1.27.32-py3-none-any.whl",
-    "sha256": "f256792375d457ec722a7710ba6e4872c898b63d3f09f1a700ecb36e207948ff"
+    "name": "wheels/mclaw-1.2.0-py3-none-any.whl",
+    "sha256": "b339c5c9cb92f60bfb73c2f675107b24538f06aa9f77a184f2ccb5beb167ab42"
   },
   "uv": {
     "path": "bin/uv.exe",
     "windows_path": "bin/uv.exe",
     "version": "0.11.13",
-    "sha256": "23cf0f8194ff576562646a1a2950c6826249c8806cd1547debd24db77eb68f58"
+    "sha256": "965816e654d8fac650b282345c89c1daff16a0cfe45e9d2d2a8f5af3fed466a4"
   },
   "python_seed": {
     "packaged": true,
@@ -30,6 +30,11 @@
     "packaged": false,
     "path": "",
     "note": "Reserved for managed Node.js seed packaging; release workflows currently do not bundle Node.js."
+  },
+  "wheelhouse": {
+    "complete": true,
+    "path": "wheelhouse/",
+    "note": "Bundled dependency wheels for offline install; includes locally-built mclaw-plugin-sdk."
   },
   "third_party": {
     "uv": {

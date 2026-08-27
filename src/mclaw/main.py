@@ -2298,8 +2298,9 @@ def serve(
                 )
             except Exception:
                 logger.debug("Failed to update API startup readiness", exc_info=True)
-        except ImportError:
-            console.print("[yellow]⚠[/yellow] HTTP API 未启动（缺少 fastapi/uvicorn 依赖）")
+        except ImportError as e:
+            console.print(f"[yellow]⚠[/yellow] HTTP API 未启动（依赖缺失）: {e}")
+            logger.error(f"HTTP API import failed: {e}", exc_info=True)
         except Exception as e:
             console.print(f"[red]✗[/red] HTTP API 启动失败: {e}")
             logger.error(f"HTTP API server failed to start: {e}", exc_info=True)
