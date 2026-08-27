@@ -26,6 +26,9 @@
       "minimumSystemVersion": "10.15"
     },
     "windows": {
+      "webviewInstallMode": {
+        "type": "offlineInstaller"
+      },
       "nsis": {
         "installMode": "currentUser",
         "installerIcon": "icons/logo.ico",

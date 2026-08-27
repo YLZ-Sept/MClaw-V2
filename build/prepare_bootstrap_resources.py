@@ -345,9 +345,9 @@ def build_wheel() -> Path:
             cwd=tmp,
             check=True,
         )
-    wheels = sorted(out_dir.glob("openakita-*.whl"), key=lambda item: item.stat().st_mtime)
+    wheels = sorted(out_dir.glob("mclaw-*.whl"), key=lambda item: item.stat().st_mtime)
     if not wheels:
-        raise RuntimeError("python -m build --wheel completed but no openakita wheel was found")
+        raise RuntimeError("python -m build --wheel completed but no mclaw wheel was found")
     return wheels[-1]
 
 
@@ -361,7 +361,7 @@ def stage_package_assets() -> None:
 
 def copy_wheel(wheel: Path, wheels_dir: Path) -> Path:
     wheels_dir.mkdir(parents=True, exist_ok=True)
-    for old in wheels_dir.glob("openakita-*.whl"):
+    for old in wheels_dir.glob("mclaw-*.whl"):
         old.unlink()
     target = wheels_dir / wheel.name
     shutil.copy2(wheel, target)
@@ -1078,7 +1078,7 @@ def main() -> int:
     if args.require_real_assets and not args.skip_wheel_build:
         stage_package_assets()
 
-    wheel = sorted(DIST_DIR.glob("openakita-*.whl"), key=lambda item: item.stat().st_mtime)[-1] if args.skip_wheel_build else build_wheel()
+    wheel = sorted(DIST_DIR.glob("mclaw-*.whl"), key=lambda item: item.stat().st_mtime)[-1] if args.skip_wheel_build else build_wheel()
     packaged_wheel = copy_wheel(wheel, wheels_dir)
     uv = download_uv(args.uv_url or find_uv_url(), bin_dir) if args.download_uv else install_uv(bin_dir)
 
