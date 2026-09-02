@@ -753,6 +753,37 @@ def create_app(
     web_access_config = WebAccessConfig(data_dir)
     app.state.web_access_config = web_access_config
 
+    # Offline license enforcement. Registered FIRST so that — with FastAPI's
+    # LIFO middleware stack — it executes *after* the auth middleware on the
+    # inbound side. That ordering is deliberate: ``/api/license/activate``
+    # must be admin-only, which requires ``request.state.user_id`` to already
+    # be populated by auth. Set MCLAW_DISABLE_LICENSE=1 to skip enforcement
+    # (development only — never in a shipped build).
+    license_manager = None
+    if os.environ.get("MCLAW_DISABLE_LICENSE", "").strip().lower() not in (
+        "1",
+        "true",
+        "yes",
+    ):
+        try:
+            from mclaw.license.manager import LicenseManager, set_manager
+
+            from .middleware_license_gate import create_license_gate_middleware
+
+            license_manager = LicenseManager(data_dir)
+            license_manager.load()
+            set_manager(license_manager)
+            app.middleware("http")(create_license_gate_middleware(license_manager))
+        except Exception:
+            # A crash in license wiring must not brick the server — that would
+            # take the activation endpoint down with it and leave the customer
+            # with no way to recover.
+            logger.exception("License subsystem failed to initialise — running unlicensed")
+            license_manager = None
+    else:
+        logger.warning("License enforcement disabled via MCLAW_DISABLE_LICENSE")
+    app.state.license_manager = license_manager
+
     auth_mw = create_auth_middleware(web_access_config)
     app.middleware("http")(auth_mw)
 
@@ -1092,6 +1123,11 @@ def create_app(
 
     # Mount routes
     app.include_router(auth_routes.router, tags=["认证"])
+    # License endpoints must stay reachable even when unlicensed — they are
+    # the only way out of the 402 state.
+    from .routes import license as license_routes
+
+    app.include_router(license_routes.router)
     app.include_router(agents.router, tags=["智能体"])
     app.include_router(bug_report.router, tags=["反馈"])
     app.include_router(chat.router, tags=["对话"])
@@ -1110,7 +1146,12 @@ def create_app(
     app.include_router(mcp.router, tags=["MCP"])
     app.include_router(memory.router, tags=["记忆"])
     app.include_router(memory_repair.router, tags=["记忆修复"])
-    app.include_router(knowledge.router, tags=["知识库"])
+    # Knowledge base is a licensed module — mounting it at all is the gate.
+    # Unlicensed installs get 404 on every /api/knowledge/* endpoint.
+    if license_manager is None or license_manager.has_feature("knowledge_base"):
+        app.include_router(knowledge.router, tags=["知识库"])
+    else:
+        logger.info("知识库模块未授权，接口未挂载")
     app.include_router(scheduler.router, tags=["定时任务"])
     app.include_router(pending_approvals.router, tags=["待审批"])
     app.include_router(optional_features.router, tags=["可选功能"])

@@ -4258,5 +4258,28 @@
     "uploadFailed": "Upload failed: {{name}}",
     "editCollection": "Edit Collection",
     "dropHere": "Drop files to upload"
+  },
+  "license": {
+    "title": "Activate License",
+    "reasonMissing": "This machine is not activated yet. Send the machine code below to your vendor, then paste the license code you receive.",
+    "reasonExpired": "Your license has expired. Contact your vendor to renew, then activate with the new code below.",
+    "reasonMismatch": "This license code is bound to a different machine. If you changed hardware, send the machine code below to your vendor for reissue.",
+    "reasonInvalid": "License verification failed. The license file may be corrupt or the system clock is wrong — please contact support.",
+    "fingerprintLabel": "Machine code",
+    "fingerprintLoading": "Reading hardware info...",
+    "fingerprintFailed": "Could not read hardware info. Please contact support.",
+    "fingerprintInsufficient": "Only {{usable}} hardware identifiers could be read (at least {{required}} are required). Activation may fail — please contact support.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "sendHint": "Send this machine code to your vendor to obtain a license code. It is a one-way hash and contains no device-identifying details.",
+    "codeLabel": "License code",
+    "codePlaceholder": "Paste the code starting with MC1. — line breaks and spaces are ignored",
+    "submit": "Activate",
+    "submitting": "Verifying...",
+    "errorEmpty": "Please enter a license code",
+    "errorGeneric": "Activation failed — check that the code is complete",
+    "successTitle": "Activated",
+    "successRestart": "Your license is active. Plugins, skills and IM channels load on startup, so restart the backend to apply the new feature set.",
+    "dismiss": "Dismiss"
   }
 }

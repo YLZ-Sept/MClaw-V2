@@ -5,6 +5,8 @@ import { getActiveServer, getActiveServerId } from "./platform/servers";
 import { checkAuth, installFetchInterceptor, AUTH_EXPIRED_EVENT, clearAccessToken, setTauriRemoteMode, isTauriRemoteMode } from "./platform/auth";
 import { LoginView } from "./views/LoginView";
 import { SetupView } from "./views/SetupView";
+import { LicenseView } from "./views/LicenseView";
+import { fetchLicenseStatus, type LicenseState, type LicenseStatus } from "./platform/license";
 import { ServerManagerView } from "./views/ServerManagerView";
 import { ChatView } from "./views/ChatView";
 import type { LinkDiagnostic } from "./components/LinkDiagnosticsPanel";
@@ -292,6 +294,15 @@ function MainApp() {
   // We mirror the same condition here so the SPA can route the user to the
   // SetupView before any "logged out" toast or login screen confuses them.
   const [setupRequired, setSetupRequired] = useState(false);
+  // License gate: middleware_license_gate returns 402 when the install is
+  // unlicensed, expired past its grace period, or bound to another machine.
+  // Unlike the setup gate this runs *after* auth (activation is admin-only),
+  // so the LicenseView render branch sits below the login gate.
+  const [licenseRequired, setLicenseRequired] = useState(false);
+  const [licenseInfo, setLicenseInfo] = useState<{ state?: LicenseState; detail?: string }>({});
+  // Non-blocking renewal banner: license still works but is nearing expiry
+  // (or is inside the post-expiry grace window).
+  const [licenseWarning, setLicenseWarning] = useState<LicenseStatus | null>(null);
   // Tauri remote auth: when Tauri desktop connects to a remote backend that requires login
   const [tauriRemoteLoginUrl, setTauriRemoteLoginUrl] = useState<string | null>(null);
 
@@ -303,6 +314,22 @@ function MainApp() {
     window.addEventListener("mclaw:setup-required", onSetupRequired);
     return () => {
       window.removeEventListener("mclaw:setup-required", onSetupRequired);
+    };
+  }, []);
+
+  // ── Top-level: react to 402 license_* signals from any in-flight fetch
+  // (see providers.ts safeFetchResponse).
+  useEffect(() => {
+    const onLicenseRequired = (e: Event) => {
+      const detail = (e as CustomEvent).detail as
+        | { state?: LicenseState; detail?: string }
+        | undefined;
+      setLicenseInfo({ state: detail?.state, detail: detail?.detail });
+      setLicenseRequired(true);
+    };
+    window.addEventListener("mclaw:license-required", onLicenseRequired);
+    return () => {
+      window.removeEventListener("mclaw:license-required", onLicenseRequired);
     };
   }, []);
 
@@ -960,9 +987,35 @@ function MainApp() {
   // 路径（成功/失败/被中途 cancel）都能清掉同一只气泡。
   const autoStartToastRef = useRef<string | number | null>(null);
 
-  // Web mode init: runs after auth is confirmed
-  const webInitDone = useRef(false);
+  // ── License probe: runs once the user is authenticated.
+  //
+  // Deliberately runs after auth rather than at startup: /api/license/status
+  // sits behind the auth middleware, so an unauthenticated probe would just
+  // 401. A null result means "couldn't reach the backend" and is ignored —
+  // treating a timeout as "unlicensed" would lock a paying customer out of
+  // their own install over a transient network blip.
   useEffect(() => {
+    if (!webAuthed) return;
+    const base = IS_CAPACITOR ? apiBaseUrl : (IS_TAURI ? httpApiBase() : "");
+    let cancelled = false;
+    (async () => {
+      const status = await fetchLicenseStatus(base);
+      if (cancelled || !status) return;
+      if (!status.allows_access) {
+        setLicenseInfo({ state: status.state, detail: status.message });
+        setLicenseRequired(true);
+        return;
+      }
+      setLicenseRequired(false);
+      setLicenseWarning(status.should_warn ? status : null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [webAuthed, apiBaseUrl]);
+
+  // Web mode init: runs after auth is confirmed
+  const webInitDone = useRef(false);  useEffect(() => {
     if ((!IS_WEB && !IS_CAPACITOR) || !webAuthed || webInitDone.current) return;
     webInitDone.current = true;
     let cancelled = false;
@@ -5032,10 +5085,53 @@ function MainApp() {
     />;
   }
 
+  // ── License gate: blocks the app when unlicensed / expired / wrong machine ──
+  // Placed AFTER the login gates on purpose: activation is admin-only, so the
+  // user must be authenticated before they can get here. Preview mode is
+  // exempt so the demo path still works.
+  if (licenseRequired && !previewMode) {
+    return (
+      <LicenseView
+        apiBaseUrl={IS_CAPACITOR ? apiBaseUrl : (IS_TAURI ? httpApiBase() : "")}
+        state={licenseInfo.state}
+        detail={licenseInfo.detail}
+        onActivated={() => {
+          setLicenseRequired(false);
+          setLicenseInfo({});
+          webInitDone.current = false;
+        }}
+      />
+    );
+  }
+
   return (
     <EnvFieldContext.Provider value={envFieldCtx}>
     <div className={`appShell ${sidebarCollapsed ? "appShellCollapsed" : ""}${isMobile ? " appShellMobile" : ""}`} style={previewMode ? { paddingTop: IS_CAPACITOR ? "calc(32px + env(safe-area-inset-top))" : 32 } : undefined}>
       <DegradedBanner apiBase={httpApiBase()} />
+      {licenseWarning && (
+        <div
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, zIndex: 9998,
+            background: licenseWarning.state === "grace" ? "#dc2626" : "#f59e0b",
+            color: "#fff", textAlign: "center",
+            padding: "6px 16px",
+            paddingTop: IS_CAPACITOR ? "max(6px, env(safe-area-inset-top))" : "6px",
+            fontSize: 13, fontWeight: 600,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
+          }}
+        >
+          <span>{licenseWarning.message}</span>
+          <button
+            onClick={() => setLicenseWarning(null)}
+            style={{
+              background: "rgba(255,255,255,0.2)", border: "none", color: "#fff",
+              borderRadius: 6, padding: "2px 10px", fontSize: 12, cursor: "pointer",
+            }}
+          >
+            {t("license.dismiss")}
+          </button>
+        </div>
+      )}
       {previewMode && (
         <div style={{
           position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999,

@@ -243,6 +243,15 @@ scripts/start-frontend.ps1
 # Tauri signing keys (NEVER commit private keys)
 .tauri/
 
+# Offline license signing keys — belt-and-braces. The real private key lives
+# OUTSIDE this repo (see docs/license-system-plan.md); these patterns only
+# guard against an accidental copy landing in the tree. Leaking the private
+# key voids the entire licensing scheme and cannot be undone for already-
+# issued codes.
+*.pem
+*private*key*
+license_ledger.csv
+
 # Cloudflare CDN credentials doc (contains secrets)
 docs/cloudflare-cdn-plan.md
 

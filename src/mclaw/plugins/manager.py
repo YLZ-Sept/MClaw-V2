@@ -477,6 +477,15 @@ class PluginManager:
         _PLUGIN_FAILURE_COOLDOWN_SEC = 60.0
         _now_mono = time.monotonic()
 
+        # 插件是授权模块。未授权时整批跳过，而不是逐个判断——插件之间可能
+        # 互相依赖，半开状态比全关更难排查。
+        # default=True：CLI 子命令、单测等未初始化授权系统的场景不应被误伤。
+        from mclaw.license.manager import feature_enabled
+
+        if not feature_enabled("plugins", default=True):
+            logger.info("插件模块未授权，跳过全部插件加载")
+            return
+
         for plugin_dir, manifest in sorted_plugins:
             if not self._check_mclaw_version(manifest):
                 continue

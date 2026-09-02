@@ -181,6 +181,15 @@ def _create_bot_adapter(
 
     Uses the centralized adapter registry instead of if/elif branches.
     """
+    # IM 通道是授权模块。返回 None 即通道不注册——调用方（start_im_channels
+    # 与 apply_im_bot）都已处理 None 分支。
+    # default=True：CLI/单测等未初始化授权系统的场景不应被误伤。
+    from mclaw.license.manager import feature_enabled
+
+    if not feature_enabled("im_channels", default=True):
+        logger.info("IM 通道模块未授权，跳过 %s (%s)", channel_name, bot_type)
+        return None
+
     from .channels.registry import ADAPTER_REGISTRY
 
     factory = ADAPTER_REGISTRY.get(bot_type)

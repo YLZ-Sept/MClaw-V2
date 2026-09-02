@@ -377,6 +377,15 @@ class MCPClient:
         Returns:
             MCPConnectResult 包含成功状态、错误详情、发现的工具数
         """
+        # MCP 是授权模块。default=True：CLI/单测等未初始化授权系统的场景
+        # 不应被误伤。
+        from mclaw.license.manager import feature_enabled
+
+        if not feature_enabled("mcp", default=True):
+            msg = "MCP 模块未授权，请联系供应商开通"
+            logger.info("[MCP] %s (server=%s)", msg, server_name)
+            return MCPConnectResult(success=False, error=msg)
+
         if not MCP_SDK_AVAILABLE:
             if not ensure_mcp_sdk():
                 msg = (

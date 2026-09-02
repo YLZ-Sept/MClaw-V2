@@ -78,6 +78,12 @@ dependencies = [
 
     # PDF parsing for knowledge base document ingestion
     "pdfplumber>=0.10.0",
+
+    # 离线授权：Ed25519 验签。核心依赖——授权校验在每个 API 请求上运行，
+    # 缺它则整个后端无法启动，必须进安装包 wheelhouse。
+    # 下界 42.0 远低于需求（Ed25519 自 2.6 起支持），取宽下界是为了与
+    # finance-auto 插件的既有约束兼容。
+    "cryptography>=42.0",
 ]
 
 [project.optional-dependencies]
@@ -196,7 +202,11 @@ finance-auto = [
     "xltpl>=0.20,<1.0",            # 审计模板 .xlsx 渲染（PyPI 当前 HEAD = 0.21）
     "keyring>=24.0,<26.0",         # OS keyring（Windows Credential Manager / macOS Keychain / Secret Service）
     "pywin32>=306; sys_platform == 'win32'",  # .xls Tier 3 COM fallback（Windows-only）
-    "cryptography>=42.0,<46.0",    # AES-256-GCM + PBKDF2-HMAC-SHA256
+    "cryptography>=42.0",          # AES-256-GCM + PBKDF2-HMAC-SHA256
+                                   # 上界 <46.0 已移除：与核心依赖及 wework_ws
+                                   # extra 的 >=46.0.7 直接冲突，同时安装会解不
+                                   # 出来。所用 API（AESGCM/HKDF/PBKDF2HMAC）在
+                                   # 50.x 上验证可用。
 ]
 
 # 开发依赖

@@ -26,6 +26,17 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+# ---------------------------------------------------------------------------
+# License enforcement off by default in tests.
+#
+# The suite exercises the product as a *licensed* install behaves. Without
+# this, every ``create_app()`` test would boot into the unlicensed state and
+# find plugins / skills / MCP / IM channels disabled. Tests that specifically
+# cover license enforcement construct their own LicenseManager and never go
+# through ``create_app``, so they are unaffected by this switch.
+# ---------------------------------------------------------------------------
+os.environ.setdefault("MCLAW_DISABLE_LICENSE", "1")
+
 from tests.fixtures.mock_llm import MockBrain, MockLLMClient, MockResponse
 
 

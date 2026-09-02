@@ -92,6 +92,21 @@ def _verify_password(password: str, hash_hex: str, salt_hex: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _license_user_limit() -> int:
+    """授权允许的最大用户数；``0`` 表示不限。
+
+    授权系统未初始化时返回 ``0``（不限）——CLI 子命令、单测等场景不应被
+    误伤。真实部署里 ``create_app`` 一定会初始化它。
+    """
+    try:
+        from mclaw.license.manager import get_manager
+
+        manager = get_manager()
+        return manager.max_users() if manager is not None else 0
+    except Exception:  # 授权子系统异常绝不能挡住用户管理
+        return 0
+
+
 class WebAccessConfig:
     r"""Manages the web_access.json file with multi-user support.
 
@@ -264,6 +279,15 @@ class WebAccessConfig:
             raise ValueError("用户名仅允许小写字母、数字、下划线和连字符")
         if username in self._users:
             raise ValueError(f"用户 '{username}' 已存在")
+
+        # 授权用户数上限。卡在这里而非路由层，未来新增调用方自动受控；
+        # 调用方 routes/auth.py 已把 ValueError 映射为 HTTP 409。
+        limit = _license_user_limit()
+        if limit and len(self._users) >= limit:
+            raise ValueError(
+                f"当前授权最多 {limit} 个用户，如需增加请联系供应商升级授权"
+            )
+
         hash_hex, salt_hex = _hash_password(password)
         self._data["users"][username] = {
             "password_hash": hash_hex,

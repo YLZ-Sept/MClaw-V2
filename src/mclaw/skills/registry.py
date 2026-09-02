@@ -462,6 +462,20 @@ class SkillEntry:
         }
 
 
+def _skills_licensed() -> bool:
+    """技能模块是否已授权。
+
+    卡在「对 LLM 可见的工具表」这一层而非加载层：技能已加载但不暴露给
+    模型，因此设置页仍能列出技能清单（客户能看到买了什么没开通），但
+    智能体不会调用它们。
+
+    ``default=True``：CLI 子命令、单测等未初始化授权系统的场景不应被误伤。
+    """
+    from mclaw.license.manager import feature_enabled
+
+    return feature_enabled("skills", default=True)
+
+
 class SkillRegistry:
     """
     技能注册中心
@@ -911,6 +925,9 @@ class SkillRegistry:
         if not context or not context.strip():
             return []
 
+        if not _skills_licensed():
+            return []
+
         context_lower = context.lower()
         scored: list[tuple[SkillEntry, int]] = []
 
@@ -953,6 +970,8 @@ class SkillRegistry:
 
         用于将技能作为工具提供给 LLM（排除 disabled 技能）
         """
+        if not _skills_licensed():
+            return []
         return [skill.to_tool_schema() for skill in self._skills.values() if not skill.disabled]
 
     def list_system_skills(self) -> list[SkillEntry]:

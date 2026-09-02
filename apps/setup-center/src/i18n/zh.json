@@ -4273,5 +4273,28 @@
     "uploadFailed": "上传失败: {{name}}",
     "editCollection": "编辑集合",
     "dropHere": "释放文件以上传"
+  },
+  "license": {
+    "title": "激活授权",
+    "reasonMissing": "本机尚未激活。请将下方「机器码」发送给供应商，获取授权码后粘贴到下面完成激活。",
+    "reasonExpired": "授权已过期。请联系供应商续费，获取新的授权码后在下面重新激活。",
+    "reasonMismatch": "当前授权码绑定的是另一台机器。如果你更换了主机，请把下方机器码发给供应商重新签发。",
+    "reasonInvalid": "授权校验未通过。可能是授权文件损坏或系统时间异常，请联系技术支持。",
+    "fingerprintLabel": "本机机器码",
+    "fingerprintLoading": "正在读取硬件信息...",
+    "fingerprintFailed": "读取硬件信息失败，请联系技术支持。",
+    "fingerprintInsufficient": "仅能读取到 {{usable}} 项硬件特征（需要至少 {{required}} 项），激活可能失败，请联系技术支持。",
+    "copy": "复制",
+    "copied": "已复制",
+    "sendHint": "把机器码发给供应商即可获取授权码。机器码是单向哈希值，不包含任何设备隐私信息。",
+    "codeLabel": "授权码",
+    "codePlaceholder": "粘贴以 MC1. 开头的授权码，换行和空格会自动忽略",
+    "submit": "激活",
+    "submitting": "校验中...",
+    "errorEmpty": "请先填写授权码",
+    "errorGeneric": "激活失败，请检查授权码是否完整",
+    "successTitle": "激活成功",
+    "successRestart": "授权已生效。插件、技能和 IM 通道需要重启后端后才会按新授权加载。",
+    "dismiss": "知道了"
   }
 }

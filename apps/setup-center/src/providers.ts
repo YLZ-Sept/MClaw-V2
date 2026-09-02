@@ -365,6 +365,30 @@ export async function safeFetchResponse(url: string, init?: RequestInit): Promis
       throw err;
     }
   }
+
+  // HTTP 402 Payment Required is the signal from middleware_license_gate:
+  // the install is unlicensed, expired past its grace period, or the license
+  // is bound to a different machine. Same pattern as the 428 branch above —
+  // dispatch an event so App can swap in LicenseView, then throw so the
+  // caller knows the request was not fulfilled.
+  if (res.status === 402) {
+    let body: { error?: string; detail?: string; state?: string } = {};
+    try {
+      const text = await res.clone().text();
+      if (text) body = JSON.parse(text);
+    } catch { /* ignore parse error */ }
+    if (body?.error && body.error.startsWith("license_")) {
+      try {
+        window.dispatchEvent(
+          new CustomEvent("mclaw:license-required", { detail: body }),
+        );
+      } catch { /* ignore in non-browser env */ }
+      const message = body.detail || "License required";
+      const err = new Error(message);
+      (err as Error & { licenseRequired?: boolean }).licenseRequired = true;
+      throw err;
+    }
+  }
   return res;
 }
 

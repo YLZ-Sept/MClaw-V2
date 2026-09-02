@@ -55,6 +55,11 @@ Pillow>=10.0.0             # Image format conversion/processing
 # === Document Processing ===
 pdfplumber>=0.10.0         # PDF parsing for knowledge base ingestion
 
+# === Offline License ===
+# Ed25519 signature verification. Core dependency — license checks run on
+# every API request, so this must land in the installer wheelhouse.
+cryptography>=42.0         # Ed25519 verify (shared with finance-auto / WeCom)
+
 # === HTTP API ===
 fastapi>=0.110.0           # HTTP API framework
 uvicorn>=0.27.0            # ASGI server
@@ -73,7 +78,7 @@ lark-oapi>=1.5.5           # Lark official SDK (WebSocket + card callback)
 # WeCom (WeChat Work)
 aiohttp>=3.13.0            # WeCom HTTP callback server (with CVE fixes)
 pycryptodome>=3.23.0       # WeCom message encryption/decryption (AES-256-CBC) + ARM64 wheel
-cryptography>=46.0.7       # WeCom WS encryption (patch-level security update)
+# cryptography: see the Offline License section above (core dependency).
 
 # DingTalk (Stream mode)
 dingtalk-stream>=0.24.3    # DingTalk Stream SDK
