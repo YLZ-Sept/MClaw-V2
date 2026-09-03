@@ -16,6 +16,7 @@ import { notifySuccess, notifyError, notifyLoading, dismissLoading } from "../ut
 import { FieldText, FieldBool, FieldSelect } from "../components/EnvFields";
 import { Section } from "../components/Section";
 import { WebPasswordManager } from "../components/WebPasswordManager";
+import { LicenseInfoView } from "./LicenseInfoView";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1143,6 +1144,18 @@ export function AdvancedView(props: AdvancedViewProps) {
       {/* ── Card 6: 系统信息与运维 ── */}
       <div className="card" style={{ marginTop: 10 }}>
         <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{t("adv.sysOpsTitle")}</h3>
+
+        {/* 授权信息卡：置于系统信息上方，到期倒计时 + 续费入口都在这里。
+            用 LicenseInfoView 而非内联渲染，避免高级配置页同时维护两套授权 UI。 */}
+        <LicenseInfoView
+          apiBaseUrl={shouldUseHttpApi() ? httpApiBase() : ""}
+          backendVersion={info?.version ?? undefined}
+          // 复用 App 顶层已有的 402 监听：省去把 setLicenseRequired 一路
+          // 透传进来，也保证与真正被 gate 拦截时走的是同一条渲染路径。
+          onReactivate={() => window.dispatchEvent(
+            new CustomEvent("mclaw:license-required", { detail: { state: "active" } }),
+          )}
+        />
 
         <Section title={t("adv.sysTitle")}
           toggle={IS_TAURI ? (

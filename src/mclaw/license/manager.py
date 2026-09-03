@@ -44,6 +44,23 @@ GRACE_PERIOD_DAYS = 7
 # 时钟水位线写盘节流间隔。
 _HEARTBEAT_INTERVAL = timedelta(hours=1)
 
+
+def _active_message(expires: date, days_remaining: int) -> str:
+    """有效期内的状态文案。
+
+    临近到期时 ``message`` 会被前端当作告警横幅的正文直接展示；若始终返回
+    "授权有效"，横幅上就是一句自相矛盾的话（黄条 + "一切正常"）。按剩余
+    天数分档措辞，让横幅自己把话说清楚。
+    """
+    if days_remaining == 0:
+        return f"授权今天（{expires.isoformat()}）到期，请尽快联系供应商续费"
+    if days_remaining <= WARN_BEFORE_DAYS:
+        return (
+            f"授权将于 {expires.isoformat()} 到期，剩余 {days_remaining} 天，"
+            "请及时联系供应商续费"
+        )
+    return "授权有效"
+
 # 允许的时间倒退容差。覆盖时区调整、NTP 校正、虚拟机挂起恢复等正常情况。
 _CLOCK_TOLERANCE = timedelta(hours=24)
 
@@ -244,7 +261,7 @@ class LicenseManager:
             return LicenseStatus(
                 state=LicenseState.ACTIVE,
                 payload=payload,
-                message="授权有效",
+                message=_active_message(payload.expires, days_remaining),
                 days_remaining=days_remaining,
                 matched_segments=matched,
             )
@@ -371,7 +388,7 @@ class LicenseManager:
             return LicenseStatus(
                 state=LicenseState.ACTIVE,
                 payload=payload,
-                message="授权有效",
+                message=_active_message(payload.expires, days_remaining),
                 days_remaining=days_remaining,
                 matched_segments=matched,
             )

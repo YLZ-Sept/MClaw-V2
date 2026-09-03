@@ -102,7 +102,12 @@ export async function fetchFingerprint(
 export async function activateLicense(
   code: string,
   apiBase = "",
-): Promise<{ success: boolean; error?: string; restartRequired?: boolean }> {
+): Promise<{
+  success: boolean;
+  error?: string;
+  restartRequired?: boolean;
+  license?: LicenseStatus;
+}> {
   try {
     const res = await authFetch(
       `${apiBase}/api/license/activate`,
@@ -119,7 +124,11 @@ export async function activateLicense(
       return { success: false, error: data.detail || `HTTP ${res.status}` };
     }
     const data = await res.json();
-    return { success: true, restartRequired: data.restart_required === true };
+    return {
+      success: true,
+      restartRequired: data.restart_required === true,
+      license: data.license as LicenseStatus | undefined,
+    };
   } catch (e) {
     return { success: false, error: String(e) };
   }

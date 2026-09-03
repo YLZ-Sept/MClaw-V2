@@ -5121,6 +5121,18 @@ function MainApp() {
           }}
         >
           <span>{licenseWarning.message}</span>
+          {/* 光说"快到期了"而没有去处，用户只能干着急——给一条到授权页的路。 */}
+          <button
+            onClick={() => { navigateToView("wizard", "advanced"); setLicenseWarning(null); }}
+            style={{
+              background: "rgba(255,255,255,0.9)", border: "none",
+              color: licenseWarning.state === "grace" ? "#dc2626" : "#b45309",
+              borderRadius: 6, padding: "2px 10px", fontSize: 12,
+              fontWeight: 700, cursor: "pointer",
+            }}
+          >
+            {t("licenseInfo.viewDetail")}
+          </button>
           <button
             onClick={() => setLicenseWarning(null)}
             style={{

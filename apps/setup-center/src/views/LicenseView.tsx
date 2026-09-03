@@ -19,6 +19,7 @@ import {
   fetchFingerprint,
   type FingerprintInfo,
   type LicenseState,
+  type LicenseStatus,
 } from "../platform/license";
 
 export function LicenseView({
@@ -40,6 +41,7 @@ export function LicenseView({
   const [fpLoading, setFpLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [done, setDone] = useState(false);
+  const [granted, setGranted] = useState<LicenseStatus | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,10 +89,10 @@ export function LicenseView({
       // Plugins / skills / IM channels are wired up at process start, so a
       // freshly-widened feature set only takes effect after a restart. The
       // API surface itself unblocks immediately.
+      setGranted(result.license ?? null);
       setDone(true);
-      setTimeout(onActivated, 1600);
     },
-    [apiBaseUrl, code, onActivated, t],
+    [apiBaseUrl, code, t],
   );
 
   const reasonKey =
@@ -113,9 +115,57 @@ export function LicenseView({
             <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
               {t("license.successTitle")}
             </div>
+            {/* Echo what was actually granted: the customer should be able to
+                confirm the serial and expiry match what they were sold before
+                leaving this screen. */}
+            {granted && (
+              <dl style={grantGridStyle}>
+                {granted.customer && (
+                  <>
+                    <dt style={grantKeyStyle}>{t("license.fieldCustomer")}</dt>
+                    <dd style={grantValStyle}>{granted.customer}</dd>
+                  </>
+                )}
+                {granted.serial && (
+                  <>
+                    <dt style={grantKeyStyle}>{t("license.fieldSerial")}</dt>
+                    <dd style={grantValStyle}>{granted.serial}</dd>
+                  </>
+                )}
+                {granted.expires && (
+                  <>
+                    <dt style={grantKeyStyle}>{t("license.fieldExpires")}</dt>
+                    <dd style={grantValStyle}>
+                      {granted.expires}
+                      {granted.days_remaining > 0 &&
+                        ` (${t("license.daysRemaining", {
+                          days: granted.days_remaining,
+                        })})`}
+                    </dd>
+                  </>
+                )}
+                <>
+                  <dt style={grantKeyStyle}>{t("license.fieldMaxUsers")}</dt>
+                  <dd style={grantValStyle}>
+                    {!granted.max_users || granted.max_users <= 0
+                      ? t("license.usersUnlimited")
+                      : granted.max_users}
+                  </dd>
+                </>
+                {granted.tier && (
+                  <>
+                    <dt style={grantKeyStyle}>{t("license.fieldTier")}</dt>
+                    <dd style={grantValStyle}>{granted.tier}</dd>
+                  </>
+                )}
+              </dl>
+            )}
             <div style={{ fontSize: 13, lineHeight: 1.6 }}>
               {t("license.successRestart")}
             </div>
+            <button type="button" onClick={onActivated} style={continueBtnStyle}>
+              {t("license.continue")}
+            </button>
           </div>
         ) : (
           <>
@@ -324,6 +374,44 @@ const successStyle: React.CSSProperties = {
   padding: "16px 14px",
   marginTop: 12,
   textAlign: "left",
+};
+
+const grantGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "auto 1fr",
+  gap: "6px 12px",
+  margin: "12px 0",
+  padding: "10px 12px",
+  background: "var(--card, rgba(255,255,255,0.6))",
+  border: "1px solid var(--success-line, #bbf7d0)",
+  borderRadius: 8,
+};
+
+const grantKeyStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "var(--text2, #475569)",
+  whiteSpace: "nowrap",
+};
+
+const grantValStyle: React.CSSProperties = {
+  fontSize: 12.5,
+  fontWeight: 600,
+  color: "var(--text, #1e293b)",
+  margin: 0,
+  wordBreak: "break-word",
+};
+
+const continueBtnStyle: React.CSSProperties = {
+  marginTop: 14,
+  width: "100%",
+  padding: "9px 14px",
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#fff",
+  background: "var(--success, #15803d)",
+  border: "none",
+  borderRadius: 8,
+  cursor: "pointer",
 };
 
 const labelStyle: React.CSSProperties = {

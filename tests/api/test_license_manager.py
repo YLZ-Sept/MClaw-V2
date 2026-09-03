@@ -205,6 +205,39 @@ def test_no_warning_when_far_from_expiry(manager, signing_key):
     assert not manager.status.should_warn
 
 
+def test_warning_message_tiered_by_remaining_days(signing_key, tmp_path):
+    """临期文案按剩余天数分档，横幅正文不再自相矛盾。
+
+    之前临近到期时 ``message`` 仍硬编码"授权有效"，前端黄条上会同时
+    出现"快到期"和"一切正常"。此处锁死三档措辞；每档用独立 manager，
+    避免同一实例上重复激活引入状态耦合。
+    """
+
+    def status_for(days_valid):
+        mgr = LicenseManager(tmp_path / f"d{days_valid}")
+        mgr.activate(make_code(signing_key, days_valid=days_valid))
+        return mgr.status
+
+    # 远离到期：中性文案
+    far = status_for(WARN_BEFORE_DAYS + 30)
+    assert far.state is LicenseState.ACTIVE
+    assert far.message == "授权有效"
+
+    # 临期：写明到期日与剩余天数，前端黄条据此渲染
+    near = status_for(WARN_BEFORE_DAYS - 1)
+    assert near.state is LicenseState.ACTIVE
+    assert near.should_warn
+    assert near.message.startswith("授权将于")
+    assert "到期" in near.message
+    assert str(near.days_remaining) in near.message
+
+    # 当天到期：最紧迫的措辞
+    today = status_for(0)
+    assert today.state is LicenseState.ACTIVE
+    assert today.days_remaining == 0
+    assert "今天" in today.message
+
+
 # ── 时钟回拨 ──────────────────────────────────────────────────────────
 
 
