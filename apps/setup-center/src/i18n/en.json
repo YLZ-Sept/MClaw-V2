@@ -2365,6 +2365,8 @@
     "platformTitle": "Platform & Cloud Services",
     "dataBackupTitle": "Data & Backup",
     "sysOpsTitle": "System Info & Maintenance",
+    "licModuleTitle": "License Info",
+    "desktopOnlyHint": "Desktop app only",
     "needService": "Backend service must be running",
     "copied": "Copied to clipboard",
     "cleaning": "Cleaning up...",

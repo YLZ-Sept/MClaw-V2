@@ -303,6 +303,13 @@ export function LicenseInfoView({
               </span>
             </ContactRow>
           )}
+          {VENDOR.xiaohongshu && (
+            <ContactRow icon={<IconVideoGlyph />}>
+              <span className="text-muted-foreground">
+                {t("licenseInfo.xiaohongshu")}：{VENDOR.xiaohongshu}
+              </span>
+            </ContactRow>
+          )}
           {VENDOR.hours && (
             <ContactRow icon={<IconClock size={13} />}>
               <span className="text-muted-foreground">{VENDOR.hours}</span>

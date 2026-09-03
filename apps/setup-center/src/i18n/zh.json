@@ -2365,6 +2365,8 @@
     "platformTitle": "平台与云服务",
     "dataBackupTitle": "数据与备份",
     "sysOpsTitle": "系统信息与运维",
+    "licModuleTitle": "授权信息",
+    "desktopOnlyHint": "仅桌面版可用",
     "needService": "需要后端服务运行中",
     "copied": "已复制到剪贴板",
     "cleaning": "正在清理...",

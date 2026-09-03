@@ -8,9 +8,12 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ChevronRight } from "lucide-react";
 import { IconFolder, IconFile, IconClipboard, IconLightbulb, IconCheck } from "../icons";
 import { invoke, IS_TAURI, saveFileDialog } from "../platform";
 import { safeFetch } from "../providers";
+import { fetchLicenseStatus } from "../platform/license";
+import type { LicenseStatus } from "../platform/license";
 import { joinPath, envGet, envSet } from "../utils";
 import { notifySuccess, notifyError, notifyLoading, dismissLoading } from "../utils/notify";
 import { FieldText, FieldBool, FieldSelect } from "../components/EnvFields";
@@ -317,6 +320,91 @@ function UserManagementSection({ apiBaseUrl, isAdmin }: { apiBaseUrl: string; is
 }
 
 
+// ── 底部“模块卡”：标题行点击展开/收起整块内容 ──
+// 高级配置页底部分成「授权信息」「系统信息」两个模块，默认折叠；
+// 与页面里其它 `.card` 保持一致外观，标题行右侧放模块级控件（如授权状态摘要）。
+function ModuleCard({
+  title,
+  open,
+  onToggle,
+  children,
+  right,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children?: React.ReactNode;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div className="card" style={{ marginTop: 10 }}>
+      <div
+        role="button"
+        tabIndex={0}
+        className="flex cursor-pointer select-none items-center justify-between gap-3"
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); }
+        }}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <ChevronRight className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`} />
+          <h3 style={{ fontWeight: 700, fontSize: 15, margin: 0 }}>{title}</h3>
+        </span>
+        {right}
+      </div>
+      {open && <div className="mt-3 flex flex-col gap-2.5">{children}</div>}
+    </div>
+  );
+}
+
+// 授权信息模块标题右侧的状态摘要：折叠时也能看到“授权正常 · 剩余 N 天”。
+// 读不到（服务未起/无后端）时不显示任何文案，避免吓到用户——展开后自会展示可重试的完整状态。
+function LicenseHeaderChip({ apiBaseUrl }: { apiBaseUrl: string }) {
+  const { t } = useTranslation();
+  const [st, setSt] = useState<LicenseStatus | null>(null);
+  useEffect(() => {
+    let on = true;
+    fetchLicenseStatus(apiBaseUrl).then((s) => { if (on) setSt(s); });
+    return () => { on = false; };
+  }, [apiBaseUrl]);
+
+  if (!st) return null;
+  const days = st.days_remaining ?? 0;
+  const tone =
+    st.state === "disabled" ? "text-muted-foreground"
+      : st.state === "active" && days <= 30 ? "text-amber-600 dark:text-amber-400"
+      : st.state === "active" ? "text-emerald-600 dark:text-emerald-400"
+      : "text-destructive";
+  const label = st.state === "disabled"
+    ? t("licenseInfo.stateDisabled")
+    : t(`licenseInfo.state.${st.state}`, { defaultValue: st.message });
+  const time =
+    st.state === "active" && st.expires
+      ? days > 0 ? t("licenseInfo.daysLeft", { days })
+      : days === 0 ? t("licenseInfo.expiresToday")
+      : t("licenseInfo.overdueDays", { days: -days })
+      : null;
+  return (
+    <span className={`flex min-w-0 items-center gap-1.5 text-xs font-medium ${tone}`}>
+      <span className="size-1.5 shrink-0 rounded-full" style={{ background: "currentColor" }} />
+      <span className="truncate">{label}</span>
+      {time && <span className="shrink-0 opacity-80">{time}</span>}
+    </span>
+  );
+}
+
+// 「仅桌面版可用」角标：浏览器端也渲染这些运维块，但操作依赖桌面本地能力，
+// 放在标题右侧提示用户为何按钮不可用。
+function DesktopOnlyTag({ label }: { label: string }) {
+  return (
+    <span className="shrink-0 rounded bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+      {label}
+    </span>
+  );
+}
+
+
 export function AdvancedView(props: AdvancedViewProps) {
   const {
     envDraft, setEnvDraft, busy,
@@ -344,6 +432,10 @@ export function AdvancedView(props: AdvancedViewProps) {
   const [advSysInfo, setAdvSysInfo] = useState<Record<string, string> | null>(null);
   const [advLoading, setAdvLoading] = useState<Record<string, boolean>>({});
   const [hubProvider, setHubProvider] = useState<string>("skillhub");
+
+  // 底部两大模块的展开态：授权信息 / 系统信息（默认折叠，点击标题展开全部信息）。
+  const [licOpen, setLicOpen] = useState(false);
+  const [sysOpen, setSysOpen] = useState(false);
 
   const [backupHistory, setBackupHistory] = useState<Array<{ filename: string; path: string; size_bytes: number; created_at: string; manifest?: any }>>([]);
   const [backupShowHistory, setBackupShowHistory] = useState(false);
@@ -1143,12 +1235,13 @@ export function AdvancedView(props: AdvancedViewProps) {
         <ExtensionsCard shouldUseHttpApi={shouldUseHttpApi} httpApiBase={httpApiBase} />
       )}
 
-      {/* ── Card 6: 系统信息与运维 ── */}
-      <div className="card" style={{ marginTop: 10 }}>
-        <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{t("adv.sysOpsTitle")}</h3>
-
-        {/* 授权信息卡：置于系统信息上方，到期倒计时 + 续费入口都在这里。
-            用 LicenseInfoView 而非内联渲染，避免高级配置页同时维护两套授权 UI。 */}
+      {/* ── Card 6a: 授权信息（默认折叠，点击标题展开全部信息） ── */}
+      <ModuleCard
+        title={t("adv.licModuleTitle")}
+        open={licOpen}
+        onToggle={() => setLicOpen((o) => !o)}
+        right={<LicenseHeaderChip apiBaseUrl={shouldUseHttpApi() ? httpApiBase() : ""} />}
+      >
         <LicenseInfoView
           apiBaseUrl={shouldUseHttpApi() ? httpApiBase() : ""}
           backendVersion={backendVersion ?? undefined}
@@ -1158,14 +1251,24 @@ export function AdvancedView(props: AdvancedViewProps) {
             new CustomEvent("mclaw:license-required", { detail: { state: "active" } }),
           )}
         />
+      </ModuleCard>
 
-        <Section title={t("adv.sysTitle")}
-          toggle={IS_TAURI ? (
-            <Button variant="outline" size="xs" onClick={(e) => { e.preventDefault(); opsHandleBundleExport(); }} disabled={!!busy || !currentWorkspaceId}>
+      {/* ── Card 6b: 系统信息（运行环境 / 路径信息 / 重置系统 并入此模块） ── */}
+      <ModuleCard
+        title={t("adv.sysTitle")}
+        open={sysOpen}
+        onToggle={() => setSysOpen((o) => !o)}
+      >
+        {/* 系统基础信息：操作系统 / 后端版本 / 桌面端 */}
+        <div className="rounded-xl border border-border/80 bg-card/60 p-3">
+          <div className="mb-2 flex items-center justify-end gap-2">
+            <Button variant="outline" size="xs" onClick={opsHandleBundleExport}
+              disabled={!IS_TAURI || !!busy || !currentWorkspaceId}
+              title={IS_TAURI ? undefined : t("adv.desktopOnlyHint")}>
               {busy === t("adv.opsLogExporting") ? t("adv.opsLogExporting") : t("adv.exportDiagBtn")}
             </Button>
-          ) : undefined}
-        >
+            {!IS_TAURI && <DesktopOnlyTag label={t("adv.desktopOnlyHint")} />}
+          </div>
           {!advSysInfo ? (
             advLoading.sysinfo ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1190,108 +1293,111 @@ export function AdvancedView(props: AdvancedViewProps) {
               <span>{desktopVersion}</span>
             </div>
           )}
-        </Section>
+        </div>
 
-        {IS_TAURI && (
-          <Section
-            title="Mclaw 运行环境"
-            subtitle="runtime venv / agent tools venv"
-            className="mt-2"
-          >
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5">
-              <div className="min-w-[180px] flex-1">
-                <div className="text-sm font-medium">
-                  {runtimeHealthy ? "环境正常" : backendBootPhase === "error" ? "运行环境需检查" : "运行环境信息"}
-                </div>
-                <div className="mt-0.5 text-xs text-muted-foreground">
-                  查看 runtime venv、agent tools venv、Node/npm 与种子包状态；异常时可在弹窗内修复。
-                </div>
+        <div className="rounded-xl border border-border/80 bg-card/60 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold">Mclaw 运行环境</span>
+            {!IS_TAURI && <DesktopOnlyTag label={t("adv.desktopOnlyHint")} />}
+          </div>
+          <p className="mt-0.5 mb-2 text-xs text-muted-foreground">runtime venv / agent tools venv</p>
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5">
+            <div className="min-w-[180px] flex-1">
+              <div className="text-sm font-medium">
+                {runtimeHealthy ? "环境正常" : backendBootPhase === "error" ? "运行环境需检查" : "运行环境信息"}
               </div>
-              <Button size="sm" variant="outline" onClick={onOpenRuntimeEnvironment}>
-                查看与修复
-              </Button>
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                查看 runtime venv、agent tools venv、Node/npm 与种子包状态；异常时可在弹窗内修复。
+              </div>
             </div>
-          </Section>
-        )}
-
-        {IS_TAURI && (
-          <Section title={t("adv.opsPaths")} className="mt-2">
-            <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-1.5 items-center text-sm">
-              {opsPathRows.map((row) => (
-                <Fragment key={row.label}>
-                  <span className="font-medium whitespace-nowrap">{row.label}</span>
-                  <span className="break-all text-muted-foreground text-xs font-mono">{row.path || "—"}</span>
-                  <Button variant="outline" size="xs" onClick={() => opsOpenFolder(row.path)} disabled={!row.path}>{t("adv.opsOpenFolder")}</Button>
-                </Fragment>
-              ))}
-            </div>
-          </Section>
-        )}
-
-        {IS_TAURI && (
-          <Section title={t("adv.factoryResetTitle")} subtitle={t("adv.factoryResetSubtitle")} className="mt-2">
-            <p className="text-xs text-muted-foreground mb-2">{t("adv.factoryResetDesc")}</p>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => { setFactoryResetConfirmText(""); setFactoryResetOpen(true); }}
-              disabled={!!busy}
-            >
-              {t("adv.factoryResetBtn")}
+            <Button size="sm" variant="outline" onClick={onOpenRuntimeEnvironment} disabled={!IS_TAURI}>
+              查看与修复
             </Button>
-          </Section>
-        )}
+          </div>
+        </div>
 
-        <AlertDialog open={factoryResetOpen} onOpenChange={(open) => { if (!open) setFactoryResetOpen(false); }}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t("adv.factoryResetConfirmTitle")}</AlertDialogTitle>
-              <AlertDialogDescription className="space-y-2" asChild>
-                <div>
-                  <p>{t("adv.factoryResetConfirmDesc")}</p>
-                  <ul className="list-disc pl-5 text-sm space-y-0.5">
-                    <li>{t("adv.factoryResetItem1")}</li>
-                    <li>{t("adv.factoryResetItem2")}</li>
-                    <li>{t("adv.factoryResetItem3")}</li>
-                    <li>{t("adv.factoryResetItem4")}</li>
-                  </ul>
-                  <p className="font-medium mt-2">{t("adv.factoryResetTypeHint")}</p>
-                  <Input
-                    value={factoryResetConfirmText}
-                    onChange={(e) => setFactoryResetConfirmText(e.target.value)}
-                    placeholder="RESET"
-                    className="mt-1"
-                    autoFocus
-                  />
-                </div>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                disabled={factoryResetConfirmText !== "RESET"}
-                onClick={async () => {
-                  setFactoryResetOpen(false);
-                  const _b = notifyLoading(t("adv.factoryResetInProgress"));
-                  try {
-                    const result = await invoke<string>("factory_reset");
-                    dismissLoading(_b);
-                    notifySuccess(result);
-                    try { localStorage.clear(); } catch {}
-                    setTimeout(() => { setView("onboarding"); window.location.reload(); }, 1500);
-                  } catch (e) {
-                    dismissLoading(_b);
-                    notifyError(String(e));
-                  }
-                }}
-              >
-                {t("adv.factoryResetConfirmBtn")}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+        <div className="rounded-xl border border-border/80 bg-card/60 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold">{t("adv.opsPaths")}</span>
+            {!IS_TAURI && <DesktopOnlyTag label={t("adv.desktopOnlyHint")} />}
+          </div>
+          <div className="mt-2 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-1.5 items-center text-sm">
+            {opsPathRows.map((row) => (
+              <Fragment key={row.label}>
+                <span className="font-medium whitespace-nowrap">{row.label}</span>
+                <span className="break-all text-muted-foreground text-xs font-mono">{row.path || "—"}</span>
+                <Button variant="outline" size="xs" onClick={() => opsOpenFolder(row.path)} disabled={!IS_TAURI || !row.path}>{t("adv.opsOpenFolder")}</Button>
+              </Fragment>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border/80 bg-card/60 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold">{t("adv.factoryResetTitle")}</span>
+            {!IS_TAURI && <DesktopOnlyTag label={t("adv.desktopOnlyHint")} />}
+          </div>
+          <p className="mt-0.5 mb-2 text-xs text-muted-foreground">{t("adv.factoryResetDesc")}</p>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => { setFactoryResetConfirmText(""); setFactoryResetOpen(true); }}
+            disabled={!IS_TAURI || !!busy}
+          >
+            {t("adv.factoryResetBtn")}
+          </Button>
+        </div>
+      </ModuleCard>
+
+      <AlertDialog open={factoryResetOpen} onOpenChange={(open) => { if (!open) setFactoryResetOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("adv.factoryResetConfirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2" asChild>
+              <div>
+                <p>{t("adv.factoryResetConfirmDesc")}</p>
+                <ul className="list-disc pl-5 text-sm space-y-0.5">
+                  <li>{t("adv.factoryResetItem1")}</li>
+                  <li>{t("adv.factoryResetItem2")}</li>
+                  <li>{t("adv.factoryResetItem3")}</li>
+                  <li>{t("adv.factoryResetItem4")}</li>
+                </ul>
+                <p className="font-medium mt-2">{t("adv.factoryResetTypeHint")}</p>
+                <Input
+                  value={factoryResetConfirmText}
+                  onChange={(e) => setFactoryResetConfirmText(e.target.value)}
+                  placeholder="RESET"
+                  className="mt-1"
+                  autoFocus
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={factoryResetConfirmText !== "RESET"}
+              onClick={async () => {
+                setFactoryResetOpen(false);
+                const _b = notifyLoading(t("adv.factoryResetInProgress"));
+                try {
+                  const result = await invoke<string>("factory_reset");
+                  dismissLoading(_b);
+                  notifySuccess(result);
+                  try { localStorage.clear(); } catch {}
+                  setTimeout(() => { setView("onboarding"); window.location.reload(); }, 1500);
+                } catch (e) {
+                  dismissLoading(_b);
+                  notifyError(String(e));
+                }
+              }}
+            >
+              {t("adv.factoryResetConfirmBtn")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

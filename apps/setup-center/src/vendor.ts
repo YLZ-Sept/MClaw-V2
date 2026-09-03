@@ -28,11 +28,12 @@ export const VENDOR: VendorContact = {
   company: "云南米贝科技有限公司",
   phone: "0871-63820616",
   address: "云南省昆明市高新区昆百大国际派B座1703",
-  email: "admin@ynmbkj.cn",
-  website: "https://ynmbkj.cn",
+  email: "256903284@qq.com",
+  // 官网已不再使用，改以小红书号承接联系方式（空串=页面不渲染该行）。
+  website: "",
   wechatService: "https://work.weixin.qq.com/kfid/kfc6ea1e452c2944b7f",
   wechatAccount: "云南米贝科技有限公司",
   douyin: "44264185979",
-  xiaohongshu: "",
+  xiaohongshu: "27786900252",
   hours: "",
 };
