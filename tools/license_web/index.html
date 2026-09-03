@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MClaw 授权码签发</title>
+<!--
+  ─── MClaw 授权码签发页（离线单文件） ───
+
+  与 tools/license_gen.py 等价的浏览器版本，供商务人员使用。
+
+  【签名一致性】payload 必须与 Python 端逐字节一致，否则客户端验签失败：
+    - 键名按字典序排列（Python sort_keys=True）
+    - 无空格分隔符（separators=(",", ":")）
+    - 中文不转义、按 UTF-8 编码（ensure_ascii=False）
+    - base64url 去掉尾部 '=' 填充
+  改动任何一条都会签出验不过的废码。改前先跑 tools/license_web/verify_parity.mjs。
+
+  【私钥】页面不保存私钥，刷新即忘。私钥文件本身仍需妥善保管——
+  持有它的人可无限签码，且离线设计无法远程吊销。
+
+  【台账】浏览器不能追加写本地文件，台账存在 localStorage，
+  需定期「导出 CSV」并汇总到 E:\mclaw-license-keys\license_ledger.csv。
+-->
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    background: #f1f5f9; color: #1e293b; line-height: 1.6;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #64748b; font-size: 13px; margin-bottom: 20px; }
+  .card {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+    padding: 20px; margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 15px; margin: 0 0 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .step {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #1e293b; color: #fff; font-size: 12px; flex: none;
+  }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 180px; }
+  label { display: block; font-size: 12px; color: #475569; margin-bottom: 4px; font-weight: 600; }
+  input[type=text], input[type=number], input[type=date], select {
+    width: 100%; padding: 8px 10px; font-size: 14px;
+    border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1e293b;
+  }
+  input:focus, select:focus { outline: 2px solid #2563eb33; border-color: #2563eb; }
+  .mono { font-family: ui-monospace, Consolas, monospace; letter-spacing: .04em; }
+  .field { margin-bottom: 14px; }
+  .hint { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+  button {
+    padding: 9px 18px; font-size: 14px; font-weight: 600; border-radius: 8px;
+    border: none; cursor: pointer; background: #2563eb; color: #fff;
+  }
+  button:disabled { background: #cbd5e1; cursor: not-allowed; }
+  button.ghost { background: transparent; border: 1px solid #cbd5e1; color: #475569; font-weight: 500; }
+  button.sm { padding: 5px 12px; font-size: 12px; }
+  .feats { display: flex; flex-wrap: wrap; gap: 14px; }
+  .feats label {
+    display: flex; align-items: center; gap: 6px; font-weight: 400;
+    font-size: 13px; margin: 0; cursor: pointer; color: #1e293b;
+  }
+  .ok { color: #15803d; font-size: 13px; }
+  .err {
+    color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca;
+    border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-top: 12px;
+  }
+  .warn {
+    color: #92400e; background: #fffbeb; border: 1px solid #fde68a;
+    border-radius: 8px; padding: 10px 12px; font-size: 13px;
+  }
+  .out {
+    background: #0f172a; color: #4ade80; border-radius: 8px;
+    padding: 14px; font-family: ui-monospace, Consolas, monospace;
+    font-size: 12px; word-break: break-all; line-height: 1.7; user-select: all;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid #f1f5f9; }
+  th { color: #64748b; font-weight: 600; background: #f8fafc; }
+  td.nowrap { white-space: nowrap; }
+  .empty { color: #94a3b8; font-size: 13px; text-align: center; padding: 20px; }
+  dl.summary { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0 0 12px; }
+  dl.summary dt { font-size: 12px; color: #64748b; white-space: nowrap; }
+  dl.summary dd { margin: 0; font-size: 13px; font-weight: 600; }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>MClaw 授权码签发</h1>
+  <div class="sub">离线工具 · 私钥不上传、不保存，关闭页面即清除</div>
+
+  <!-- 第一步：私钥 -->
+  <div class="card">
+    <h2><span class="step">1</span>加载签发私钥</h2>
+    <input type="file" id="keyFile" accept=".pem,.key,.txt">
+    <div class="hint">选择 private.pem（默认在 E:\mclaw-license-keys\）。每次打开页面都要重新选一次。</div>
+    <div id="keyMsg" style="margin-top:10px"></div>
+  </div>
+
+  <!-- 第二步：填写 -->
+  <div class="card">
+    <h2><span class="step">2</span>填写授权信息</h2>
+
+    <div class="field">
+      <label>客户名称 *</label>
+      <input type="text" id="cust" placeholder="某某科技有限公司">
+      <div class="hint">会显示在客户的激活成功页上，请填正式公司名。</div>
+    </div>
+
+    <div class="field">
+      <label>客户机器码 *</label>
+      <input type="text" id="fp" class="mono" placeholder="2F72-4463-9B50-7666-617F"
+             maxlength="24" autocomplete="off">
+      <div class="hint">客户在激活页点「复制」发给你的 5 段码。粘贴后会自动校验。</div>
+      <div id="fpMsg"></div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>有效期</label>
+        <select id="term">
+          <option value="1">1 个月（试用）</option>
+          <option value="3">3 个月</option>
+          <option value="6" selected>6 个月</option>
+          <option value="12">12 个月</option>
+          <option value="24">24 个月</option>
+          <option value="custom">指定到期日…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>用户数上限</label>
+        <input type="number" id="users" value="20" min="0" step="1">
+        <div class="hint">0 = 不限</div>
+      </div>
+      <div class="field">
+        <label>档位备注（选填）</label>
+        <input type="text" id="tier" placeholder="标准版">
+      </div>
+    </div>
+
+    <div class="field hide" id="dateWrap">
+      <label>到期日</label>
+      <input type="date" id="expDate">
+    </div>
+
+    <div class="field">
+      <label>开放功能</label>
+      <div class="feats">
+        <label><input type="checkbox" class="feat" value="plugins" checked> 插件</label>
+        <label><input type="checkbox" class="feat" value="skills" checked> 技能</label>
+        <label><input type="checkbox" class="feat" value="mcp" checked> MCP</label>
+        <label><input type="checkbox" class="feat" value="knowledge_base" checked> 知识库</label>
+        <label><input type="checkbox" class="feat" value="im_channels" checked> IM 通道</label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>流水号</label>
+      <input type="text" id="sn" class="mono" placeholder="留空自动生成">
+      <div class="hint">留空按本机台账自动递增（MC-年份-序号）。</div>
+    </div>
+
+    <button id="signBtn" disabled>生成授权码</button>
+    <div id="signMsg"></div>
+  </div>
+
+  <!-- 第三步：结果 -->
+  <div class="card hide" id="resultCard">
+    <h2><span class="step">3</span>授权码已生成</h2>
+    <dl class="summary" id="resultSummary"></dl>
+    <div class="out" id="codeOut"></div>
+    <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap">
+      <button id="copyBtn">复制授权码</button>
+      <button class="ghost" id="againBtn">再签一个</button>
+    </div>
+    <div class="hint" style="margin-top:10px">
+      把这串码发给客户，粘贴到激活页即可。此码只能在机器码对应的那台机器上激活。
+    </div>
+  </div>
+
+  <!-- 台账 -->
+  <div class="card">
+    <h2><span class="step">4</span>签发台账
+      <span style="margin-left:auto; display:flex; gap:8px">
+        <button class="ghost sm" id="exportBtn">导出 CSV</button>
+        <button class="ghost sm" id="importBtn">导入 CSV</button>
+      </span>
+    </h2>
+    <div class="warn" style="margin-bottom:12px">
+      台账存在这台电脑的浏览器里。<b>请定期导出 CSV</b> 汇总到
+      <span class="mono">E:\mclaw-license-keys\license_ledger.csv</span>，
+      否则换电脑、清缓存会丢记录。
+    </div>
+    <div id="ledgerBox"></div>
+    <input type="file" id="importFile" accept=".csv" class="hide">
+  </div>
+
+</div>
+
+<script>
+/* ==== VENDOR:noble-ed25519 BEGIN (由 build.py 注入，勿手改) ==== */
+/*! noble-ed25519 - MIT License (c) 2019 Paul Miller (paulmillr.com) */
+/**
+ * 4KB JS implementation of ed25519 EdDSA signatures.
+ * Compliant with RFC8032, FIPS 186-5 & ZIP215.
+ * @module
+ * @example
+ * ```js
+import * as ed from '@noble/ed25519';
+(async () => {
+  const privKey = ed.utils.randomPrivateKey();
+  const message = Uint8Array.from([0xab, 0xbc, 0xcd, 0xde]);
+  const pubKey = await ed.getPublicKeyAsync(privKey); // Sync methods are also present
+  const signature = await ed.signAsync(message, privKey);
+  const isValid = await ed.verifyAsync(signature, message, pubKey);
+})();
+```
+ */
+/**
+ * Curve params. ed25519 is twisted edwards curve. Equation is −x² + y² = -a + dx²y².
+ * * P = `2n**255n - 19n` // field over which calculations are done
+ * * N = `2n**252n + 27742317777372353535851937790883648493n` // group order, amount of curve points
+ * * h = 8 // cofactor
+ * * a = `Fp.create(BigInt(-1))` // equation param
+ * * d = -121665/121666 a.k.a. `Fp.neg(121665 * Fp.inv(121666))` // equation param
+ * * Gx, Gy are coordinates of Generator / base point
+ */
+const ed25519_CURVE = {
+    p: 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffedn,
+    n: 0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3edn,
+    h: 8n,
+    a: 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffecn,
+    d: 0x52036cee2b6ffe738cc740797779e89800700a4d4141d8ab75eb4dca135978a3n,
+    Gx: 0x216936d3cd6e53fec0a4e231fdd6dc5c692cc7609525a7b2c9562d608f25d51an,
+    Gy: 0x6666666666666666666666666666666666666666666666666666666666666658n,
+};
+const { p: P, n: N, Gx, Gy, a: _a, d: _d } = ed25519_CURVE;
+const h = 8n; // cofactor
+const L = 32; // field / group byte length
+const L2 = 64;
+// Helpers and Precomputes sections are reused between libraries
+// ## Helpers
+// ----------
+// error helper, messes-up stack trace
+const err = (m = '') => {
+    throw new Error(m);
+};
+const isBig = (n) => typeof n === 'bigint'; // is big integer
+const isStr = (s) => typeof s === 'string'; // is string
+const isBytes = (a) => a instanceof Uint8Array || (ArrayBuffer.isView(a) && a.constructor.name === 'Uint8Array');
+/** assert is Uint8Array (of specific length) */
+const abytes = (a, l) => !isBytes(a) || (typeof l === 'number' && l > 0 && a.length !== l)
+    ? err('Uint8Array expected')
+    : a;
+/** create Uint8Array */
+const u8n = (len) => new Uint8Array(len);
+const u8fr = (buf) => Uint8Array.from(buf);
+const padh = (n, pad) => n.toString(16).padStart(pad, '0');
+const bytesToHex = (b) => Array.from(abytes(b))
+    .map((e) => padh(e, 2))
+    .join('');
+const C = { _0: 48, _9: 57, A: 65, F: 70, a: 97, f: 102 }; // ASCII characters
+const _ch = (ch) => {
+    if (ch >= C._0 && ch <= C._9)
+        return ch - C._0; // '2' => 50-48
+    if (ch >= C.A && ch <= C.F)
+        return ch - (C.A - 10); // 'B' => 66-(65-10)
+    if (ch >= C.a && ch <= C.f)
+        return ch - (C.a - 10); // 'b' => 98-(97-10)
+    return;
+};
+const hexToBytes = (hex) => {
+    const e = 'hex invalid';
+    if (!isStr(hex))
+        return err(e);
+    const hl = hex.length;
+    const al = hl / 2;
+    if (hl % 2)
+        return err(e);
+    const array = u8n(al);
+    for (let ai = 0, hi = 0; ai < al; ai++, hi += 2) {
+        // treat each char as ASCII
+        const n1 = _ch(hex.charCodeAt(hi)); // parse first char, multiply it by 16
+        const n2 = _ch(hex.charCodeAt(hi + 1)); // parse second char
+        if (n1 === undefined || n2 === undefined)
+            return err(e);
+        array[ai] = n1 * 16 + n2; // example: 'A9' => 10*16 + 9
+    }
+    return array;
+};
+/** normalize hex or ui8a to ui8a */
+const toU8 = (a, len) => abytes(isStr(a) ? hexToBytes(a) : u8fr(abytes(a)), len);
+const cr = () => globalThis?.crypto; // WebCrypto is available in all modern environments
+const subtle = () => cr()?.subtle ?? err('crypto.subtle must be defined');
+// prettier-ignore
+const concatBytes = (...arrs) => {
+    const r = u8n(arrs.reduce((sum, a) => sum + abytes(a).length, 0)); // create u8a of summed length
+    let pad = 0; // walk through each array,
+    arrs.forEach(a => { r.set(a, pad); pad += a.length; }); // ensure they have proper type
+    return r;
+};
+/** WebCrypto OS-level CSPRNG (random number generator). Will throw when not available. */
+const randomBytes = (len = L) => {
+    const c = cr();
+    return c.getRandomValues(u8n(len));
+};
+const big = BigInt;
+const arange = (n, min, max, msg = 'bad number: out of range') => isBig(n) && min <= n && n < max ? n : err(msg);
+/** modular division */
+const M = (a, b = P) => {
+    const r = a % b;
+    return r >= 0n ? r : b + r;
+};
+const modN = (a) => M(a, N);
+/** Modular inversion using eucledian GCD (non-CT). No negative exponent for now. */
+// prettier-ignore
+const invert = (num, md) => {
+    if (num === 0n || md <= 0n)
+        err('no inverse n=' + num + ' mod=' + md);
+    let a = M(num, md), b = md, x = 0n, y = 1n, u = 1n, v = 0n;
+    while (a !== 0n) {
+        const q = b / a, r = b % a;
+        const m = x - u * q, n = y - v * q;
+        b = a, a = r, x = u, y = v, u = m, v = n;
+    }
+    return b === 1n ? M(x, md) : err('no inverse'); // b is gcd at this point
+};
+const callHash = (name) => {
+    // @ts-ignore
+    const fn = etc[name];
+    if (typeof fn !== 'function')
+        err('hashes.' + name + ' not set');
+    return fn;
+};
+const apoint = (p) => (p instanceof Point ? p : err('Point expected'));
+// ## End of Helpers
+// -----------------
+const B256 = 2n ** 256n;
+/** Point in XYZT extended coordinates. */
+class Point {
+    static BASE;
+    static ZERO;
+    ex;
+    ey;
+    ez;
+    et;
+    constructor(ex, ey, ez, et) {
+        const max = B256;
+        this.ex = arange(ex, 0n, max);
+        this.ey = arange(ey, 0n, max);
+        this.ez = arange(ez, 1n, max);
+        this.et = arange(et, 0n, max);
+        Object.freeze(this);
+    }
+    static fromAffine(p) {
+        return new Point(p.x, p.y, 1n, M(p.x * p.y));
+    }
+    /** RFC8032 5.1.3: Uint8Array to Point. */
+    static fromBytes(hex, zip215 = false) {
+        const d = _d;
+        // Copy array to not mess it up.
+        const normed = u8fr(abytes(hex, L));
+        // adjust first LE byte = last BE byte
+        const lastByte = hex[31];
+        normed[31] = lastByte & ~0x80;
+        const y = bytesToNumLE(normed);
+        // zip215=true:           0 <= y < 2^256
+        // zip215=false, RFC8032: 0 <= y < 2^255-19
+        const max = zip215 ? B256 : P;
+        arange(y, 0n, max);
+        const y2 = M(y * y); // y²
+        const u = M(y2 - 1n); // u=y²-1
+        const v = M(d * y2 + 1n); // v=dy²+1
+        let { isValid, value: x } = uvRatio(u, v); // (uv³)(uv⁷)^(p-5)/8; square root
+        if (!isValid)
+            err('bad point: y not sqrt'); // not square root: bad point
+        const isXOdd = (x & 1n) === 1n; // adjust sign of x coordinate
+        const isLastByteOdd = (lastByte & 0x80) !== 0; // x_0, last bit
+        if (!zip215 && x === 0n && isLastByteOdd)
+            err('bad point: x==0, isLastByteOdd'); // x=0, x_0=1
+        if (isLastByteOdd !== isXOdd)
+            x = M(-x);
+        return new Point(x, y, 1n, M(x * y)); // Z=1, T=xy
+    }
+    /** Checks if the point is valid and on-curve. */
+    assertValidity() {
+        const a = _a;
+        const d = _d;
+        const p = this;
+        if (p.is0())
+            throw new Error('bad point: ZERO'); // TODO: optimize, with vars below?
+        // Equation in affine coordinates: ax² + y² = 1 + dx²y²
+        // Equation in projective coordinates (X/Z, Y/Z, Z):  (aX² + Y²)Z² = Z⁴ + dX²Y²
+        const { ex: X, ey: Y, ez: Z, et: T } = p;
+        const X2 = M(X * X); // X²
+        const Y2 = M(Y * Y); // Y²
+        const Z2 = M(Z * Z); // Z²
+        const Z4 = M(Z2 * Z2); // Z⁴
+        const aX2 = M(X2 * a); // aX²
+        const left = M(Z2 * M(aX2 + Y2)); // (aX² + Y²)Z²
+        const right = M(Z4 + M(d * M(X2 * Y2))); // Z⁴ + dX²Y²
+        if (left !== right)
+            throw new Error('bad point: equation left != right (1)');
+        // In Extended coordinates we also have T, which is x*y=T/Z: check X*Y == Z*T
+        const XY = M(X * Y);
+        const ZT = M(Z * T);
+        if (XY !== ZT)
+            throw new Error('bad point: equation left != right (2)');
+        return this;
+    }
+    /** Equality check: compare points P&Q. */
+    equals(other) {
+        const { ex: X1, ey: Y1, ez: Z1 } = this;
+        const { ex: X2, ey: Y2, ez: Z2 } = apoint(other); // checks class equality
+        const X1Z2 = M(X1 * Z2);
+        const X2Z1 = M(X2 * Z1);
+        const Y1Z2 = M(Y1 * Z2);
+        const Y2Z1 = M(Y2 * Z1);
+        return X1Z2 === X2Z1 && Y1Z2 === Y2Z1;
+    }
+    is0() {
+        return this.equals(I);
+    }
+    /** Flip point over y coordinate. */
+    negate() {
+        return new Point(M(-this.ex), this.ey, this.ez, M(-this.et));
+    }
+    /** Point doubling. Complete formula. Cost: `4M + 4S + 1*a + 6add + 1*2`. */
+    double() {
+        const { ex: X1, ey: Y1, ez: Z1 } = this;
+        const a = _a;
+        // https://hyperelliptic.org/EFD/g1p/auto-twisted-extended.html#doubling-dbl-2008-hwcd
+        const A = M(X1 * X1);
+        const B = M(Y1 * Y1);
+        const C = M(2n * M(Z1 * Z1));
+        const D = M(a * A);
+        const x1y1 = X1 + Y1;
+        const E = M(M(x1y1 * x1y1) - A - B);
+        const G = D + B;
+        const F = G - C;
+        const H = D - B;
+        const X3 = M(E * F);
+        const Y3 = M(G * H);
+        const T3 = M(E * H);
+        const Z3 = M(F * G);
+        return new Point(X3, Y3, Z3, T3);
+    }
+    /** Point addition. Complete formula. Cost: `8M + 1*k + 8add + 1*2`. */
+    add(other) {
+        const { ex: X1, ey: Y1, ez: Z1, et: T1 } = this;
+        const { ex: X2, ey: Y2, ez: Z2, et: T2 } = apoint(other); // doesn't check if other on-curve
+        const a = _a;
+        const d = _d;
+        // https://hyperelliptic.org/EFD/g1p/auto-twisted-extended-1.html#addition-add-2008-hwcd-3
+        const A = M(X1 * X2);
+        const B = M(Y1 * Y2);
+        const C = M(T1 * d * T2);
+        const D = M(Z1 * Z2);
+        const E = M((X1 + Y1) * (X2 + Y2) - A - B);
+        const F = M(D - C);
+        const G = M(D + C);
+        const H = M(B - a * A);
+        const X3 = M(E * F);
+        const Y3 = M(G * H);
+        const T3 = M(E * H);
+        const Z3 = M(F * G);
+        return new Point(X3, Y3, Z3, T3);
+    }
+    /**
+     * Point-by-scalar multiplication. Scalar must be in range 1 <= n < CURVE.n.
+     * Uses {@link wNAF} for base point.
+     * Uses fake point to mitigate side-channel leakage.
+     * @param n scalar by which point is multiplied
+     * @param safe safe mode guards against timing attacks; unsafe mode is faster
+     */
+    multiply(n, safe = true) {
+        if (!safe && (n === 0n || this.is0()))
+            return I;
+        arange(n, 1n, N);
+        if (n === 1n)
+            return this;
+        if (this.equals(G))
+            return wNAF(n).p;
+        // init result point & fake point
+        let p = I;
+        let f = G;
+        for (let d = this; n > 0n; d = d.double(), n >>= 1n) {
+            // if bit is present, add to point
+            // if not present, add to fake, for timing safety
+            if (n & 1n)
+                p = p.add(d);
+            else if (safe)
+                f = f.add(d);
+        }
+        return p;
+    }
+    /** Convert point to 2d xy affine point. (X, Y, Z) ∋ (x=X/Z, y=Y/Z) */
+    toAffine() {
+        const { ex: x, ey: y, ez: z } = this;
+        // fast-paths for ZERO point OR Z=1
+        if (this.equals(I))
+            return { x: 0n, y: 1n };
+        const iz = invert(z, P);
+        // (Z * Z^-1) must be 1, otherwise bad math
+        if (M(z * iz) !== 1n)
+            err('invalid inverse');
+        // x = X*Z^-1; y = Y*Z^-1
+        return { x: M(x * iz), y: M(y * iz) };
+    }
+    toBytes() {
+        const { x, y } = this.assertValidity().toAffine();
+        const b = numTo32bLE(y);
+        // store sign in first LE byte
+        b[31] |= x & 1n ? 0x80 : 0;
+        return b;
+    }
+    toHex() {
+        return bytesToHex(this.toBytes());
+    } // encode to hex string
+    clearCofactor() {
+        return this.multiply(big(h), false);
+    }
+    isSmallOrder() {
+        return this.clearCofactor().is0();
+    }
+    isTorsionFree() {
+        // multiply by big number CURVE.n
+        let p = this.multiply(N / 2n, false).double(); // ensures the point is not "bad".
+        if (N % 2n)
+            p = p.add(this); // P^(N+1) // P*N == (P*(N/2))*2+P
+        return p.is0();
+    }
+    static fromHex(hex, zip215) {
+        return Point.fromBytes(toU8(hex), zip215);
+    }
+    get x() {
+        return this.toAffine().x;
+    }
+    get y() {
+        return this.toAffine().y;
+    }
+    toRawBytes() {
+        return this.toBytes();
+    }
+}
+/** Generator / base point */
+const G = new Point(Gx, Gy, 1n, M(Gx * Gy));
+/** Identity / zero point */
+const I = new Point(0n, 1n, 1n, 0n);
+// Static aliases
+Point.BASE = G;
+Point.ZERO = I;
+const numTo32bLE = (num) => hexToBytes(padh(arange(num, 0n, B256), L2)).reverse();
+const bytesToNumLE = (b) => big('0x' + bytesToHex(u8fr(abytes(b)).reverse()));
+const pow2 = (x, power) => {
+    // pow2(x, 4) == x^(2^4)
+    let r = x;
+    while (power-- > 0n) {
+        r *= r;
+        r %= P;
+    }
+    return r;
+};
+// prettier-ignore
+const pow_2_252_3 = (x) => {
+    const x2 = (x * x) % P; // x^2,       bits 1
+    const b2 = (x2 * x) % P; // x^3,       bits 11
+    const b4 = (pow2(b2, 2n) * b2) % P; // x^(2^4-1), bits 1111
+    const b5 = (pow2(b4, 1n) * x) % P; // x^(2^5-1), bits 11111
+    const b10 = (pow2(b5, 5n) * b5) % P; // x^(2^10)
+    const b20 = (pow2(b10, 10n) * b10) % P; // x^(2^20)
+    const b40 = (pow2(b20, 20n) * b20) % P; // x^(2^40)
+    const b80 = (pow2(b40, 40n) * b40) % P; // x^(2^80)
+    const b160 = (pow2(b80, 80n) * b80) % P; // x^(2^160)
+    const b240 = (pow2(b160, 80n) * b80) % P; // x^(2^240)
+    const b250 = (pow2(b240, 10n) * b10) % P; // x^(2^250)
+    const pow_p_5_8 = (pow2(b250, 2n) * x) % P; // < To pow to (p+3)/8, multiply it by x.
+    return { pow_p_5_8, b2 };
+};
+const RM1 = 0x2b8324804fc1df0b2b4d00993dfbd7a72f431806ad2fe478c4ee1b274a0ea0b0n; // √-1
+// for sqrt comp
+// prettier-ignore
+const uvRatio = (u, v) => {
+    const v3 = M(v * v * v); // v³
+    const v7 = M(v3 * v3 * v); // v⁷
+    const pow = pow_2_252_3(u * v7).pow_p_5_8; // (uv⁷)^(p-5)/8
+    let x = M(u * v3 * pow); // (uv³)(uv⁷)^(p-5)/8
+    const vx2 = M(v * x * x); // vx²
+    const root1 = x; // First root candidate
+    const root2 = M(x * RM1); // Second root candidate; RM1 is √-1
+    const useRoot1 = vx2 === u; // If vx² = u (mod p), x is a square root
+    const useRoot2 = vx2 === M(-u); // If vx² = -u, set x <-- x * 2^((p-1)/4)
+    const noRoot = vx2 === M(-u * RM1); // There is no valid root, vx² = -u√-1
+    if (useRoot1)
+        x = root1;
+    if (useRoot2 || noRoot)
+        x = root2; // We return root2 anyway, for const-time
+    if ((M(x) & 1n) === 1n)
+        x = M(-x); // edIsNegative
+    return { isValid: useRoot1 || useRoot2, value: x };
+};
+// N == L, just weird naming
+const modL_LE = (hash) => modN(bytesToNumLE(hash)); // modulo L; but little-endian
+const sha512a = (...m) => etc.sha512Async(...m); // Async SHA512
+const sha512s = (...m) => callHash('sha512Sync')(...m);
+// RFC8032 5.1.5
+const hash2extK = (hashed) => {
+    // slice creates a copy, unlike subarray
+    const head = hashed.slice(0, L);
+    head[0] &= 248; // Clamp bits: 0b1111_1000
+    head[31] &= 127; // 0b0111_1111
+    head[31] |= 64; // 0b0100_0000
+    const prefix = hashed.slice(L, L2); // private key "prefix"
+    const scalar = modL_LE(head); // modular division over curve order
+    const point = G.multiply(scalar); // public key point
+    const pointBytes = point.toBytes(); // point serialized to Uint8Array
+    return { head, prefix, scalar, point, pointBytes };
+};
+// RFC8032 5.1.5; getPublicKey async, sync. Hash priv key and extract point.
+const getExtendedPublicKeyAsync = (priv) => sha512a(toU8(priv, L)).then(hash2extK);
+const getExtendedPublicKey = (priv) => hash2extK(sha512s(toU8(priv, L)));
+/** Creates 32-byte ed25519 public key from 32-byte private key. Async. */
+const getPublicKeyAsync = (priv) => getExtendedPublicKeyAsync(priv).then((p) => p.pointBytes);
+/** Creates 32-byte ed25519 public key from 32-byte private key. To use, set `etc.sha512Sync` first. */
+const getPublicKey = (priv) => getExtendedPublicKey(priv).pointBytes;
+const hashFinishA = (res) => sha512a(res.hashable).then(res.finish);
+const hashFinishS = (res) => res.finish(sha512s(res.hashable));
+const _sign = (e, rBytes, msg) => {
+    // sign() shared code
+    const { pointBytes: P, scalar: s } = e;
+    const r = modL_LE(rBytes); // r was created outside, reduce it modulo L
+    const R = G.multiply(r).toBytes(); // R = [r]B
+    const hashable = concatBytes(R, P, msg); // dom2(F, C) || R || A || PH(M)
+    const finish = (hashed) => {
+        // k = SHA512(dom2(F, C) || R || A || PH(M))
+        const S = modN(r + modL_LE(hashed) * s); // S = (r + k * s) mod L; 0 <= s < l
+        return abytes(concatBytes(R, numTo32bLE(S)), L2); // 64-byte sig: 32b R.x + 32b LE(S)
+    };
+    return { hashable, finish };
+};
+/**
+ * Signs message (NOT message hash) using private key. Async.
+ * Follows RFC8032 5.1.6.
+ */
+const signAsync = async (msg, privKey) => {
+    const m = toU8(msg);
+    const e = await getExtendedPublicKeyAsync(privKey);
+    const rBytes = await sha512a(e.prefix, m); // r = SHA512(dom2(F, C) || prefix || PH(M))
+    return hashFinishA(_sign(e, rBytes, m)); // gen R, k, S, then 64-byte signature
+};
+/**
+ * Signs message (NOT message hash) using private key. To use, set `hashes.sha512` first.
+ * Follows RFC8032 5.1.6.
+ */
+const sign = (msg, privKey) => {
+    const m = toU8(msg);
+    const e = getExtendedPublicKey(privKey);
+    const rBytes = sha512s(e.prefix, m); // r = SHA512(dom2(F, C) || prefix || PH(M))
+    return hashFinishS(_sign(e, rBytes, m)); // gen R, k, S, then 64-byte signature
+};
+const veriOpts = { zip215: true };
+const _verify = (sig, msg, pub, opts = veriOpts) => {
+    sig = toU8(sig, L2); // Signature hex str/Bytes, must be 64 bytes
+    msg = toU8(msg); // Message hex str/Bytes
+    pub = toU8(pub, L);
+    const { zip215 } = opts; // switch between zip215 and rfc8032 verif
+    let A;
+    let R;
+    let s;
+    let SB;
+    let hashable = Uint8Array.of();
+    try {
+        A = Point.fromHex(pub, zip215); // public key A decoded
+        R = Point.fromHex(sig.slice(0, L), zip215); // 0 <= R < 2^256: ZIP215 R can be >= P
+        s = bytesToNumLE(sig.slice(L, L2)); // Decode second half as an integer S
+        SB = G.multiply(s, false); // in the range 0 <= s < L
+        hashable = concatBytes(R.toBytes(), A.toBytes(), msg); // dom2(F, C) || R || A || PH(M)
+    }
+    catch (error) { }
+    const finish = (hashed) => {
+        // k = SHA512(dom2(F, C) || R || A || PH(M))
+        if (SB == null)
+            return false; // false if try-catch catched an error
+        if (!zip215 && A.isSmallOrder())
+            return false; // false for SBS: Strongly Binding Signature
+        const k = modL_LE(hashed); // decode in little-endian, modulo L
+        const RkA = R.add(A.multiply(k, false)); // [8]R + [8][k]A'
+        return RkA.add(SB.negate()).clearCofactor().is0(); // [8][S]B = [8]R + [8][k]A'
+    };
+    return { hashable, finish };
+};
+/** Verifies signature on message and public key. Async. Follows RFC8032 5.1.7. */
+const verifyAsync = async (s, m, p, opts = veriOpts) => hashFinishA(_verify(s, m, p, opts));
+/** Verifies signature on message and public key. To use, set `hashes.sha512` first. Follows RFC8032 5.1.7. */
+const verify = (s, m, p, opts = veriOpts) => hashFinishS(_verify(s, m, p, opts));
+/** Math, hex, byte helpers. Not in `utils` because utils share API with noble-curves. */
+const etc = {
+    sha512Async: async (...messages) => {
+        const s = subtle();
+        const m = concatBytes(...messages);
+        return u8n(await s.digest('SHA-512', m.buffer));
+    },
+    sha512Sync: undefined,
+    bytesToHex: bytesToHex,
+    hexToBytes: hexToBytes,
+    concatBytes: concatBytes,
+    mod: M,
+    invert: invert,
+    randomBytes: randomBytes,
+};
+/** ed25519-specific key utilities. */
+const utils = {
+    getExtendedPublicKeyAsync: getExtendedPublicKeyAsync,
+    getExtendedPublicKey: getExtendedPublicKey,
+    randomPrivateKey: () => randomBytes(L),
+    precompute: (w = 8, p = G) => {
+        p.multiply(3n);
+        w;
+        return p;
+    }, // no-op
+};
+// ## Precomputes
+// --------------
+const W = 8; // W is window size
+const scalarBits = 256;
+const pwindows = Math.ceil(scalarBits / W) + 1; // 33 for W=8
+const pwindowSize = 2 ** (W - 1); // 128 for W=8
+const precompute = () => {
+    const points = [];
+    let p = G;
+    let b = p;
+    for (let w = 0; w < pwindows; w++) {
+        b = p;
+        points.push(b);
+        for (let i = 1; i < pwindowSize; i++) {
+            b = b.add(p);
+            points.push(b);
+        } // i=1, bc we skip 0
+        p = b.double();
+    }
+    return points;
+};
+let Gpows = undefined; // precomputes for base point G
+// const-time negate
+const ctneg = (cnd, p) => {
+    const n = p.negate();
+    return cnd ? n : p;
+};
+/**
+ * Precomputes give 12x faster getPublicKey(), 10x sign(), 2x verify() by
+ * caching multiples of G (base point). Cache is stored in 32MB of RAM.
+ * Any time `G.multiply` is done, precomputes are used.
+ * Not used for getSharedSecret, which instead multiplies random pubkey `P.multiply`.
+ *
+ * w-ary non-adjacent form (wNAF) precomputation method is 10% slower than windowed method,
+ * but takes 2x less RAM. RAM reduction is possible by utilizing `.subtract`.
+ *
+ * !! Precomputes can be disabled by commenting-out call of the wNAF() inside Point#multiply().
+ */
+const wNAF = (n) => {
+    const comp = Gpows || (Gpows = precompute());
+    let p = I;
+    let f = G; // f must be G, or could become I in the end
+    const pow_2_w = 2 ** W; // 256 for W=8
+    const maxNum = pow_2_w; // 256 for W=8
+    const mask = big(pow_2_w - 1); // 255 for W=8 == mask 0b11111111
+    const shiftBy = big(W); // 8 for W=8
+    for (let w = 0; w < pwindows; w++) {
+        let wbits = Number(n & mask); // extract W bits.
+        n >>= shiftBy; // shift number by W bits.
+        if (wbits > pwindowSize) {
+            wbits -= maxNum;
+            n += 1n;
+        } // split if bits > max: +224 => 256-32
+        const off = w * pwindowSize;
+        const offF = off; // offsets, evaluate both
+        const offP = off + Math.abs(wbits) - 1;
+        const isEven = w % 2 !== 0; // conditions, evaluate both
+        const isNeg = wbits < 0;
+        if (wbits === 0) {
+            // off == I: can't add it. Adding random offF instead.
+            f = f.add(ctneg(isEven, comp[offF])); // bits are 0: add garbage to fake point
+        }
+        else {
+            p = p.add(ctneg(isNeg, comp[offP])); // bits are 1: add to result point
+        }
+    }
+    return { p, f }; // return both real and fake points for JIT
+};
+// !! Remove the export to easily use in REPL / browser console
+// [MClaw] 改为挂到全局：file:// 下浏览器拒绝加载 ES module，
+// 页面需双击即可用，故内联本文件并以 globalThis.nobleEd25519 暴露。
+globalThis.nobleEd25519 = { CURVE: ed25519_CURVE, etc, ExtendedPoint: Point, getPublicKey, getPublicKeyAsync, Point, sign, signAsync, utils, verify, verifyAsync };
+
+/* ==== VENDOR:noble-ed25519 END ==== */
+</script>
+<script>
+// ══════════════ 与 Python 端保持一致的常量 ══════════════
+const PREFIX = "MC1";
+const KNOWN_FEATURES = ["im_channels", "knowledge_base", "mcp", "plugins", "skills"];
+const SEGMENTS = 5;          // FINGERPRINT_SEGMENTS 长度
+const MISSING = "XXXX";      // MISSING_SEGMENT
+const MIN_USABLE = 3;        // MIN_USABLE_SEGMENTS
+const LEDGER_KEY = "mclaw_license_ledger_v1";
+const LEDGER_HEADER = ["sn","cust","fp","iss","exp","users","tier","feat","code"];
+
+let privateKey = null;   // {kind:"webcrypto"|"noble", ...}，只在内存里
+
+// ══════════════ 编码工具 ══════════════
+
+/** base64url，去掉尾部 '=' —— 对应 Python 的 _b64url。 */
+function b64url(bytes) {
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/**
+ * 按 Python ``json.dumps(sort_keys=True, separators=(",",":"), ensure_ascii=False)``
+ * 的字节序列化 payload。
+ *
+ * JS 对象字面量的键顺序不可靠，因此显式按字典序拼装；JSON.stringify 默认
+ * 无空格、不转义非 ASCII，与 Python 上述参数一致。
+ */
+function serializePayload(p) {
+  const ordered = {};
+  for (const k of Object.keys(p).sort()) ordered[k] = p[k];
+  return new TextEncoder().encode(JSON.stringify(ordered));
+}
+
+/** Python round() 用的是银行家舍入，.5 舍到偶数——JS Math.round 不同，需复刻。 */
+function pyRound(x) {
+  const f = Math.floor(x);
+  const diff = x - f;
+  if (Math.abs(diff - 0.5) > Number.EPSILON) return Math.round(x);
+  return f % 2 === 0 ? f : f + 1;
+}
+
+function ymd(d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function addDays(dateStr, days) {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return ymd(d);
+}
+
+// ══════════════ 校验（对应 _validate_fingerprint） ══════════════
+
+function validateFingerprint(raw) {
+  const norm = raw.trim().toUpperCase();
+  const parts = norm.split("-");
+  if (parts.length !== SEGMENTS) {
+    return { ok: false, msg: `机器码应为 ${SEGMENTS} 段，收到 ${parts.length} 段` };
+  }
+  for (const p of parts) {
+    if (p === MISSING) continue;
+    if (p.length !== 4 || !/^[0-9A-F]{4}$/.test(p)) {
+      return { ok: false, msg: `机器码格式无效：「${p}」应为 4 位十六进制` };
+    }
+  }
+  const usable = parts.filter((p) => p !== MISSING).length;
+  if (usable < MIN_USABLE) {
+    return {
+      ok: false,
+      msg: `该机器码仅 ${usable} 段可用（需至少 ${MIN_USABLE} 段），`
+         + `签出的码在客户机器上必然激活失败。请让客户联系技术支持排查硬件信息采集。`,
+    };
+  }
+  return { ok: true, value: norm, usable };
+}
+
+// ══════════════ 私钥加载 ══════════════
+//
+// 两条签名路径，优先 WebCrypto、失败退到内联的 noble-ed25519：
+// 部分浏览器/企业策略下 importKey({name:"Ed25519"}) 抛
+// "Unrecognized name"，即使版本足够新。纯 JS 实现不依赖该 API
+// （只用通用的 SHA-512 摘要），任何环境都能跑。
+// 两条路径产出的签名逐字节相同——Ed25519 是确定性签名。
+
+function pemToDer(pem) {
+  const m = pem.match(/-----BEGIN PRIVATE KEY-----([\s\S]*?)-----END PRIVATE KEY-----/);
+  if (!m) throw new Error("不是 PKCS#8 私钥文件（应以 -----BEGIN PRIVATE KEY----- 开头）");
+  const b64 = m[1].replace(/\s+/g, "");
+  const bin = atob(b64);
+  const der = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) der[i] = bin.charCodeAt(i);
+  return der;
+}
+
+/**
+ * 从 PKCS#8 DER 里取出 32 字节 Ed25519 私钥种子。
+ *
+ * 结构固定为 48 字节，末 32 字节即种子：
+ *   30 2e 02 01 00 30 05 06 03 2b 65 70 04 22 04 20 <32 bytes>
+ * 其中 OID 1.3.101.112 (06 03 2b 65 70) 标识 Ed25519。
+ */
+function pkcs8ToSeed(der) {
+  const OID = [0x06, 0x03, 0x2b, 0x65, 0x70];
+  let at = -1;
+  for (let i = 0; i + OID.length <= der.length; i++) {
+    if (OID.every((b, j) => der[i + j] === b)) { at = i; break; }
+  }
+  if (at < 0) throw new Error("不是 Ed25519 私钥（未找到 OID 1.3.101.112）");
+  // OID 之后是 OCTET STRING 包 OCTET STRING：04 22 04 20 <seed>
+  const p = at + OID.length;
+  if (der[p] !== 0x04 || der[p + 2] !== 0x04 || der[p + 3] !== 0x20) {
+    throw new Error("私钥结构异常，无法解析出密钥数据");
+  }
+  const seed = der.slice(p + 4, p + 4 + 32);
+  if (seed.length !== 32) throw new Error("私钥长度异常");
+  return seed;
+}
+
+document.getElementById("keyFile").addEventListener("change", async (e) => {
+  const box = document.getElementById("keyMsg");
+  const file = e.target.files[0];
+  privateKey = null;
+  refreshSignBtn();
+  if (!file) { box.innerHTML = ""; return; }
+
+  let der;
+  try {
+    der = pemToDer(await file.text());
+  } catch (err) {
+    box.innerHTML = `<div class="err">私钥加载失败：${esc(err.message || err)}</div>`;
+    refreshSignBtn();
+    return;
+  }
+
+  // 路径一：WebCrypto 原生 Ed25519。
+  try {
+    const k = await crypto.subtle.importKey("pkcs8", der, { name: "Ed25519" }, false, ["sign"]);
+    privateKey = { kind: "webcrypto", key: k };
+    box.innerHTML = `<div class="ok">✓ 私钥已加载（${esc(file.name)}）</div>`;
+    refreshSignBtn();
+    return;
+  } catch (_) { /* 退到路径二 */ }
+
+  // 路径二：内联的 noble-ed25519（纯 JS，不依赖浏览器的 Ed25519 支持）。
+  try {
+    const noble = globalThis.nobleEd25519;
+    if (!noble) throw new Error("页面缺少 noble-ed25519，请用 build.py 重新生成");
+    const seed = pkcs8ToSeed(der);
+    // 自检：立刻签一段并自验，确认这条路径真的可用，而不是到签发时才炸。
+    const probe = new TextEncoder().encode("mclaw-selftest");
+    const sig = await noble.signAsync(probe, seed);
+    const pub = await noble.getPublicKeyAsync(seed);
+    if (!(await noble.verifyAsync(sig, probe, pub))) throw new Error("自检未通过");
+    privateKey = { kind: "noble", seed };
+    box.innerHTML = `<div class="ok">✓ 私钥已加载（${esc(file.name)}）</div>`
+      + `<div class="hint">当前浏览器不支持原生 Ed25519，已自动改用内置算法，签发结果完全一致。</div>`;
+  } catch (err) {
+    box.innerHTML = `<div class="err">私钥加载失败：${esc(err.message || err)}</div>`;
+  }
+  refreshSignBtn();
+});
+
+/** 用已加载的私钥签名，两条路径产出一致。 */
+async function signBytes(msg) {
+  if (!privateKey) throw new Error("请先加载私钥");
+  if (privateKey.kind === "webcrypto") {
+    return new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, privateKey.key, msg));
+  }
+  return await globalThis.nobleEd25519.signAsync(msg, privateKey.seed);
+}
+
+// ══════════════ 台账（localStorage） ══════════════
+
+function loadLedger() {
+  try { return JSON.parse(localStorage.getItem(LEDGER_KEY) || "[]"); }
+  catch { return []; }
+}
+
+function saveLedger(rows) {
+  localStorage.setItem(LEDGER_KEY, JSON.stringify(rows));
+}
+
+/** 对应 _next_serial：按当年已用最大序号 +1。 */
+function nextSerial() {
+  const year = new Date().getFullYear();
+  let used = 0;
+  for (const r of loadLedger()) {
+    const parts = String(r.sn || "").split("-");
+    if (parts.length === 3 && parts[0] === "MC" && parts[1] === String(year)) {
+      const n = parseInt(parts[2], 10);
+      if (!isNaN(n)) used = Math.max(used, n);
+    }
+  }
+  return `MC-${year}-${String(used + 1).padStart(4, "0")}`;
+}
+
+function renderLedger() {
+  const rows = loadLedger();
+  const box = document.getElementById("ledgerBox");
+  if (!rows.length) {
+    box.innerHTML = `<div class="empty">还没有签发记录</div>`;
+    return;
+  }
+  const today = ymd(new Date());
+  const body = rows.slice().reverse().map((r) => {
+    const expired = r.exp < today;
+    const days = Math.round((new Date(r.exp) - new Date(today)) / 86400000);
+    const state = expired
+      ? `<span style="color:#b91c1c">已过期</span>`
+      : days <= 30
+        ? `<span style="color:#b45309">剩 ${days} 天</span>`
+        : `<span style="color:#15803d">剩 ${days} 天</span>`;
+    return `<tr>
+      <td class="nowrap mono">${esc(r.sn)}</td>
+      <td>${esc(r.cust)}</td>
+      <td class="nowrap mono">${esc(r.fp)}</td>
+      <td class="nowrap">${esc(r.exp)}</td>
+      <td class="nowrap">${state}</td>
+      <td class="nowrap">${r.users > 0 ? r.users + " 人" : "不限"}</td>
+      <td><button class="ghost sm" data-code="${esc(r.code)}">复制码</button></td>
+    </tr>`;
+  }).join("");
+  box.innerHTML = `<table>
+    <tr><th>流水号</th><th>客户</th><th>机器码</th><th>到期</th><th>状态</th><th>用户数</th><th></th></tr>
+    ${body}
+  </table>`;
+  box.querySelectorAll("button[data-code]").forEach((b) => {
+    b.onclick = () => {
+      navigator.clipboard.writeText(b.dataset.code);
+      b.textContent = "已复制";
+      setTimeout(() => (b.textContent = "复制码"), 1500);
+    };
+  });
+}
+
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+}
+
+// ══════════════ 签发 ══════════════
+
+function refreshSignBtn() {
+  const fpOk = validateFingerprint(document.getElementById("fp").value).ok;
+  const custOk = document.getElementById("cust").value.trim().length > 0;
+  document.getElementById("signBtn").disabled = !(privateKey && fpOk && custOk);
+}
+
+["fp", "cust"].forEach((id) =>
+  document.getElementById(id).addEventListener("input", () => {
+    if (id === "fp") {
+      const box = document.getElementById("fpMsg");
+      const v = document.getElementById("fp").value.trim();
+      if (!v) { box.innerHTML = ""; }
+      else {
+        const r = validateFingerprint(v);
+        box.innerHTML = r.ok
+          ? `<div class="ok">✓ 机器码有效（${r.usable}/${SEGMENTS} 段可用）</div>`
+          : `<div class="err">${r.msg}</div>`;
+      }
+    }
+    refreshSignBtn();
+  }));
+
+document.getElementById("term").addEventListener("change", (e) => {
+  document.getElementById("dateWrap").classList.toggle("hide", e.target.value !== "custom");
+});
+
+document.getElementById("signBtn").addEventListener("click", async () => {
+  const msg = document.getElementById("signMsg");
+  msg.innerHTML = "";
+  try {
+    const cust = document.getElementById("cust").value.trim();
+    const fpCheck = validateFingerprint(document.getElementById("fp").value);
+    if (!fpCheck.ok) throw new Error(fpCheck.msg);
+
+    const feat = [...document.querySelectorAll(".feat:checked")].map((c) => c.value).sort();
+    if (!feat.length) throw new Error("至少要开放一项功能");
+
+    const iss = ymd(new Date());
+    const term = document.getElementById("term").value;
+    let exp;
+    if (term === "custom") {
+      exp = document.getElementById("expDate").value;
+      if (!exp) throw new Error("请选择到期日");
+    } else {
+      exp = addDays(iss, pyRound(parseFloat(term) * 30.44));
+    }
+    if (exp <= iss) throw new Error(`到期日 ${exp} 必须晚于签发日 ${iss}`);
+
+    const users = parseInt(document.getElementById("users").value, 10) || 0;
+    const tier = document.getElementById("tier").value.trim();
+    const sn = document.getElementById("sn").value.trim() || nextSerial();
+
+    // 键序 / 分隔符 / 编码必须与 Python 端一致，详见 serializePayload。
+    const payload = { v: 1, sn, cust, fp: fpCheck.value, iss, exp, tier, users, feat };
+    const payloadB64 = b64url(serializePayload(payload));
+    const signedText = new TextEncoder().encode(`${PREFIX}.${payloadB64}`);
+    const sig = await signBytes(signedText);
+    const code = `${PREFIX}.${payloadB64}.${b64url(sig)}`;
+
+    const rows = loadLedger();
+    rows.push({ sn, cust, fp: fpCheck.value, iss, exp, users, tier, feat: feat.join(","), code });
+    saveLedger(rows);
+
+    showResult({ sn, cust, fp: fpCheck.value, iss, exp, users, tier, feat, code });
+    renderLedger();
+  } catch (err) {
+    msg.innerHTML = `<div class="err">${esc(err.message || err)}</div>`;
+  }
+});
+
+function showResult(r) {
+  const days = Math.round((new Date(r.exp) - new Date(r.iss)) / 86400000);
+  document.getElementById("resultSummary").innerHTML = `
+    <dt>客户</dt><dd>${esc(r.cust)}</dd>
+    <dt>流水号</dt><dd class="mono">${esc(r.sn)}</dd>
+    <dt>机器码</dt><dd class="mono">${esc(r.fp)}</dd>
+    <dt>有效期</dt><dd>${r.iss} → ${r.exp}（${days} 天）</dd>
+    <dt>用户数</dt><dd>${r.users > 0 ? r.users + " 人" : "不限"}</dd>
+    ${r.tier ? `<dt>档位</dt><dd>${esc(r.tier)}</dd>` : ""}
+    <dt>功能</dt><dd>${r.feat.join("、")}</dd>`;
+  document.getElementById("codeOut").textContent = r.code;
+  document.getElementById("resultCard").classList.remove("hide");
+  document.getElementById("resultCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  document.getElementById("copyBtn").dataset.code = r.code;
+}
+
+document.getElementById("copyBtn").addEventListener("click", (e) => {
+  navigator.clipboard.writeText(e.target.dataset.code);
+  e.target.textContent = "已复制 ✓";
+  setTimeout(() => (e.target.textContent = "复制授权码"), 1600);
+});
+
+document.getElementById("againBtn").addEventListener("click", () => {
+  document.getElementById("resultCard").classList.add("hide");
+  document.getElementById("cust").value = "";
+  document.getElementById("fp").value = "";
+  document.getElementById("sn").value = "";
+  document.getElementById("fpMsg").innerHTML = "";
+  refreshSignBtn();
+  document.getElementById("cust").focus();
+});
+
+// ══════════════ CSV 导入导出 ══════════════
+
+function csvCell(v) {
+  const s = String(v == null ? "" : v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const rows = loadLedger();
+  if (!rows.length) { alert("台账为空"); return; }
+  const lines = [LEDGER_HEADER.join(",")];
+  for (const r of rows) lines.push(LEDGER_HEADER.map((h) => csvCell(r[h])).join(","));
+  // BOM：让 Excel 正确识别 UTF-8 中文
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `license_ledger_${ymd(new Date())}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+document.getElementById("importBtn").addEventListener("click", () =>
+  document.getElementById("importFile").click());
+
+document.getElementById("importFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = (await file.text()).replace(/^﻿/, "");
+    const imported = parseCsv(text);
+    const existing = loadLedger();
+    const seen = new Set(existing.map((r) => r.sn));
+    let added = 0;
+    for (const r of imported) {
+      if (r.sn && !seen.has(r.sn)) { existing.push(r); seen.add(r.sn); added++; }
+    }
+    saveLedger(existing);
+    renderLedger();
+    alert(`导入完成：新增 ${added} 条，跳过 ${imported.length - added} 条重复流水号。`);
+  } catch (err) {
+    alert("导入失败：" + (err.message || err));
+  }
+  e.target.value = "";
+});
+
+/** 最小 CSV 解析：支持引号包裹与转义双引号。 */
+function parseCsv(text) {
+  const rows = [];
+  let row = [], cell = "", inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { cell += '"'; i++; }
+        else inQ = false;
+      } else cell += c;
+    } else if (c === '"') inQ = true;
+    else if (c === ",") { row.push(cell); cell = ""; }
+    else if (c === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
+    else if (c !== "\r") cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  if (!rows.length) return [];
+  const header = rows[0].map((h) => h.trim());
+  return rows.slice(1)
+    .filter((r) => r.length && r.some((c) => c.trim()))
+    .map((r) => Object.fromEntries(header.map((h, i) => [h, r[i] ?? ""])));
+}
+
+// ══════════════ 启动 ══════════════
+
+if (!crypto.subtle) {
+  document.body.insertAdjacentHTML("afterbegin",
+    `<div class="err">此页面需要通过 file:// 或 https:// 打开，当前环境不支持加密接口。</div>`);
+}
+document.getElementById("sn").placeholder = nextSerial() + "（留空自动使用）";
+renderLedger();
+</script>
+</body>
+</html>

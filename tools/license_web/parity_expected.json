@@ -1,0 +1,206 @@
+{
+  "_note": "由 gen_expected.py 生成，勿手改。verify_parity.mjs 用它比对浏览器端实现。",
+  "cases": [
+    {
+      "label": "常规 5 功能全开",
+      "payload": {
+        "v": 1,
+        "sn": "MC-2026-0001",
+        "cust": "某某科技有限公司",
+        "fp": "2F72-4463-9B50-7666-617F",
+        "iss": "2026-09-03",
+        "exp": "2027-03-03",
+        "tier": "标准版",
+        "users": 20,
+        "feat": [
+          "im_channels",
+          "knowledge_base",
+          "mcp",
+          "plugins",
+          "skills"
+        ]
+      },
+      "payload_b64": "eyJjdXN0Ijoi5p-Q5p-Q56eR5oqA5pyJ6ZmQ5YWs5Y-4IiwiZXhwIjoiMjAyNy0wMy0wMyIsImZlYXQiOlsiaW1fY2hhbm5lbHMiLCJrbm93bGVkZ2VfYmFzZSIsIm1jcCIsInBsdWdpbnMiLCJza2lsbHMiXSwiZnAiOiIyRjcyLTQ0NjMtOUI1MC03NjY2LTYxN0YiLCJpc3MiOiIyMDI2LTA5LTAzIiwic24iOiJNQy0yMDI2LTAwMDEiLCJ0aWVyIjoi5qCH5YeG54mIIiwidXNlcnMiOjIwLCJ2IjoxfQ"
+    },
+    {
+      "label": "空 tier + 不限用户",
+      "payload": {
+        "v": 1,
+        "sn": "MC-2026-0002",
+        "cust": "Acme Inc.",
+        "fp": "AAAA-BBBB-CCCC-DDDD-EEEE",
+        "iss": "2026-01-01",
+        "exp": "2026-12-31",
+        "tier": "",
+        "users": 0,
+        "feat": [
+          "skills"
+        ]
+      },
+      "payload_b64": "eyJjdXN0IjoiQWNtZSBJbmMuIiwiZXhwIjoiMjAyNi0xMi0zMSIsImZlYXQiOlsic2tpbGxzIl0sImZwIjoiQUFBQS1CQkJCLUNDQ0MtRERERC1FRUVFIiwiaXNzIjoiMjAyNi0wMS0wMSIsInNuIjoiTUMtMjAyNi0wMDAyIiwidGllciI6IiIsInVzZXJzIjowLCJ2IjoxfQ"
+    },
+    {
+      "label": "含缺失段的指纹",
+      "payload": {
+        "v": 1,
+        "sn": "MC-2026-0003",
+        "cust": "测试客户（含括号）& 符号",
+        "fp": "1234-XXXX-5678-XXXX-9ABC",
+        "iss": "2026-06-15",
+        "exp": "2026-07-15",
+        "tier": "试用",
+        "users": 5,
+        "feat": [
+          "mcp",
+          "skills"
+        ]
+      },
+      "payload_b64": "eyJjdXN0Ijoi5rWL6K-V5a6i5oi377yI5ZCr5ous5Y-377yJJiDnrKblj7ciLCJleHAiOiIyMDI2LTA3LTE1IiwiZmVhdCI6WyJtY3AiLCJza2lsbHMiXSwiZnAiOiIxMjM0LVhYWFgtNTY3OC1YWFhYLTlBQkMiLCJpc3MiOiIyMDI2LTA2LTE1Iiwic24iOiJNQy0yMDI2LTAwMDMiLCJ0aWVyIjoi6K-V55SoIiwidXNlcnMiOjUsInYiOjF9"
+    },
+    {
+      "label": "引号与反斜杠",
+      "payload": {
+        "v": 1,
+        "sn": "MC-2026-0004",
+        "cust": "A\"B\\C 公司",
+        "fp": "FFFF-0000-1111-2222-3333",
+        "iss": "2026-02-28",
+        "exp": "2026-08-28",
+        "tier": "",
+        "users": 100,
+        "feat": [
+          "im_channels",
+          "plugins"
+        ]
+      },
+      "payload_b64": "eyJjdXN0IjoiQVwiQlxcQyDlhazlj7giLCJleHAiOiIyMDI2LTA4LTI4IiwiZmVhdCI6WyJpbV9jaGFubmVscyIsInBsdWdpbnMiXSwiZnAiOiJGRkZGLTAwMDAtMTExMS0yMjIyLTMzMzMiLCJpc3MiOiIyMDI2LTAyLTI4Iiwic24iOiJNQy0yMDI2LTAwMDQiLCJ0aWVyIjoiIiwidXNlcnMiOjEwMCwidiI6MX0"
+    }
+  ],
+  "round_cases": [
+    [
+      0.5,
+      0
+    ],
+    [
+      1.5,
+      2
+    ],
+    [
+      2.5,
+      2
+    ],
+    [
+      3.5,
+      4
+    ],
+    [
+      -0.5,
+      0
+    ],
+    [
+      15.22,
+      15
+    ],
+    [
+      15.5,
+      16
+    ],
+    [
+      91.32,
+      91
+    ],
+    [
+      182.64,
+      183
+    ],
+    [
+      365.28,
+      365
+    ]
+  ],
+  "term_cases": [
+    {
+      "iss": "2026-09-03",
+      "months": 1,
+      "exp": "2026-10-03"
+    },
+    {
+      "iss": "2026-09-03",
+      "months": 3,
+      "exp": "2026-12-03"
+    },
+    {
+      "iss": "2026-09-03",
+      "months": 6,
+      "exp": "2027-03-05"
+    },
+    {
+      "iss": "2026-09-03",
+      "months": 12,
+      "exp": "2027-09-03"
+    },
+    {
+      "iss": "2026-09-03",
+      "months": 24,
+      "exp": "2028-09-03"
+    },
+    {
+      "iss": "2026-01-31",
+      "months": 1,
+      "exp": "2026-03-02"
+    },
+    {
+      "iss": "2026-02-28",
+      "months": 12,
+      "exp": "2027-02-28"
+    },
+    {
+      "iss": "2026-12-15",
+      "months": 6,
+      "exp": "2027-06-16"
+    },
+    {
+      "iss": "2026-09-03",
+      "months": 0.5,
+      "exp": "2026-09-18"
+    }
+  ],
+  "b64_cases": [
+    [
+      "00",
+      "AA"
+    ],
+    [
+      "0000",
+      "AAA"
+    ],
+    [
+      "000000",
+      "AAAA"
+    ],
+    [
+      "ff",
+      "_w"
+    ],
+    [
+      "ffff",
+      "__8"
+    ],
+    [
+      "ffffff",
+      "____"
+    ],
+    [
+      "deadbeef",
+      "3q2-7w"
+    ],
+    [
+      "0102030405060708090a0b0c0d0e0f10",
+      "AQIDBAUGBwgJCgsMDQ4PEA"
+    ],
+    [
+      "fbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfb",
+      "-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-w"
+    ]
+  ]
+}
