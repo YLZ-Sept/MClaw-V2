@@ -51,7 +51,7 @@ configure_utf8_stdio()
 # uv release pin —— **必须**显式版本号，禁止 `latest`。
 # 原因：CI 缓存 key 需要 uv 版本作为锚点；`latest` 滚动会出现"key 不动、内容变"，
 # 让缓存命中老版本但代码已经升级。升级 uv 时改这里的常量并跑全平台 release-dryrun。
-UV_VERSION = "0.11.13"
+UV_VERSION = "0.12.9"
 
 UV_RELEASES = {
     ("Windows", "AMD64"): f"https://github.com/astral-sh/uv/releases/download/{UV_VERSION}/uv-x86_64-pc-windows-msvc.zip",
@@ -410,7 +410,10 @@ def install_uv(bin_dir: Path) -> Path:
             "--target",
             str(BUILD_BOOTSTRAP_UV),
             "--prefer-binary",
-            "uv",
+            # 固定版本：不固定时 pip 装最新版，而 manifest 里的 uv.version 写的是
+            # UV_VERSION 常量，两者会不一致（sha256 仍按真实文件算，校验不会失败，
+            # 只是元数据说谎，排障时误导人）。也让 --download-uv 与本路径取到同一版本。
+            f"uv=={UV_VERSION}",
         ],
         cwd=ROOT,
         check=True,
