@@ -3484,6 +3484,7 @@ function MainApp() {
         storeVisible={storeVisible}
         setStoreVisible={setStoreVisible}
         desktopVersion={desktopVersion}
+        backendVersion={backendVersion}
         shouldUseHttpApi={shouldUseHttpApi}
         httpApiBase={httpApiBase}
         backendBootPhase={backendBootPhase}

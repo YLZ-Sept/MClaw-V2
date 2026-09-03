@@ -54,6 +54,8 @@ export interface AdvancedViewProps {
   storeVisible: boolean;
   setStoreVisible: (v: boolean) => void;
   desktopVersion: string;
+  /** 后端版本（v1.2.0…），授权卡产品区展示用；null=读取失败时隐藏。 */
+  backendVersion?: string | null;
   shouldUseHttpApi: () => boolean;
   httpApiBase: () => string;
   backendBootPhase: "unknown" | "starting" | "running" | "stopped" | "error";
@@ -319,7 +321,7 @@ export function AdvancedView(props: AdvancedViewProps) {
   const {
     envDraft, setEnvDraft, busy,
     workspaces, currentWorkspaceId, serviceStatus, info,
-    storeVisible, setStoreVisible, desktopVersion,
+    storeVisible, setStoreVisible, desktopVersion, backendVersion,
     shouldUseHttpApi, httpApiBase,
     backendBootPhase, onOpenRuntimeEnvironment,
     askConfirm,
@@ -1149,7 +1151,7 @@ export function AdvancedView(props: AdvancedViewProps) {
             用 LicenseInfoView 而非内联渲染，避免高级配置页同时维护两套授权 UI。 */}
         <LicenseInfoView
           apiBaseUrl={shouldUseHttpApi() ? httpApiBase() : ""}
-          backendVersion={info?.version ?? undefined}
+          backendVersion={backendVersion ?? undefined}
           // 复用 App 顶层已有的 402 监听：省去把 setLicenseRequired 一路
           // 透传进来，也保证与真正被 gate 拦截时走的是同一条渲染路径。
           onReactivate={() => window.dispatchEvent(
