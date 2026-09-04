@@ -1,0 +1,9 @@
+interface:
+  display_name: "抖音评论助手"
+  short_description: "读取抖音评论、智能生成回复、人工确认后发送（米贝科技账号）"
+  default_prompt: "Use $douyin-comments to read and reply to Douyin comments for 米贝科技"
+
+i18n:
+  zh:
+    name: "抖音评论助手"
+    description: "通过 CDP 连接浏览器读取抖音视频评论，智能生成回复（敏感话题过滤），人工确认后发送。"

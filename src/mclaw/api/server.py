@@ -214,6 +214,61 @@ def _arm_force_exit_watchdog_sync(app: FastAPI) -> None:
         logger.warning("[Shutdown] Failed to arm threading force-exit safety net: %s", exc)
 
 
+_SIGNAL_FORCE_EXIT_TIMER: Any | None = None
+
+
+def arm_signal_force_exit_watchdog() -> None:
+    """Force-exit safety net for the **signal** shutdown path (SIGINT/SIGTERM).
+
+    Companion to :func:`_schedule_force_exit_after_grace`, which is armed
+    from the ``POST /api/shutdown`` route and therefore has a ``FastAPI``
+    app to pin state on. Signals arrive outside any request, so this
+    variant keeps its handle in a module global instead.
+
+    Why this exists — 2026-09-03 production incident: an agent ran
+    ``kill <own pid>`` from a chat message. SIGTERM drove the graceful
+    path to completion (uvicorn unbound the port, 19 plugins unloaded),
+    but one non-daemon ``_connection_worker_thread`` never exited, so
+    the process lingered as a husk. systemd only watches MainPID, saw
+    ``active``, and never fired ``Restart=always`` — the service was
+    down for 23.5h behind an nginx 502. ``/api/shutdown`` had the
+    ``os._exit(0)`` net since v31; the signal path never did.
+
+    Same design as the sync watchdog: daemon ``threading.Timer``,
+    deliberately never cancelled (if the process already exited, the
+    callback simply never runs).
+    """
+    global _SIGNAL_FORCE_EXIT_TIMER
+
+    grace_s = _resolve_force_exit_grace_s()
+    if grace_s <= 0:
+        logger.warning(
+            "[Shutdown] Signal force-exit safety net disabled (grace_s=%s); "
+            "graceful path must complete on its own.",
+            grace_s,
+        )
+        return
+
+    if _SIGNAL_FORCE_EXIT_TIMER is not None:
+        logger.debug("[Shutdown] Signal force-exit safety net already armed; skipping duplicate")
+        return
+
+    try:
+        import threading
+
+        timer = threading.Timer(float(grace_s), lambda: _do_force_exit(grace_s))
+        timer.name = "mclaw-signal-force-exit-watchdog"
+        timer.daemon = True
+        timer.start()
+        _SIGNAL_FORCE_EXIT_TIMER = timer
+        logger.info(
+            "[Shutdown] Signal force-exit safety net armed (grace=%ss); graceful path runs first.",
+            grace_s,
+        )
+    except Exception as exc:  # noqa: BLE001 -- never break the signal handler
+        logger.warning("[Shutdown] Failed to arm signal force-exit safety net: %s", exc)
+
+
 def _arm_force_exit_watchdog_async(app: FastAPI) -> None:
     """Legacy v31 asyncio-based watchdog. **Known broken** under uvicorn
     lifespan teardown — kept solely as a rollback path behind

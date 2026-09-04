@@ -1160,6 +1160,13 @@ async def run_interactive():
         if not _shutdown_triggered:
             _shutdown_triggered = True
             console.print("\n[yellow]收到停止信号，正在优雅关闭...[/yellow]")
+            # 同 serve 路径：非 daemon 线程钉住解释器时靠这个兜底强退。
+            try:
+                from .api.server import arm_signal_force_exit_watchdog
+
+                arm_signal_force_exit_watchdog()
+            except Exception as exc:  # noqa: BLE001 -- 兜底失败也不能挡住关闭
+                logger.warning(f"Failed to arm signal force-exit watchdog: {exc}")
             try:
                 loop = asyncio.get_running_loop()
                 loop.call_soon_threadsafe(shutdown_event.set)
@@ -2535,6 +2542,17 @@ def serve(
             # 信号触发的是真正的关闭，不是重启
             cfg._restart_requested = False
             console.print("\n[yellow]收到停止信号，正在优雅关闭...[/yellow]")
+            # 武装 force-exit 兜底：graceful 路径跑完后，若有非 daemon 线程
+            # （典型是 aiosqlite 的 _connection_worker_thread）钉住解释器，
+            # 进程会变成"端口已释放但 PID 还在"的空壳。systemd 只看 MainPID，
+            # 会一直判 active 而不触发 Restart=always —— 2026-09-03 线上就是
+            # 这样静默宕了 23.5 小时。/api/shutdown 早有此兜底，信号路径没有。
+            try:
+                from .api.server import arm_signal_force_exit_watchdog
+
+                arm_signal_force_exit_watchdog()
+            except Exception as exc:  # noqa: BLE001 -- 兜底失败也不能挡住关闭
+                logger.warning(f"Failed to arm signal force-exit watchdog: {exc}")
             # 使用 call_soon_threadsafe 确保线程安全
             try:
                 loop = asyncio.get_running_loop()
