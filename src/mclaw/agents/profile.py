@@ -39,6 +39,7 @@ BUILTIN_CATEGORIES: list[dict[str, Any]] = [
     {"id": "education", "label": "教育辅助", "color": "#8E44AD", "builtin": True},
     {"id": "productivity", "label": "生活效率", "color": "#E74C3C", "builtin": True},
     {"id": "devops", "label": "开发运维", "color": "#95A5A6", "builtin": True},
+    {"id": "digital-employee", "label": "数字员工", "color": "#F39C12", "builtin": True},
 ]
 _BUILTIN_IDS = frozenset(c["id"] for c in BUILTIN_CATEGORIES)
 

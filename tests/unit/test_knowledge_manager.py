@@ -50,6 +50,40 @@ def _insert_doc_and_chunk(km: KnowledgeManager, collection_id: str, filename: st
     return chunk_id
 
 
+class TestEnsureCollection:
+    """D 轮：SYSTEM 预置空知识库骨架 —— ensure_collection 幂等、稳定 id。"""
+
+    def test_creates_once_and_is_idempotent(self, tmp_path, monkeypatch):
+        km = _make_km(tmp_path, monkeypatch)
+        created = km.ensure_collection(
+            "sys-dept-finance", "财务部资料库", "部门空骨架", workspace_id="default"
+        )
+        assert created is True
+
+        again = km.ensure_collection(
+            "sys-dept-finance", "财务部资料库", "部门空骨架", workspace_id="default"
+        )
+        assert again is False  # 已存在，不重复建
+
+        coll = km.get_collection("sys-dept-finance")
+        assert coll is not None
+        assert coll.id == "sys-dept-finance"
+        assert coll.name == "财务部资料库"
+        assert coll.workspace_id == "default"
+        assert coll.doc_count == 0
+        assert coll.chunk_count == 0
+
+    def test_does_not_touch_existing_uuid_collections(self, tmp_path, monkeypatch):
+        km = _make_km(tmp_path, monkeypatch)
+        auto = km.create_collection("用户集合", "自动 id")
+        # 已有 uuid 集合不受 ensure 影响，数量不变
+        assert km.ensure_collection("sys-dept-tech", "技术中心资料库", "骨架") is True
+        assert km.get_collection(auto.id) is not None
+        _items, total = km.list_collections()
+        # auto + sys-dept-tech = 2
+        assert total == 2
+
+
 class TestSearchWithChunks:
     def test_fills_filename_from_document(self, tmp_path, monkeypatch):
         km = _make_km(tmp_path, monkeypatch)

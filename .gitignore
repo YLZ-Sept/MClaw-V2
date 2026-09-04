@@ -462,3 +462,7 @@ _archive/
 # 本地模型与交付物（不进仓库）
 .models/
 deliverables/
+
+# bid-writer 为独立私有仓库，含真实公司资料（人名/项目/金额/资质差距），
+# 不进 MClaw 主线。可进主线的只有公开骨架/模板。
+skills/bid-writer/

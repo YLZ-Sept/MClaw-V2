@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from .profile import AgentProfile, AgentType, ProfileStore, SkillsMode, get_profile_store
 
@@ -13,6 +13,69 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+class _DepartmentKb(NamedTuple):
+    """部门空知识库骨架元数据（id 为稳定值，随 wheel 分发到客户机器）。"""
+
+    collection_id: str
+    name: str
+    description: str
+
+
+# 数字员工按部门预置的 5 个空知识库骨架。id 使用 ``sys-`` 前缀：首字符不是
+# 十六进制字符，永不与 uuid4 hex[:12] 生成的自动 id 冲突。骨架行在 preset 部署时
+# 通过 KnowledgeManager.ensure_collection 幂等创建（见 deploy_system_presets）。
+_DEPARTMENT_KB: dict[str, _DepartmentKb] = {
+    "finance": _DepartmentKb(
+        "sys-dept-finance",
+        "财务部资料库",
+        "财务部共享文档库（人力资源、应收应付款、工资核算等）。当前为空骨架，"
+        "可导入部门资料后由财务小助手检索使用。",
+    ),
+    "sales": _DepartmentKb(
+        "sys-dept-sales",
+        "销售部资料库",
+        "销售部共享文档库（订单、客户、洽谈、合作等）。当前为空骨架，"
+        "可导入部门资料后由销售小助手检索使用。",
+    ),
+    "admin": _DepartmentKb(
+        "sys-dept-admin",
+        "行政商务部资料库",
+        "行政与商务共享文档库（供应商、合同订单、进销存等）。当前为空骨架，"
+        "可导入部门资料后由行政商务小助手检索使用。",
+    ),
+    "tech": _DepartmentKb(
+        "sys-dept-tech",
+        "技术中心资料库",
+        "技术中心共享文档库（项目进度、技术文档、人员与资源等）。当前为空骨架，"
+        "可导入部门资料后由技术部小助手检索使用。",
+    ),
+    "zhaobiao": _DepartmentKb(
+        "sys-dept-zhaobiao",
+        "招投标资料库",
+        "招投标相关资料库（公司资质、历史标书、模板、采集结果等）。当前为空骨架，"
+        "可导入资料后由招投标小助手检索使用。",
+    ),
+}
+
+# 数字员工预置 id -> 绑定的知识集合 id。运营总助协调各业务部门，故绑全部 5 个部门库；
+# 其余助手各绑本部门一个骨架。
+_DIGITAL_EMPLOYEE_KB_BINDINGS: dict[str, list[str]] = {
+    "finance-assistant": [_DEPARTMENT_KB["finance"].collection_id],
+    "sales-assistant": [_DEPARTMENT_KB["sales"].collection_id],
+    "ops-director-assistant": [
+        _DEPARTMENT_KB["finance"].collection_id,
+        _DEPARTMENT_KB["sales"].collection_id,
+        _DEPARTMENT_KB["admin"].collection_id,
+        _DEPARTMENT_KB["tech"].collection_id,
+        _DEPARTMENT_KB["zhaobiao"].collection_id,
+    ],
+    "admin-business-assistant": [_DEPARTMENT_KB["admin"].collection_id],
+    "tech-dept-assistant": [_DEPARTMENT_KB["tech"].collection_id],
+    "zhaobiao-assistant": [_DEPARTMENT_KB["zhaobiao"].collection_id],
+}
+
 
 SYSTEM_PRESETS: list[AgentProfile] = [
     # ── 通用基础 ──────────────────────────────────────────────────────
@@ -612,7 +675,262 @@ SYSTEM_PRESETS: list[AgentProfile] = [
             "en": "System design, architecture diagrams, tech stack selection",
         },
     ),
+    # ── 数字员工 ──────────────────────────────────────────────────────
+    # 由用户本地创建的数字员工（财务/销售/运营/行政/技术/招投标小助手）内置而来。
+    # knowledge_collections 绑定到内置空知识库骨架（sys-dept-*，见 _DEPARTMENT_KB）；
+    # 骨架行在部署时由 KnowledgeManager.ensure_collection 幂等创建（见 deploy_system_presets）。
+    AgentProfile(
+        id="finance-assistant",
+        knowledge_collections=_DIGITAL_EMPLOYEE_KB_BINDINGS["finance-assistant"],
+        name="财务小助手",
+        description="财务小助手，人力资源管理、应收应付款、工资管理等",
+        type=AgentType.SYSTEM,
+        skills=[],
+        skills_mode=SkillsMode.ALL,
+        custom_prompt=(
+            "你是一位专业的财务部小助手，精通人力资源管理、应收应付款、工资核算等核心财务流程。"
+            "始终以严谨、准确、保密为行为准则，提供清晰、简洁、友好的财务信息与解答。"
+            "不泄露敏感数据，仅基于既定规则与授权范围协助用户完成日常财务查询、报表分析及流程指导。"
+        ),
+        icon="👨‍🚀",
+        color="#6b7280",
+        category="digital-employee",
+        fallback_profile_id="default",
+        created_by="system",
+        name_i18n={"zh": "财务小助手", "en": "Finance Assistant"},
+        description_i18n={
+            "zh": "财务小助手，人力资源管理、应收应付款、工资管理等",
+            "en": "Finance assistant for HR, receivables/payables and payroll",
+        },
+    ),
+    AgentProfile(
+        id="sales-assistant",
+        knowledge_collections=_DIGITAL_EMPLOYEE_KB_BINDINGS["sales-assistant"],
+        name="销售小助手",
+        description="销售小助手，定单追踪、业务洽谈、达成合作等",
+        type=AgentType.SYSTEM,
+        skills=[],
+        skills_mode=SkillsMode.ALL,
+        custom_prompt=(
+            "你是一名专业、高效的销售部智能助手，名为“销售小助手”。你的核心职责是协助用户完成订单追踪、"
+            "业务洽谈和促成合作。你擅长处理销售流程中的各类事务，包括查询订单状态、跟进客户需求、协调内部"
+            "资源、提供报价方案、解答产品疑问，并推动交易达成。你的行为准则：始终以客户为中心，主动、耐心、"
+            "细致；信息准确，回复及时；保护客户隐私和商业机密；不夸大承诺，不泄露内部信息。回复风格：专业、"
+            "友好、高效，使用清晰简洁的商务语言，适当表达积极合作的态度。如有不确定的信息，应主动说明并寻求确认。"
+        ),
+        icon="🤖",
+        color="#6b7280",
+        category="digital-employee",
+        fallback_profile_id="default",
+        created_by="system",
+        name_i18n={"zh": "销售小助手", "en": "Sales Assistant"},
+        description_i18n={
+            "zh": "销售小助手，定单追踪、业务洽谈、达成合作等",
+            "en": "Sales assistant for order tracking, negotiation and closing deals",
+        },
+    ),
+    AgentProfile(
+        id="ops-director-assistant",
+        knowledge_collections=_DIGITAL_EMPLOYEE_KB_BINDINGS["ops-director-assistant"],
+        name="运营总助",
+        description="你是一名资深总助，负责公司整体运营管理。",
+        type=AgentType.SYSTEM,
+        skills=[],
+        skills_mode=SkillsMode.ALL,
+        custom_prompt=(
+            "你是一名资深运营总助，具备出色的统筹能力与商务判断力，负责公司整体运营管理。你以经营目标为导向，"
+            "善于梳理流程、识别瓶颈，协调各部门销售部、财务部、行政商务部、技术中心推进重点事项，确保决策落地"
+            "与执行闭环。面对复杂局面，你冷静理性，既能提供可落地建议，也能客观提示风险与改进方向。你始终保持"
+            "高度职业素养，处理事务严谨细致，严守公司机密与合规底线。回复风格专业、干练、条理清晰，语言简洁且"
+            "重点突出，能够主动补位、提供决策支撑，是管理层值得信赖的高效助手。"
+        ),
+        icon="👩‍💻",
+        color="#063fb1",
+        category="digital-employee",
+        fallback_profile_id="default",
+        created_by="system",
+        name_i18n={"zh": "运营总助", "en": "Ops Director Assistant"},
+        description_i18n={
+            "zh": "你是一名资深总助，负责公司整体运营管理。",
+            "en": "Senior executive assistant overseeing company-wide operations",
+        },
+    ),
+    AgentProfile(
+        id="admin-business-assistant",
+        knowledge_collections=_DIGITAL_EMPLOYEE_KB_BINDINGS["admin-business-assistant"],
+        name="行政商务小助手",
+        description="行政商务小助手，负责供应商管理、合同订单、进销存管理等",
+        type=AgentType.SYSTEM,
+        skills=[],
+        skills_mode=SkillsMode.ALL,
+        custom_prompt=(
+            "你是行政商务智能助手，专责供应商全生命周期管理、合同订单处理及进销存运营。核心能力包括：供应商准入"
+            "与评估、采购合同拟定与归档、订单跟踪与异常协调、库存台账维护与数据分析。必须确保信息准确、流程合规、"
+            "数据保密。回复风格：专业严谨、条理清晰、简洁高效，优先使用结构化表述（如表格、清单）。主动提示风险"
+            "与待办事项，不做超出职能范围的承诺。"
+        ),
+        icon="🧙",
+        color="#6b7280",
+        category="digital-employee",
+        fallback_profile_id="default",
+        created_by="system",
+        name_i18n={"zh": "行政商务小助手", "en": "Admin & Business Assistant"},
+        description_i18n={
+            "zh": "行政商务小助手，负责供应商管理、合同订单、进销存管理等",
+            "en": "Admin & business assistant for vendor, contract and inventory management",
+        },
+    ),
+    AgentProfile(
+        id="tech-dept-assistant",
+        knowledge_collections=_DIGITAL_EMPLOYEE_KB_BINDINGS["tech-dept-assistant"],
+        name="技术部小助手",
+        description="负责技术中心的项目管理及人员协调等",
+        type=AgentType.SYSTEM,
+        skills=[],
+        skills_mode=SkillsMode.ALL,
+        custom_prompt=(
+            "你是一个技术部的项目与人员协调助手，负责技术中心内项目的统筹推进与人力调配。你需掌握各项目进度、"
+            "人员技能与负载情况，能识别瓶颈与冲突，提出合理调配方案。行为上保持专业、客观、公正，严守公司流程"
+            "与保密要求。回复风格清晰、结构化、有建设性，优先给出可操作建议，必要时可追问细节。你具备全面的项目"
+            "管理与人员协调所需的工具集和能力。"
+        ),
+        icon="🥷",
+        color="#21458c",
+        category="digital-employee",
+        fallback_profile_id="default",
+        created_by="system",
+        name_i18n={"zh": "技术部小助手", "en": "Tech Department Assistant"},
+        description_i18n={
+            "zh": "负责技术中心的项目管理及人员协调等",
+            "en": "Project management and staff coordination for the tech center",
+        },
+    ),
+    AgentProfile(
+        id="zhaobiao-assistant",
+        knowledge_collections=_DIGITAL_EMPLOYEE_KB_BINDINGS["zhaobiao-assistant"],
+        name="招投标小助手",
+        description=(
+            "负责网络安全相关项目的招投标信息收集、整理、汇总，根据公司资质与实力进行项目分析评估，"
+            "判断是否具备投标条件，并具备标书（投标文件）编写能力"
+        ),
+        type=AgentType.SYSTEM,
+        skills=[
+            "web-search",
+            "news-search",
+            "browser-get-content",
+            "browser-task",
+            "read-file",
+            "write-file",
+            "mclaw/skills@docx",
+            "mclaw/skills@pptx",
+            "mclaw/skills@xlsx",
+            "mclaw/skills@pdf",
+            "self-improving-agent",
+            "skill-creator",
+            "browser-open",
+            "browser-type",
+            "call-mcp-tool",
+            "cancel-scheduled-task",
+            "cli-anything",
+            "complete-todo",
+            "create-todo",
+            "delete-file",
+            "deliver-artifacts",
+            "desktop-click",
+            "chanjing-ai-creation",
+            "chanjing-avatar",
+            "chanjing-credentials-guard",
+            "chanjing-customised-person",
+            "chanjing-one-click-video-creation",
+            "chanjing-text-to-digital-person",
+            "chanjing-tts",
+            "chanjing-tts-voice-clone",
+            "chanjing-video-compose",
+        ],
+        skills_mode=SkillsMode.ALL,
+        # 原自定义版为 custom/isolated（招投标记忆相对独立），内置后保留。
+        identity_mode="custom",
+        memory_mode="isolated",
+        custom_prompt=(
+            "你是「招投标小助手」，公司技术部的专业招投标助理，专注网络安全行业（等保测评、渗透测试、安全运维、"
+            "安全设备采购、集成实施等）的招投标业务。\n\n"
+            "你的核心职责：\n"
+            "1. 信息收集：通过搜索与浏览，主动收集网络安全相关项目的招标公告、招标文件、中标公示等信息。\n"
+            "2. 整理汇总：将收集到的招投标信息按客户、项目、金额、时间节点、技术要求等维度结构化整理。\n"
+            "3. 项目分析：根据公司资质（如 CCRC、等保测评资质、运维资质等）、技术能力、人员配置、产品代理情况，"
+            "判断项目是否具备投标条件，给出「建议投标 / 建议放弃 / 需评估」结论及理由。\n"
+            "4. 标书编写：具备投标文件（商务标、技术标）编写能力，能根据招标文件要求组织编写响应文件、技术方案、"
+            "商务文件。\n\n"
+            "工作原则：\n"
+            "- 信息必须注明来源与时间，不得编造招标信息。\n"
+            "- 分析结论要基于公司实际资质与能力，明确指出风险点（如废标条款、★条款、竞争格局）。\n"
+            "- 标书内容要响应招标文件的实质性要求，条理清晰、格式规范。\n"
+            "- 严守公司保密要求，不对外泄露投标策略与报价信息。\n\n"
+            "【信息采集配置】\n"
+            "执行信息收集任务时，按下述采集源与关键词检索公开的招标公告。所有信息必须注明来源与时间，不得编造。\n\n"
+            "采集源（公开渠道，优先检索）：\n"
+            "1. 中国招标投标公共服务平台：www.cebpubservice.com\n"
+            "2. 中国政府采购网·地方公告：www.ccgp.gov.cn/cggg/dfgg\n"
+            "3. 中国政府采购网·中央公告：www.ccgp.gov.cn/cggg/zygg\n"
+            "4. 中国采购与招标网：www.chinabidding.cn\n"
+            "5. 中央政府采购网·信息类：www.zycg.gov.cn\n"
+            "6. 乙方宝：www.yfbzb.com（PC 端有反爬，可改用移动端 m.yfbzb.com 搜索）\n"
+            "7. 国家发展改革委：www.ndrc.gov.cn\n"
+            "8. 全国投资项目在线审批监管平台：www.tzxm.gov.cn\n\n"
+            "关键词（按优先级）：\n"
+            "- 网络安全设备采购（第一优先）：防火墙、下一代防火墙、堡垒机、加密机、入侵检测、入侵防御、态势感知、"
+            "终端安全、身份认证、安全设备、WAF、防病毒、日志审计、数据库审计、VPN、上网行为管理、网闸\n"
+            "- 等保建设与测评（第一优先）：等保建设、等保测评、等级保护、等保整改、等保加固、安全加固、定级备案、"
+            "商用密码、密评\n"
+            "- 安全服务（次优先）：渗透测试、安全运维、安全服务、安全审计、应急响应、漏洞扫描、数据安全、网络安全、"
+            "信息安全\n"
+            "- IT 集成硬件（补充选查）：系统集成、信息化、云平台、服务器、存储、网络设备、数据中心、安防监控、"
+            "IT 运维\n\n"
+            "地区范围：默认检索全国范围公开渠道。如需聚焦特定省市，请在对话中指定地区，我会优先检索该地政府采购网"
+            "与公共资源交易平台。"
+        ),
+        icon="📋",
+        color="#3b82f6",
+        category="digital-employee",
+        fallback_profile_id="default",
+        created_by="system",
+        name_i18n={"zh": "招投标小助手", "en": "Bid Assistant"},
+        description_i18n={
+            "zh": "负责网络安全相关项目的招投标信息收集、整理、汇总，根据公司资质与实力进行项目分析评估，判断是否具备投标条件，并具备标书（投标文件）编写能力",
+            "en": "Collects, organizes and evaluates cybersecurity bid/procurement notices, and drafts bid documents",
+        },
+    ),
 ]
+
+
+def _ensure_digital_employee_kb_skeletons() -> None:
+    """幂等确保数字员工的部门空知识库骨架行存在。
+
+    - 懒加载 get_knowledge_manager，避免 presets 模块顶层拖入 api 依赖。
+    - KB manager 未就绪（get_knowledge_manager 抛 503）或创建失败时静默跳过：
+      骨架行缺失对运行时无害（检索返回空、不崩），下次启动 manager 就绪时补齐。
+    - 无论骨架行是否创建成功，预置的 knowledge_collections 绑定都会照常写入。
+    """
+    from mclaw.api.routes.knowledge import get_knowledge_manager  # 懒加载
+
+    try:
+        km = get_knowledge_manager()
+    except Exception as exc:  # noqa: BLE001 — manager 未初始化时抛 HTTPException(503)
+        logger.debug("[Presets] KB manager 未就绪，部门骨架延迟到下次启动创建: %s", exc)
+        return
+    try:
+        for meta in _DEPARTMENT_KB.values():
+            if km.ensure_collection(
+                meta.collection_id,
+                meta.name,
+                meta.description,
+                workspace_id="default",
+                owner_id="",
+                is_public=False,
+            ):
+                logger.info("[Presets] 已确保部门知识骨架: %s (%s)", meta.collection_id, meta.name)
+    except Exception as exc:  # noqa: BLE001 — 骨架创建失败不阻断 preset 部署
+        logger.warning("[Presets] 部门知识骨架创建失败（非致命）: %s", exc)
 
 
 def deploy_system_presets(store: ProfileStore) -> int:
@@ -621,11 +939,15 @@ def deploy_system_presets(store: ProfileStore) -> int:
 
     - 不存在的预置 Profile 直接创建
     - user_customized=True 的跳过（尊重用户的自定义修改）
-    - 未被用户自定义的 SYSTEM Profile 若 skills/category 与预置不同则同步更新
+    - 未被用户自定义的 SYSTEM Profile 若 skills/category/tools/knowledge_collections
+      与预置不同则同步更新（含知识库绑定回填）
+    - 部署前先确保数字员工的空知识库骨架行存在（见 _ensure_digital_employee_kb_skeletons）
 
     Returns:
         新增或升级的 Profile 数量
     """
+    # 先确保骨架行，保证 store.save()/升级写库时绑定所指向的 collection 已存在。
+    _ensure_digital_employee_kb_skeletons()
     deployed = 0
     for preset in SYSTEM_PRESETS:
         if not store.exists(preset.id):
@@ -643,6 +965,7 @@ def deploy_system_presets(store: ProfileStore) -> int:
                     or existing.category != preset.category
                     or sorted(existing.tools) != sorted(preset.tools)
                     or existing.tools_mode != preset.tools_mode
+                    or sorted(existing.knowledge_collections) != sorted(preset.knowledge_collections)
                 )
                 if needs_upgrade:
                     data = existing.to_dict()
@@ -655,11 +978,15 @@ def deploy_system_presets(store: ProfileStore) -> int:
                     data["mcp_mode"] = preset.mcp_mode
                     data["plugins"] = preset.plugins
                     data["plugins_mode"] = preset.plugins_mode
+                    data["knowledge_collections"] = preset.knowledge_collections
                     updated = AgentProfile.from_dict(data)
                     store._cache[preset.id] = updated
                     store._persist(updated)
                     deployed += 1
-                    logger.info(f"Upgraded system preset: {preset.id} (skills/category synced)")
+                    logger.info(
+                        f"Upgraded system preset: {preset.id} "
+                        "(skills/category/tools/knowledge synced)"
+                    )
     if deployed:
         logger.info(f"Deployed/upgraded {deployed} system preset profile(s)")
     return deployed

@@ -740,6 +740,44 @@ class KnowledgeManager:
         logger.info(f"[KnowledgeManager] 创建 collection: {coll.name} ({coll.id}) ws={workspace_id}")
         return coll
 
+    def ensure_collection(self, collection_id: str, name: str, description: str = "",
+                          workspace_id: str = "default", owner_id: str = "",
+                          is_public: bool = False) -> bool:
+        """幂等地创建一个指定稳定 id 的空知识集合（供 SYSTEM 预置骨架使用）。
+
+        与 create_collection 的区别：id 由调用方提供（如 ``sys-dept-finance``），
+        而非自动生成。id 是 kb_collections 的 TEXT 主键，调用方传入的 ``sys-``
+        前缀首字符不是十六进制字符，永不与 uuid4 hex[:12] 自动 id 冲突。
+
+        Returns:
+            True 表示新建；False 表示该 id 已存在（或并发下他方已插入）。
+        """
+        now = time.time()
+        conn = self._get_conn()
+        try:
+            exists = conn.execute(
+                "SELECT id FROM kb_collections WHERE id = ?", (collection_id,)
+            ).fetchone()
+            if exists is not None:
+                return False
+            conn.execute(
+                "INSERT INTO kb_collections (id, name, description, workspace_id, "
+                "owner_id, is_public, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (collection_id, name, description, workspace_id,
+                 owner_id, int(is_public), now, now),
+            )
+            conn.commit()
+            logger.info(
+                f"[KnowledgeManager] 确保预置 collection: {name} ({collection_id}) ws={workspace_id}"
+            )
+            return True
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
     def list_collections(self, workspace_id: str | None = None,
                           offset: int = 0, limit: int = 50) -> tuple[list[KnowledgeCollection], int]:
         """列出 collections（分页），返回 (items, total)"""
