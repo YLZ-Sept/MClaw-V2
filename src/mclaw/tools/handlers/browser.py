@@ -336,7 +336,7 @@ class BrowserHandler:
         import json
 
         lines = [
-            f"[OPENAKITA_SOURCE] {json.dumps(source_payload, ensure_ascii=False, sort_keys=True)}",
+            f"[MCLAW_SOURCE] {json.dumps(source_payload, ensure_ascii=False, sort_keys=True)}",
             "✅ Browser content read",
             f"Current URL: {current_url or 'unknown'}",
             f"Title: {title or 'unknown'}",

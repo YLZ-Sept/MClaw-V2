@@ -1,7 +1,7 @@
 /* idea-research UI i18n strings — Phase 5 full dictionary.
  *
  * Loaded BEFORE the React bundle so the workbench can call
- * ``window.OpenAkita.i18n.t(locale, key, vars)`` synchronously.
+ * ``window.Mclaw.i18n.t(locale, key, vars)`` synchronously.
  */
 (function () {
   "use strict";
@@ -454,6 +454,6 @@
     });
   }
 
-  window.OpenAkita = window.OpenAkita || {};
-  window.OpenAkita.i18n = { t: t, dict: DICT };
+  window.Mclaw = window.Mclaw || {};
+  window.Mclaw.i18n = { t: t, dict: DICT };
 })();

@@ -25,6 +25,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -42,6 +43,7 @@ from .knowledge_types import (
     SearchResult,
     _short_uuid,
 )
+from .vector_store import needs_vector_rebuild
 
 logger = logging.getLogger(__name__)
 
@@ -481,7 +483,20 @@ def _chunk_text(
                 overlapped.append(chunks[i])
         chunks = overlapped
 
-    return chunks
+    # 丢弃无有效检索字符的 chunk（纯 markdown 表格边框线、分隔符、空白）。
+    # 实测某份周报 15 个 chunk 里有 3 个是这种，检索命中它们等于白占名额。
+    # 放在这里而不是 _persist_chunks：所有调用方拿到的就是干净列表，
+    # _mark_doc_ready(doc_id, len(chunks)) 的 chunk_count 才不会算多。
+    return [c for c in chunks if not _is_degenerate_chunk(c)]
+
+
+# 至少含一个汉字/字母/数字才算有效内容
+_CONTENT_CHAR_RE = re.compile(r"[0-9A-Za-z一-鿿]")
+
+
+def _is_degenerate_chunk(text: str) -> bool:
+    """chunk 是否不含任何有效检索字符（只有空白、表格边框、分隔符）"""
+    return _CONTENT_CHAR_RE.search(text) is None
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -501,6 +516,31 @@ def _estimate_tokens(text: str) -> int:
     return chinese_chars + english_words + others // 4
 
 
+def _settings_value(key: str, fallback: str) -> str:
+    """从全局 settings 读取配置值，任何异常回退到默认值（避免循环导入/启动顺序问题）"""
+    try:
+        from mclaw.config import settings as _settings
+
+        return getattr(_settings, key, None) or fallback
+    except Exception:
+        return fallback
+
+
+def _settings_opt_bool(key: str, fallback: bool | None = None) -> bool | None:
+    """读取三态布尔配置：未设置返回 fallback（默认 None），显式值原样返回。
+
+    ``_settings_value`` 用 ``or`` 兜底，会把显式的 False 当成"未设置"吞掉，
+    所以布尔开关单独走这里。
+    """
+    try:
+        from mclaw.config import settings as _settings
+
+        val = getattr(_settings, key, None)
+        return fallback if val is None else bool(val)
+    except Exception:
+        return fallback
+
+
 # ── KnowledgeManager ───────────────────────────────────────────────────────────
 
 class KnowledgeManager:
@@ -511,24 +551,69 @@ class KnowledgeManager:
     ChromaDB 存储向量（可降级到纯 FTS5）。
     """
 
+    # reranker 精排的候选上限（见 search()：CPU 上是延迟与收益的折中点）
+    RERANK_CANDIDATES = 15
+
     def __init__(
         self,
         data_dir: Path,
         model_name: str | None = None,
-        device: str = "cpu",
-        download_source: str = "auto",
+        device: str | None = None,
+        download_source: str | None = None,
+        reranker_enabled: bool | None = None,
+        reranker_model: str | None = None,
+        reranker_api_base: str | None = None,
+        reranker_api_key: str | None = None,
+        reranker_api_model: str | None = None,
     ):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.model_name = model_name or "shibing624/text2vec-base-chinese"
-        self.device = device
-        self.download_source = download_source
+        self.model_name = model_name or _settings_value(
+            "embedding_model", "BAAI/bge-small-zh-v1.5"
+        )
+        self.device = device or _settings_value("embedding_device", "cpu")
+        self.download_source = download_source or _settings_value(
+            "model_download_source", "auto"
+        )
+
+        # Reranker 精排配置（仅向量模式就绪后启用）
+        self._reranker_model_name = reranker_model or _settings_value(
+            "kb_reranker_model", "BAAI/bge-reranker-base"
+        )
+        self._reranker_api_base = reranker_api_base or _settings_value(
+            "kb_reranker_api_base", ""
+        )
+        self._reranker_api_key = reranker_api_key or _settings_value(
+            "kb_reranker_api_key", ""
+        )
+        self._reranker_api_model = reranker_api_model or _settings_value(
+            "kb_reranker_api_model", "BAAI/bge-reranker-v2-m3"
+        )
+
+        # 开关三态：显式 True/False 照办；未设置时只在配了在线 Rerank API 时启用。
+        # 本地模型约 1.1GB 且常驻内存，不在默认路径上主动触发下载。
+        enabled = reranker_enabled
+        if enabled is None:
+            enabled = _settings_opt_bool("kb_reranker_enabled")
+        if enabled is None:
+            enabled = bool(self._reranker_api_base and self._reranker_api_key)
+        self.reranker_enabled = bool(enabled)
 
         # ChromaDB state
         self._chroma_client = None
         self._chroma_collection = None
         self._embedding_model = None
         self._vector_enabled = False
+        # 查询扩展（同义词/缩略语，FTS5 下的语义代偿）
+        self._expand_query_enabled = bool(
+            _settings_opt_bool("kb_query_expansion_enabled", True)
+        )
+        self._synonym_groups: list[list[str]] | None = None  # 懒加载
+
+        self._reranker = None
+        self._reindex_started = False
+        self._reindex_progress: dict = {}
+        self._reindex_last_stats: dict = {}
         self._init_lock = threading.RLock()
         self._init_started = False
 
@@ -538,6 +623,9 @@ class KnowledgeManager:
 
         # Start background ChromaDB init
         self._start_chroma_init()
+
+        # 精排独立于向量模式启动（在线 API 零依赖，纯 FTS5 下也能用）
+        self._start_reranker_init()
 
     # ── SQLite ──────────────────────────────────────────────────────────────
 
@@ -656,6 +744,46 @@ class KnowledgeManager:
         )
         t.start()
 
+    # ── Reranker 初始化（与向量模式解耦）─────────────────────────────────────
+
+    def _start_reranker_init(self) -> None:
+        """后台线程装配精排器。
+
+        精排是纯增强层，**不依赖 ChromaDB**：在线 Rerank API 只需要 httpx，
+        纯 FTS5 模式下同样能对 BM25 候选重新排序。此前这段逻辑写在
+        ``_do_chroma_init`` 的成功路径里，而该函数在没装 chromadb 时会提前
+        return，导致没装 vector-memory 模块（约 2.5GB）的机器永远拿不到精排
+        —— 哪怕配置的是零依赖的在线 API。
+        """
+        if not self.reranker_enabled:
+            return
+
+        def _run() -> None:
+            try:
+                from .reranker import Reranker
+
+                reranker = Reranker(
+                    model_name=self._reranker_model_name,
+                    device=self.device,
+                    download_source=self.download_source,
+                    api_base=self._reranker_api_base,
+                    api_key=self._reranker_api_key,
+                    api_model=self._reranker_api_model,
+                )
+                with self._init_lock:
+                    self._reranker = reranker
+                reranker.start_background_init()
+            except Exception as e:
+                logger.warning(
+                    f"[KnowledgeManager] reranker 装配失败，检索沿用 RRF 排序（非致命）: {e}"
+                )
+
+        threading.Thread(
+            target=_run,
+            name="KnowledgeManager-reranker-init",
+            daemon=True,
+        ).start()
+
     def _do_chroma_init(self) -> None:
         """实际 ChromaDB 初始化逻辑"""
         if not _lazy_import_chroma():
@@ -689,11 +817,55 @@ class KnowledgeManager:
                 settings=Settings(anonymized_telemetry=False),
             )
 
-            # 创建独立的 knowledge collection
+            # 创建独立的 knowledge collection（metadata 记录 embedding 模型指纹）
             collection = client.get_or_create_collection(
                 name="knowledge",
                 metadata={"hnsw:space": "cosine"},
             )
+
+            # ── embedding 模型切换检测 ──
+            # 向量维度由模型决定（如 text2vec=768 维, bge-small=512 维），
+            # 新旧模型的向量不能混在一个 collection 里。检测到模型变化时
+            # 重建向量 collection 并后台重嵌入全部文档（FTS5 数据不受影响）。
+            metadata = collection.metadata or {}
+            existing_model = metadata.get("embedding_model", "")
+            existing_count = collection.count()
+
+            # 判定逻辑与 memories 向量库共用（见 needs_vector_rebuild 的注释）
+            needs_reindex = needs_vector_rebuild(metadata, existing_count, self.model_name)
+
+            if needs_reindex:
+                if existing_model == self.model_name:
+                    reason = "上次重建未完成（reindex_pending）"
+                else:
+                    reason = (
+                        f"{existing_model or '(旧版无模型指纹)'} → {self.model_name}"
+                        f"，存量向量 {existing_count} 条维度不兼容"
+                    )
+                logger.warning(f"[KnowledgeManager] 重建向量索引: {reason}")
+                try:
+                    client.delete_collection("knowledge")
+                except Exception:
+                    pass
+                collection = client.get_or_create_collection(
+                    name="knowledge",
+                    metadata={
+                        "hnsw:space": "cosine",
+                        "embedding_model": self.model_name,
+                        # 重建完成后由 reindex_all 清除；中途退出则下次启动重试
+                        "reindex_pending": True,
+                    },
+                )
+            elif not existing_model:
+                try:
+                    collection.modify(
+                        metadata={
+                            **metadata,
+                            "embedding_model": self.model_name,
+                        }
+                    )
+                except Exception as e:
+                    logger.debug(f"[KnowledgeManager] 写入 embedding 指纹失败: {e}")
 
             with self._init_lock:
                 self._embedding_model = model
@@ -703,8 +875,18 @@ class KnowledgeManager:
 
             logger.info(
                 f"[KnowledgeManager] ChromaDB ✓ 已就绪 "
-                f"(collection='knowledge', {collection.count()} vectors)"
+                f"(collection='knowledge', {collection.count()} vectors, "
+                f"model={self.model_name})"
             )
+
+            # 精排的装配不在这里 —— 见 _start_reranker_init()，它与向量模式解耦，
+            # 纯 FTS5 模式下同样可用（尤其在线 Rerank API）。
+
+            # ── 模型切换后的全量重建（后台线程）──
+            if needs_reindex:
+                self._schedule_reindex_all(
+                    reason=f"{existing_model or '(旧版无模型指纹)'} → {self.model_name}"
+                )
 
         except Exception as e:
             logger.warning(
@@ -1239,6 +1421,124 @@ class KnowledgeManager:
 
         return self.get_document(doc_id) or doc
 
+    def reindex_all(self) -> dict[str, int]:
+        """
+        重建全部文档索引（分块 + FTS5 + 向量重嵌入）。
+
+        用途：embedding 模型切换后新旧向量维度不兼容，需要全量重嵌入。
+        单文档失败不影响其余文档，失败计数记入返回值。
+
+        Returns:
+            {"total": 总数, "success": 成功数, "failed": 失败数}
+        """
+        conn = self._get_conn()
+        doc_ids = [
+            r["id"] for r in conn.execute("SELECT id FROM kb_documents").fetchall()
+        ]
+        conn.close()
+
+        total = len(doc_ids)
+        with self._init_lock:
+            self._reindex_progress = {"total": total, "done": 0}
+
+        success = failed = 0
+        for i, doc_id in enumerate(doc_ids, 1):
+            try:
+                self.reindex_document(doc_id)
+                success += 1
+            except Exception as e:
+                failed += 1
+                try:
+                    self._mark_doc_error(doc_id, str(e))
+                except Exception:
+                    pass
+                logger.warning(
+                    f"[KnowledgeManager] 重建失败 ({i}/{len(doc_ids)}): doc={doc_id}: {e}"
+                )
+            with self._init_lock:
+                self._reindex_progress = {"total": total, "done": i}
+            if i % 20 == 0 or i == total:
+                logger.info(
+                    f"[KnowledgeManager] 重建进度: {i}/{total} "
+                    f"(成功 {success}, 失败 {failed})"
+                )
+
+        stats = {"total": total, "success": success, "failed": failed}
+        # 全部成功才清除 pending 标记：否则留到下次启动继续重试，
+        # 避免"重建到一半失败"的库被永久标记成已完成。
+        if total and not failed:
+            self._clear_reindex_pending()
+        return stats
+
+    def schedule_reindex_all(self, reason: str = "") -> bool:
+        """
+        触发后台全量重建索引。
+
+        Returns:
+            True 表示本次已启动；False 表示已有重建任务在跑（不重复启动）。
+        """
+        with self._init_lock:
+            if self._reindex_started:
+                return False
+            self._reindex_started = True
+
+        def _run() -> None:
+            logger.info(f"[KnowledgeManager] 开始全量重建索引 ({reason})")
+            try:
+                stats = self.reindex_all()
+                with self._init_lock:
+                    self._reindex_last_stats = {**stats, "reason": reason, "ok": True}
+                logger.info(
+                    f"[KnowledgeManager] 全量重建完成: {stats['success']}/{stats['total']} "
+                    f"成功, {stats['failed']} 失败"
+                )
+            except Exception as e:
+                with self._init_lock:
+                    self._reindex_last_stats = {"reason": reason, "ok": False, "error": str(e)}
+                logger.error(f"[KnowledgeManager] 全量重建异常终止: {e}", exc_info=True)
+            finally:
+                with self._init_lock:
+                    self._reindex_started = False
+
+        t = threading.Thread(
+            target=_run,
+            name="KnowledgeManager-reindex-all",
+            daemon=True,
+        )
+        t.start()
+        return True
+
+    # 兼容旧调用名（内部启动路径使用）
+    _schedule_reindex_all = schedule_reindex_all
+
+    def reindex_status(self) -> dict:
+        """全量重建进度：running / progress / last 结果"""
+        with self._init_lock:
+            return {
+                "running": self._reindex_started,
+                "progress": dict(self._reindex_progress or {}),
+                "last": dict(self._reindex_last_stats or {}) or None,
+                "vector_enabled": self._vector_enabled,
+                "model": self.model_name,
+            }
+
+    def _clear_reindex_pending(self) -> None:
+        """重建成功后清除 collection 上的 pending 标记"""
+        with self._init_lock:
+            coll = self._chroma_collection
+        if coll is None:
+            return
+        try:
+            coll.modify(
+                metadata={
+                    **(coll.metadata or {}),
+                    "embedding_model": self.model_name,
+                    "reindex_pending": False,
+                }
+            )
+        except Exception as e:
+            logger.debug(f"[KnowledgeManager] 清除 reindex_pending 失败: {e}")
+
     # ── 混合检索 ────────────────────────────────────────────────────────────
 
     def search(
@@ -1248,7 +1548,11 @@ class KnowledgeManager:
         top_k: int = 10,
     ) -> list[SearchResult]:
         """
-        混合检索：BM25(FTS5+Jieba) + 向量(ChromaDB) → RRF 融合
+        混合检索：BM25(FTS5+Jieba) + 向量(ChromaDB) → RRF 融合 → Reranker 精排
+
+        Reranker 为可选增强层，与向量模式无关（在线 API 零依赖）：未就绪 /
+        加载中 / 失败时自动沿用 RRF 排序；纯 FTS5 模式下它直接对 BM25 候选
+        重新排序。
 
         Args:
             query: 搜索查询
@@ -1259,7 +1563,64 @@ class KnowledgeManager:
         vector_results = self._search_vector(query, collection_id, top_k * 2)
         merged = self._rrf_fusion(bm25_results, vector_results, k=60)
         merged.sort(key=lambda x: x.score, reverse=True)
+
+        # Reranker 精排：对 RRF 融合后的候选逐对精细打分。
+        # 候选数刻意压到 15：cross-encoder 是 O(n) 次前向，CPU 上每对百毫秒级，
+        # 30 条会让单次检索多出数秒，而精排收益集中在头几条。
+        reranker = self._reranker
+        if reranker is not None and reranker.available and len(merged) > 1:
+            candidate_count = min(self.RERANK_CANDIDATES, len(merged))
+            candidates = merged[:candidate_count]
+            reranked = self._rerank_results(query, candidates, reranker)
+            if reranked is not None:
+                return reranked[:top_k]
+
         return merged[:top_k]
+
+    def _rerank_results(
+        self,
+        query: str,
+        candidates: list[SearchResult],
+        reranker,
+    ) -> list[SearchResult] | None:
+        """用 reranker 对候选结果精排；失败返回 None（沿用原排序）"""
+        chunk_ids = [r.chunk.id for r in candidates]
+        contents = self._fetch_chunk_contents(chunk_ids)
+        if len(contents) != len(candidates):
+            # 部分 chunk 已被删除等异常情况，放弃精排
+            return None
+
+        try:
+            scores = reranker.rerank(query, [contents[cid] for cid in chunk_ids])
+        except Exception as e:
+            logger.warning(f"[KnowledgeManager] reranker 精排异常，沿用 RRF 排序: {e}")
+            return None
+        if scores is None:
+            return None
+
+        for r, score in zip(candidates, scores):
+            r.score = score
+            if not r.source_type.endswith("+rerank"):
+                r.source_type = f"{r.source_type}+rerank"
+        candidates.sort(key=lambda x: x.score, reverse=True)
+        return candidates
+
+    def _fetch_chunk_contents(self, chunk_ids: list[str]) -> dict[str, str]:
+        """批量读取 chunk 内容（精排需要原文）"""
+        if not chunk_ids:
+            return {}
+        placeholders = ",".join("?" for _ in chunk_ids)
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(
+                f"SELECT id, content FROM kb_chunks WHERE id IN ({placeholders})",
+                chunk_ids,
+            ).fetchall()
+            return {r["id"]: r["content"] for r in rows}
+        except Exception:
+            return {}
+        finally:
+            conn.close()
 
     @staticmethod
     def _sanitize_fts_query(query: str) -> str:
@@ -1271,20 +1632,59 @@ class KnowledgeManager:
             return '""'
         return " OR ".join(tokens)
 
-    def _search_bm25(
-        self, query: str, collection_id: str | None, limit: int
-    ) -> dict[str, float]:
-        """FTS5 + jieba BM25 搜索"""
+    def _synonyms(self) -> list[list[str]]:
+        """同义词等价组（内置表 + data_dir/synonyms.json），懒加载并缓存"""
+        if self._synonym_groups is None:
+            try:
+                from .query_expansion import load_synonym_groups
+
+                groups = load_synonym_groups(self.data_dir / "synonyms.json")
+            except Exception as e:
+                logger.warning(f"[KnowledgeManager] 同义词表加载失败，跳过查询扩展: {e}")
+                groups = []
+            with self._init_lock:
+                self._synonym_groups = groups
+        return self._synonym_groups
+
+    def _expansion_terms(self, query: str) -> list[str]:
+        """同义词扩展词（已按索引同一套分词切好）；未启用或没命中则为空"""
+        if not self._expand_query_enabled:
+            return []
+        try:
+            from .query_expansion import expand_query
+
+            extras = expand_query(query, self._synonyms())
+        except Exception as e:
+            logger.debug(f"[KnowledgeManager] 查询扩展跳过: {e}")
+            return []
+        if not extras:
+            return []
         try:
             import jieba
-            segmented = " ".join(jieba.cut_for_search(query))
-        except ImportError:
-            segmented = query
 
-        safe_query = self._sanitize_fts_query(segmented)
+            pieces: list[str] = []
+            for t in extras:
+                pieces.extend(jieba.cut_for_search(t))
+            return pieces
+        except ImportError:
+            return extras
+
+    @staticmethod
+    def _segment(text: str) -> str:
+        """按索引同一套分词切分（索引里存的是 jieba 切过的 token）"""
+        try:
+            import jieba
+
+            return " ".join(jieba.cut_for_search(text))
+        except ImportError:
+            return text
+
+    def _fts_match(
+        self, safe_query: str, collection_id: str | None, limit: int
+    ) -> dict[str, float]:
+        """执行一次 FTS5 MATCH，返回 chunk_id -> 分数（越大越相关）"""
         conn = self._get_conn()
         result: dict[str, float] = {}
-
         try:
             if collection_id:
                 rows = conn.execute(
@@ -1307,13 +1707,59 @@ class KnowledgeManager:
         except Exception:
             logger.debug("FTS query failed", exc_info=True)
             rows = []
+        finally:
+            conn.close()
 
-        conn.close()
-        # Convert BM25 rank to score: lower rank = better → score = 1/(1+rank)
+        # Convert BM25 rank to score: lower rank = better -> score = 1/(1+rank)
         for r in rows:
             rank = r["rank"] if isinstance(r, sqlite3.Row) else r[1]
             chunk_id = r["id"] if isinstance(r, sqlite3.Row) else r[0]
             result[chunk_id] = 1.0 / (1.0 + rank)
+        return result
+
+    @staticmethod
+    def _merge_expansion(
+        primary: dict[str, float],
+        extra: dict[str, float],
+        weight: float = 0.4,
+    ) -> dict[str, float]:
+        """原查询结果为准，同义词扩展结果**降权**叠加（只补召回，不抢排序）。
+
+        为什么不把扩展词直接 OR 进原查询：实测那样做 precision 会崩——
+        关键词明确的问题从 10/10 掉到 8/10，因为 BM25 按"命中词数"给命中多个
+        扩展词的无关 chunk 排到了前面。这里改成两级：原查询命中的 chunk 永远
+        排在"只靠同义词命中"的 chunk 之前。
+        """
+        k = 60
+        merged: dict[str, float] = {}
+        for i, (cid, _s) in enumerate(
+            sorted(primary.items(), key=lambda x: x[1], reverse=True), 1
+        ):
+            merged[cid] = 1.0 / (k + i)
+        for i, (cid, _s) in enumerate(
+            sorted(extra.items(), key=lambda x: x[1], reverse=True), 1
+        ):
+            if cid in merged:
+                continue  # 原查询已命中，不重复计分
+            merged[cid] = weight / (k + i)
+        return merged
+
+    def _search_bm25(
+        self, query: str, collection_id: str | None, limit: int
+    ) -> dict[str, float]:
+        """FTS5 + jieba BM25 搜索：原查询为主，同义词扩展补召回"""
+        result = self._fts_match(
+            self._sanitize_fts_query(self._segment(query)), collection_id, limit
+        )
+
+        extras = self._expansion_terms(query)
+        if extras:
+            expanded = self._fts_match(
+                self._sanitize_fts_query(" ".join(extras)), collection_id, limit
+            )
+            if expanded:
+                logger.debug(f"[KnowledgeManager] 查询扩展补召回: +{len(extras)} 词")
+                result = self._merge_expansion(result, expanded)
         return result
 
     def _search_vector(

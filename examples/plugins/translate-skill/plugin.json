@@ -9,7 +9,7 @@
   "entry": "SKILL.md",
   "permissions": ["skill"],
   "requires": {
-    "mclaw": ">=1.5.0",
+    "mclaw": ">=1.2.0",
     "plugin_api": "~1",
     "python": ">=3.11"
   },

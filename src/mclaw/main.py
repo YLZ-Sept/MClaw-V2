@@ -2206,6 +2206,8 @@ def serve(
         _install_windows_asyncio_pipe_filter()
         shutdown_event = asyncio.Event()
         shutdown_triggered = False
+        # 后台启动任务（IM 通道等）：不阻塞桌面就绪，退出前统一回收。
+        startup_tasks: list[asyncio.Task] = []
         _heartbeat_phase = "initializing"
         _heartbeat_http_ready = False
         _heartbeat_im_ready = False
@@ -2369,65 +2371,90 @@ def serve(
                         session_manager=_session_manager,
                         orchestrator=_orchestrator,
                         agent_pool=_desktop_pool,
-                        startup_phase="http_ready",
+                        startup_phase="running",
                         readiness={
-                            "phase": "http_ready",
+                            "phase": "running",
                             "http_ready": True,
                             "agent_ready": True,
                             "core_ready": True,
+                            "chat_ready": True,
                             "im_ready": False,
-                            "ready": False,
+                            # IM 尚未就绪，但桌面聊天已经可用：就绪不该被 IM 拖住。
+                            "im_status": "starting",
+                            "ready": True,
                         },
                     )
                 except Exception:
                     logger.debug("Failed to update API core readiness", exc_info=True)
 
-            # 启动 IM 通道（可选）。放在 HTTP API 之后，避免首次安装通道依赖时
-            # 桌面端长时间无法访问本地健康检查。
-            _heartbeat_phase = "starting_im"
-            _heartbeat_http_ready = True
-            _heartbeat_im_ready = False
-            _heartbeat_ready = False
-            _write_heartbeat()
-            console.print("[bold green]正在启动 IM 通道...[/bold green]")
-            im_channels = await start_im_channels(agent_or_master)
-
-            if im_channels:
-                console.print(f"[green]✓[/green] IM 通道已启动: {', '.join(im_channels)}")
-            else:
-                console.print("[yellow]ℹ[/yellow] 未启用 IM 通道（HTTP API 仍可使用）")
-
-            # 注入 shutdown_event 到网关（供终极重启指令使用），并把晚启动的网关
-            # 回填给已经运行的 FastAPI app state。
-            if _message_gateway is not None:
-                _message_gateway.set_shutdown_event(shutdown_event)
-            if api_task is not None:
-                try:
-                    from mclaw.api.server import update_runtime_refs
-
-                    update_runtime_refs(
-                        api_task,
-                        gateway=_message_gateway,
-                        startup_phase="running",
-                        readiness={
-                            "phase": "running",
-                            "http_ready": True,
-                            "im_ready": True,
-                            "ready": True,
-                            "started_im_channels": im_channels,
-                            "gateway_bound": _message_gateway is not None,
-                        },
-                    )
-                except Exception:
-                    logger.debug("Failed to update API runtime readiness", exc_info=True)
-
-            # 到这里才是真正的 serve 启动完成：HTTP API 可访问，IM 启动路径也已收敛
-            # （即便没有启用 IM 或某些 adapter 失败，后台服务也已完成启动流程）。
+            # IM 通道是可选服务：**不阻塞桌面就绪**。桌面聊天的就绪只取决于聊天
+            # 运行时，与 IM 连通性无关；IM 放到后台任务里启动，完成后由
+            # publish_im_startup 发布就绪状态。
             _heartbeat_phase = "running"
             _heartbeat_http_ready = True
-            _heartbeat_im_ready = True
+            _heartbeat_im_ready = False
             _heartbeat_ready = True
             _write_heartbeat()
+            console.print("[bold green]IM 通道将在后台启动...[/bold green]")
+            _im_startup_started_at = time.perf_counter()
+
+            def publish_im_startup(im_channels, error):
+                nonlocal _heartbeat_im_ready
+                if shutdown_event.is_set():
+                    return
+                failed: list[str] = []
+                # 注入 shutdown_event 到网关（供终极重启指令使用）
+                if _message_gateway is not None:
+                    _message_gateway.set_shutdown_event(shutdown_event)
+                    failed = _message_gateway.get_failed_adapters()
+                _heartbeat_im_ready = error is None and not failed
+                im_status = "error" if error else "degraded" if failed else "ready"
+
+                if im_channels:
+                    console.print(f"[green]✓[/green] IM 通道已启动: {', '.join(im_channels)}")
+                elif error is None:
+                    console.print("[yellow]ℹ[/yellow] 未启用 IM 通道（HTTP API 仍可使用）")
+
+                # 把晚启动的网关回填给已经运行的 FastAPI app state。
+                if api_task is not None:
+                    try:
+                        from mclaw.api.server import update_runtime_refs
+
+                        update_runtime_refs(
+                            api_task,
+                            gateway=_message_gateway,
+                            startup_phase="running",
+                            readiness={
+                                "phase": "running",
+                                "http_ready": True,
+                                "im_ready": _heartbeat_im_ready,
+                                "im_status": im_status,
+                                "started_im_channels": im_channels or [],
+                                "failed_im_channels": failed,
+                                "gateway_bound": _message_gateway is not None,
+                                "ready": True,
+                            },
+                        )
+                    except Exception:
+                        logger.debug("Failed to update API runtime readiness", exc_info=True)
+                _write_heartbeat()
+                logger.info(
+                    "IM startup finished in %.3fs (status=%s)",
+                    time.perf_counter() - _im_startup_started_at,
+                    im_status,
+                )
+
+            from mclaw.startup import run_optional_startup
+
+            startup_tasks.append(
+                asyncio.create_task(
+                    run_optional_startup(
+                        lambda: start_im_channels(agent_or_master),
+                        publish_im_startup,
+                    ),
+                    name="startup-im",
+                )
+            )
 
         console.print()
         if dev:
@@ -2488,6 +2515,14 @@ def serve(
                 _heartbeat_phase = "restarting" if is_restart else "stopping"
                 _heartbeat_http_ready = False
                 _write_heartbeat()
+                # 先回收仍在启动中的后台任务（如 IM 启动），再拆运行时资源——
+                # 与 startup.cancel_startup_tasks 的语义一致。
+                try:
+                    from mclaw.startup import cancel_startup_tasks
+
+                    await cancel_startup_tasks(startup_tasks)
+                except Exception:
+                    logger.debug("Failed to cancel startup tasks", exc_info=True)
                 if is_restart:
                     console.print("\n[yellow]正在重启服务...[/yellow]")
                 else:

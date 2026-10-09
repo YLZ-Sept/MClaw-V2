@@ -25,7 +25,7 @@ def _client() -> TestClient:
 def test_build_info_returns_env_override(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("MCLAW_BUILD_ID", "ci-1234abcd")
+    monkeypatch.setenv("OPENAKITA_BUILD_ID", "ci-1234abcd")
     with _client() as c:
         r = c.get("/api/build-info")
     assert r.status_code == 200
@@ -35,7 +35,7 @@ def test_build_info_returns_env_override(
 def test_build_info_falls_back_to_dev_when_pkg_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("MCLAW_BUILD_ID", raising=False)
+    monkeypatch.delenv("OPENAKITA_BUILD_ID", raising=False)
 
     def _raise(_name: str) -> str:
         raise build_info.PackageNotFoundError("mclaw")

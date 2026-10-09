@@ -20,12 +20,17 @@ def _catalog_skill_ids() -> list[str]:
     return [skill_id for category in data["categories"] for skill_id in category["skills"]]
 
 
+# 只存在于本地、按约定不进主线的技能：不进 catalog.json，也不随包发布。
+# bid-writer 是含真实公司资料的独立仓库（人名/项目/金额），不参与主线目录校验。
+_LOCAL_ONLY_SKILLS = frozenset({"bid-writer"})
+
+
 def test_catalog_covers_each_top_level_external_skill_once() -> None:
     actual = {
         path.name
         for path in SKILLS_ROOT.iterdir()
         if path.is_dir() and (path / "SKILL.md").is_file()
-    }
+    } - _LOCAL_ONLY_SKILLS
     catalog_ids = _catalog_skill_ids()
     counts = Counter(catalog_ids)
 

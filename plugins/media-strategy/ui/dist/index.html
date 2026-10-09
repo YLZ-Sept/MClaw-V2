@@ -782,7 +782,7 @@
           <div class="storage-path-row">
             <div class="field">
               <label for="customDataDir">数据目录</label>
-              <input id="customDataDir" class="input" placeholder="留空 = 使用 OpenAkita 默认目录；也可填写绝对路径">
+              <input id="customDataDir" class="input" placeholder="留空 = 使用 Mclaw 默认目录；也可填写绝对路径">
             </div>
             <div class="storage-path-actions">
               <button id="browseDataDir" class="btn">浏览</button>
@@ -889,7 +889,7 @@
   <div id="toast" class="toast" hidden></div>
 </div>
 <script>
-const API = window.OpenAkitaPlugin.apiBase;
+const API = window.MclawPlugin.apiBase;
 const FALLBACK_PACKAGE_OPTIONS = [
   ['taiwan','台海观察'], ['policy','时政政策'], ['economy','经济财经'],
   ['world','国际局势'], ['tech','科技产业'], ['platform','平台热点']
@@ -957,8 +957,8 @@ async function api(path, opts={}) {
 async function openExternalLink(url){
   const raw = String(url || '').trim();
   if(!/^https?:\/\//i.test(raw)) throw new Error('只允许打开 http/https 链接');
-  if(window.OpenAkitaPlugin?.openExternal){
-    await window.OpenAkitaPlugin.openExternal(raw);
+  if(window.MclawPlugin?.openExternal){
+    await window.MclawPlugin.openExternal(raw);
     return;
   }
   try{
@@ -1101,8 +1101,8 @@ function reportDownloadUrl(report, fmt){
 }
 async function openDownloadUrl(url){
   if(!url) throw new Error('缺少报告 ID，无法下载');
-  if(window.OpenAkitaPlugin?.openExternal && /^https?:\/\//i.test(url)){
-    await window.OpenAkitaPlugin.openExternal(url);
+  if(window.MclawPlugin?.openExternal && /^https?:\/\//i.test(url)){
+    await window.MclawPlugin.openExternal(url);
     return;
   }
   window.open(url, '_blank', 'noopener,noreferrer') || (window.location.href = url);
@@ -2007,7 +2007,7 @@ function describePluginError(err){
     return '插件正在初始化，请稍候再试';
   }
   if(/Failed to fetch|NetworkError|TypeError/i.test(msg)){
-    return '无法连接后端服务，请确认 OpenAkita 已启动';
+    return '无法连接后端服务，请确认 Mclaw 已启动';
   }
   return msg || '未知错误';
 }
@@ -2365,7 +2365,7 @@ function showDataDirStatus(cfg){
     el.innerHTML = `
       <div class="status-note__title">目录状态正常</div>
       <div class="status-note__path">${esc(active)}</div>
-      <div class="status-note__desc">${requested ? '正在使用自定义目录。' : '留空时使用 OpenAkita 管理的默认目录。'}</div>`;
+      <div class="status-note__desc">${requested ? '正在使用自定义目录。' : '留空时使用 Mclaw 管理的默认目录。'}</div>`;
   }
 }
 async function loadFolderPicker(path=''){
@@ -2729,6 +2729,6 @@ renderAnnotations();
 setBriefPreview(null);
 runRadar().catch(()=>{});
 </script>
-<script src="./_assets/openakita-llm-selector.js" data-plugin-id="media-strategy"></script>
+<script src="./_assets/mclaw-llm-selector.js" data-plugin-id="media-strategy"></script>
 </body>
 </html>

@@ -13,7 +13,7 @@
       "category": "core",
       "model": {
         "kind": "sentence-transformers",
-        "name": "shibing624/text2vec-base-chinese"
+        "name": "BAAI/bge-small-zh-v1.5"
       }
     },
     {

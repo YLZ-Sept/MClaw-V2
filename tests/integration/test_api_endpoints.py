@@ -11,9 +11,14 @@ async def client():
     app = create_app()
     app.state.agent = None
     app.state.session_manager = None
+    cfg = app.state.web_access_config
+    if not cfg.has_password_set:
+        cfg.add_user("admin", "test-pw", role="admin")
+    auth = {"Authorization": f"Bearer {cfg.create_access_token('admin')}"}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=auth,
     ) as c:
         yield c
 

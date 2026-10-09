@@ -96,6 +96,10 @@ class MemoryManager:
                 f"mclaw_memory_cited_{id(self)}",
                 default=None,
             )
+        if not hasattr(self, "_relational_pending_nodes_var"):
+            self._relational_pending_nodes_var = contextvars.ContextVar(
+                f"mclaw_memory_relational_pending_{id(self)}", default=None
+            )
 
     @property
     def _current_session_id(self) -> str | None:
@@ -169,6 +173,20 @@ class MemoryManager:
         self._ensure_context_vars()
         self._session_cited_memories_var.set(value)
 
+    @property
+    def _relational_pending_nodes(self) -> list:
+        self._ensure_context_vars()
+        nodes = self._relational_pending_nodes_var.get()
+        if nodes is None:
+            nodes = []
+            self._relational_pending_nodes_var.set(nodes)
+        return nodes
+
+    @_relational_pending_nodes.setter
+    def _relational_pending_nodes(self, nodes: list) -> None:
+        self._ensure_context_vars()
+        self._relational_pending_nodes_var.set(nodes)
+
     def __init__(
         self,
         data_dir: Path,
@@ -206,6 +224,10 @@ class MemoryManager:
                 device=embedding_device,
                 download_source=model_download_source,
             )
+            # embedding 模型切换会让旧向量维度不兼容，VectorStore 会清空
+            # collection；但记忆正文存在 SQLite 里，它自己拿不到，所以注入
+            # 取数回调，由它后台重嵌入全部记忆。
+            self.vector_store.set_rebuild_provider(self._memories_for_vector_rebuild)
         else:
             self.vector_store = None
 
@@ -214,7 +236,7 @@ class MemoryManager:
         self.relational_encoder = None
         self.relational_graph = None
         self.relational_consolidator = None
-        self._relational_pending_nodes = []
+
 
         # v1 compat: in-memory cache
         self.memories_file = self.data_dir / "memories.json"
@@ -446,6 +468,32 @@ class MemoryManager:
         except Exception as e:
             logger.warning(f"[Manager] Failed to load from SQLite: {e}")
         # v4：_save_memories 已退化为 no-op；不再启动期写 memories.json。
+
+    def _memories_for_vector_rebuild(self) -> list[dict]:
+        """embedding 模型切换后，供 VectorStore 全量重嵌入的记忆快照。
+
+        字段与 ``add_memory`` 写入时保持一致（枚举取小写 value），否则
+        ``search(filter_type=...)`` 的 where 过滤会因为 FACT/fact 大小写
+        不一致而全部落空。
+        """
+        try:
+            memories = self.store.load_all_memories()
+        except Exception as e:
+            logger.warning(f"[Manager] 读取记忆用于向量重建失败: {e}")
+            return []
+
+        return [
+            {
+                "id": m.id,
+                "content": m.content,
+                "type": m.type.value,
+                "priority": m.priority.value,
+                "importance": m.importance_score,
+                "tags": list(m.tags or []),
+            }
+            for m in memories
+            if m.content
+        ]
 
     def _backfill_legacy_json_memories(self, existing_mems: list[Memory]) -> int:
         """One-shot import of legacy ``memories.json`` into SQLite.

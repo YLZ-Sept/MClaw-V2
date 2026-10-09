@@ -1,6 +1,6 @@
 /* idea-research UI bootstrap — Phase 5.
  *
- * Wires the plugin frontend to the OpenAkita host bridge:
+ * Wires the plugin frontend to the Mclaw host bridge:
  * - theme / locale postMessage from the host shell
  * - ``apiFetch`` helper that resolves the plugin route prefix
  *   automatically so the same bundle works whether mounted under
@@ -10,7 +10,7 @@
  *   events.
  *
  * The React workbench (index.html bottom of file) relies on these
- * globals: ``window.OpenAkita.idea_research.api`` /
+ * globals: ``window.Mclaw.idea_research.api`` /
  * ``.subscribe`` / ``.locale`` / ``.theme``.
  */
 (function () {
@@ -220,8 +220,8 @@
     window.parent && window.parent.postMessage({ __akita_bridge: true, version: 1, type: "bridge:handshake" }, "*");
   } catch (_) {}
 
-  window.OpenAkita = window.OpenAkita || {};
-  window.OpenAkita.idea_research = {
+  window.Mclaw = window.Mclaw || {};
+  window.Mclaw.idea_research = {
     version: "1.0.0",
     state: state,
     api: apiFetch,

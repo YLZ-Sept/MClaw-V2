@@ -2,22 +2,22 @@
   "use strict";
   var script = document.currentScript;
   var pluginId = script && script.dataset ? script.dataset.pluginId : "";
-  if (!pluginId || document.getElementById("openakita-llm-selector")) return;
+  if (!pluginId || document.getElementById("mclaw-llm-selector")) return;
 
   var root = document.createElement("section");
-  root.id = "openakita-llm-selector";
-  root.setAttribute("aria-label", "OpenAkita text model settings");
+  root.id = "mclaw-llm-selector";
+  root.setAttribute("aria-label", "Mclaw text model settings");
   root.innerHTML =
     '<button class="oa-llm-toggle" type="button" aria-expanded="false">AI 模型</button>' +
     '<div class="oa-llm-panel" hidden>' +
-    '<label for="oa-llm-select">OpenAkita 文本模型</label>' +
+    '<label for="oa-llm-select">Mclaw 文本模型</label>' +
     '<select id="oa-llm-select" disabled><option>正在读取模型…</option></select>' +
-    '<p class="oa-llm-help">“跟随当前模型”使用 OpenAkita 当前选择；指定模型后将严格锁定，不会静默回退。费用由所选 OpenAkita 端点决定。</p>' +
+    '<p class="oa-llm-help">“跟随当前模型”使用 Mclaw 当前选择；指定模型后将严格锁定，不会静默回退。费用由所选 Mclaw 端点决定。</p>' +
     '<div class="oa-llm-actions"><span class="oa-llm-status" role="status"></span>' +
     '<button class="oa-llm-save" type="button" disabled>保存</button></div></div>';
   var style = document.createElement("style");
   style.textContent =
-    "#openakita-llm-selector{position:fixed;right:18px;bottom:18px;z-index:2147483000;font:14px/1.4 system-ui,sans-serif;color:#172033}" +
+    "#mclaw-llm-selector{position:fixed;right:18px;bottom:18px;z-index:2147483000;font:14px/1.4 system-ui,sans-serif;color:#172033}" +
     ".oa-llm-toggle,.oa-llm-save{border:0;border-radius:9px;background:#2563eb;color:#fff;padding:9px 14px;cursor:pointer;box-shadow:0 4px 18px #0002}" +
     ".oa-llm-panel{position:absolute;right:0;bottom:46px;width:min(360px,calc(100vw - 36px));box-sizing:border-box;padding:16px;border:1px solid #d9dfeb;border-radius:12px;background:#fff;box-shadow:0 14px 40px #0003}" +
     ".oa-llm-panel label{display:block;font-weight:650;margin-bottom:8px}.oa-llm-panel select{width:100%;box-sizing:border-box;padding:9px;border:1px solid #b8c1d1;border-radius:8px;background:#fff;color:#172033}" +
@@ -51,7 +51,7 @@
       select.innerHTML = "";
       var inherited = document.createElement("option");
       inherited.value = "";
-      inherited.textContent = "跟随 OpenAkita 当前模型";
+      inherited.textContent = "跟随 Mclaw 当前模型";
       select.appendChild(inherited);
       (payload.models || []).forEach(function (model) {
         var option = document.createElement("option");
@@ -70,7 +70,7 @@
       select.value = selected;
       select.disabled = false;
       save.disabled = false;
-      show(payload.available ? "" : "OpenAkita 文本模型暂不可用", !payload.available);
+      show(payload.available ? "" : "Mclaw 文本模型暂不可用", !payload.available);
     } catch (error) {
       select.innerHTML = "<option>模型目录读取失败</option>";
       show(String(error), true);

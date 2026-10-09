@@ -97,7 +97,7 @@ def _source_marker(meta: WebFetchMeta, *, tool_name: str = "web_fetch") -> str:
     }
     import json
 
-    return f"[OPENAKITA_SOURCE] {json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
+    return f"[MCLAW_SOURCE] {json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
 
 
 def _build_fetch_result_text(meta: WebFetchMeta, markdown: str) -> str:

@@ -72,6 +72,6 @@
 
   function get(name) { return ICONS[name] || ""; }
 
-  window.OpenAkita = window.OpenAkita || {};
-  window.OpenAkita.icons = { get: get, list: Object.keys(ICONS) };
+  window.Mclaw = window.Mclaw || {};
+  window.Mclaw.icons = { get: get, list: Object.keys(ICONS) };
 })();

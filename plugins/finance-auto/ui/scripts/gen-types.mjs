@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * gen-types.mjs — generate TypeScript type definitions for the
- * finance-auto plugin REST surface by pulling the running OpenAkita
+ * finance-auto plugin REST surface by pulling the running Mclaw
  * server's OpenAPI schema and feeding it to `openapi-typescript`.
  *
  * Closes audit EX-P2-12 from _finance_plugin_audit_extended_report.md
@@ -14,7 +14,7 @@
  *   node plugins/finance-auto/ui/scripts/gen-types.mjs
  *
  * Optional flags:
- *   --base-url=<url>   Override OpenAkita base URL (default
+ *   --base-url=<url>   Override Mclaw base URL (default
  *                      http://127.0.0.1:18900)
  *   --out=<path>       Override output path (default
  *                      plugins/finance-auto/ui/dist/types/finance-auto-api.d.ts)
@@ -92,7 +92,7 @@ async function main() {
   } catch (err) {
     die(
       `cannot reach ${BASE_URL}/openapi.json (${err.message})\n` +
-      `Hint: start OpenAkita with \`openakita serve\` then retry.`,
+      `Hint: start Mclaw with \`mclaw serve\` then retry.`,
     );
   }
 

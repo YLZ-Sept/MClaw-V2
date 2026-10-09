@@ -1798,9 +1798,23 @@ def create_app(
             from mclaw.memory.knowledge_manager import KnowledgeManager
             from mclaw.api.routes.knowledge import set_knowledge_manager
 
-            km = KnowledgeManager(data_dir=data_dir)
+            km = KnowledgeManager(
+                data_dir=data_dir,
+                model_name=getattr(_settings, "embedding_model", None),
+                device=getattr(_settings, "embedding_device", None),
+                download_source=getattr(_settings, "model_download_source", None),
+                reranker_enabled=getattr(_settings, "kb_reranker_enabled", None),
+                reranker_model=getattr(_settings, "kb_reranker_model", None),
+                reranker_api_base=getattr(_settings, "kb_reranker_api_base", None),
+                reranker_api_key=getattr(_settings, "kb_reranker_api_key", None),
+                reranker_api_model=getattr(_settings, "kb_reranker_api_model", None),
+            )
             set_knowledge_manager(km)
-            logger.info("[Startup] KnowledgeManager initialized (data_dir=%s)", data_dir)
+            logger.info(
+                "[Startup] KnowledgeManager initialized (data_dir=%s, model=%s)",
+                data_dir,
+                km.model_name,
+            )
         except Exception as e:
             logger.warning("[Startup] KnowledgeManager init failed (non-fatal): %s", e)
 

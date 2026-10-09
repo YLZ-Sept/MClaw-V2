@@ -1252,6 +1252,8 @@ async def search_session_files(
 ):
     """Search regular files inside a conversation's immutable directory."""
     _validate_id(conversation_id, "conversation_id")
+    # 其余会话路由都做这一步；此前本路由漏了，导致 user_id 恒为空 → 查不到会话 → 404。
+    user_id = user_id or _session_user(request)
     session_manager = getattr(request.app.state, "session_manager", None)
     if not session_manager:
         raise HTTPException(status_code=503, detail="Session manager unavailable")

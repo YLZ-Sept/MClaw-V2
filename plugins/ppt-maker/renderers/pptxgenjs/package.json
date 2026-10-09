@@ -1,5 +1,5 @@
 {
-  "name": .mclaw-ppt-maker-renderer",
+  "name": "mclaw-ppt-maker-renderer",
   "private": true,
   "version": "0.1.0",
   "type": "commonjs",

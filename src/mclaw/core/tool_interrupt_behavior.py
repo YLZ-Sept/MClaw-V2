@@ -163,6 +163,9 @@ _INTERRUPT_BEHAVIOR_MAP: dict[str, InterruptBehavior] = {
     "list_mcp_servers": "cancel",
     "reload_mcp_servers": "block",
     "remove_mcp_server": "block",
+    # ── Knowledge base ──────────────────────────────────────────
+    # 只读检索本地知识库（FTS5 + 可选向量），无外部副作用，可安全中断。
+    "knowledge_search": "cancel",
     # ── Memory ──────────────────────────────────────────────────
     # Reads cancel; writes/consolidation block (mid-write rolls back
     # in SQLite but DB-level retry semantics still want clean state).

@@ -1401,7 +1401,7 @@ const I18N = {
     "settings.workflow.placeholder.id": "粘贴 workflow_id",
     "settings.workflow.placeholder.path": "workflow_id 或本地路径",
     "settings.storage.dir": "数据目录",
-    "settings.storage.dir.placeholder": "留空 = 使用默认 (~/.openakita/...)",
+    "settings.storage.dir.placeholder": "留空 = 使用默认 (~/.mclaw/...)",
     "settings.storage.dir.hint": "所有生成产物（final.mp4 / 中间帧 / 角色参考图）都存放在该目录。改路径需要重新加载插件后生效。",
     "settings.storage.dir.active": "当前生效目录：",
     "settings.storage.dir.pendingReload": "新路径将在下次加载插件时生效。",
@@ -1441,7 +1441,7 @@ const I18N = {
     "common.copy": "复制",
     "common.copied": "已复制",
     "init.error.title": "插件初始化失败",
-    "init.error.hint": "请查看后端日志或重启 OpenAkita。如反复出现，可清空 data/manga.db 触发重建。",
+    "init.error.hint": "请查看后端日志或重启 Mclaw。如反复出现，可清空 data/manga.db 触发重建。",
     "banner.noKey.title": "尚未配置 API Key",
     "banner.noKey.desc": "至少需要配置「火山方舟」或「DashScope」其中一个 Key，才能在工作室提交生成任务。",
     "banner.noKey.cta": "前往配置",
@@ -1719,7 +1719,7 @@ const I18N = {
     "settings.workflow.placeholder.id": "paste workflow_id",
     "settings.workflow.placeholder.path": "workflow_id or local path",
     "settings.storage.dir": "Data directory",
-    "settings.storage.dir.placeholder": "blank = use default (~/.openakita/...)",
+    "settings.storage.dir.placeholder": "blank = use default (~/.mclaw/...)",
     "settings.storage.dir.hint": "All generated artifacts (final.mp4, intermediate frames, character refs) live here. Path changes take effect after a plugin reload.",
     "settings.storage.dir.active": "Active path:",
     "settings.storage.dir.pendingReload": "New path will take effect on next plugin reload.",
@@ -1759,7 +1759,7 @@ const I18N = {
     "common.copy": "Copy",
     "common.copied": "Copied",
     "init.error.title": "Plugin failed to initialise",
-    "init.error.hint": "Check the host logs or restart OpenAkita. If it keeps failing, you can wipe data/manga.db to trigger a rebuild.",
+    "init.error.hint": "Check the host logs or restart Mclaw. If it keeps failing, you can wipe data/manga.db to trigger a rebuild.",
     "banner.noKey.title": "API key not configured",
     "banner.noKey.desc": "Configure either the Volcengine Ark or the DashScope key before submitting any generation in Studio.",
     "banner.noKey.cta": "Open settings",
@@ -1767,8 +1767,8 @@ const I18N = {
 };
 
 function _detectLang() {
-  if (window.OpenAkitaI18n && typeof window.OpenAkitaI18n.getLocale === "function") {
-    var loc = (window.OpenAkitaI18n.getLocale() || "zh").toLowerCase();
+  if (window.MclawI18n && typeof window.MclawI18n.getLocale === "function") {
+    var loc = (window.MclawI18n.getLocale() || "zh").toLowerCase();
     return loc.startsWith("zh") ? "zh" : "en";
   }
   try {
@@ -1827,8 +1827,8 @@ function App() {
   // Subscribe to host language changes (kept in sync with the rest of the
   // app — no per-plugin language toggle, that's a host-level concern).
   useEffect(function() {
-    if (window.OpenAkitaI18n && typeof window.OpenAkitaI18n.subscribe === "function") {
-      return window.OpenAkitaI18n.subscribe(function(loc) {
+    if (window.MclawI18n && typeof window.MclawI18n.subscribe === "function") {
+      return window.MclawI18n.subscribe(function(loc) {
         setLang((loc || "zh").toLowerCase().startsWith("zh") ? "zh" : "en");
       });
     }
@@ -4489,6 +4489,6 @@ function StorageSection({ t, draft, settings, patch, savePatch, toast }) {
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 </script>
-<script src="./_assets/openakita-llm-selector.js" data-plugin-id="manga-studio"></script>
+<script src="./_assets/mclaw-llm-selector.js" data-plugin-id="manga-studio"></script>
 </body>
 </html>

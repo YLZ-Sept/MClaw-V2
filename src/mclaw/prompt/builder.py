@@ -1795,11 +1795,22 @@ def _is_short_chitchat(text: str | None) -> bool:
     return False
 
 
+# 每个知识集合的候选召回窗口。此前是 2——但真正能回答问题的 chunk 常被
+# BM25 排在第 3 名开外，只取 2 条再截断，等于让它彻底进不了模型视野。
+# 窗口放宽后由 max_chunks 决定真正注入几条。
+_KB_RETRIEVE_PER_COLLECTION = 8
+
+# 单条 chunk 的保底字符配额。实测有 chunk 的关键数字落在第 528 个字符处
+# （chunk 全长 592），配额压到 500 字以下就会把答案截掉——本来能答对的问题
+# 反而答错。保底值必须覆盖这种"答案埋在 chunk 中后段"的常见情况。
+_KB_PER_CHUNK_FLOOR = 800
+
+
 def _build_knowledge_section(
     task_description: str,
     knowledge_collections: list[str] | None = None,
-    max_chunks: int = 3,
-    max_chars: int = 2000,
+    max_chunks: int = 6,
+    max_chars: int = 5200,
 ) -> str:
     """自动搜索绑定的知识库并将相关 chunk 注入 prompt"""
     # 如果没传 collections，尝试从 agent profile 获取
@@ -1821,7 +1832,11 @@ def _build_knowledge_section(
         all_chunks: list[tuple[float, str, str]] = []  # (score, text, source)
         for cid in knowledge_collections:
             try:
-                results = km.search_with_chunks(query=task_description, collection_id=cid, top_k=2)
+                results = km.search_with_chunks(
+                    query=task_description,
+                    collection_id=cid,
+                    top_k=_KB_RETRIEVE_PER_COLLECTION,
+                )
                 for r in results:
                     score = r.score
                     chunk = r.chunk
@@ -1838,10 +1853,25 @@ def _build_knowledge_section(
         all_chunks.sort(key=lambda x: x[0], reverse=True)
         selected = all_chunks[:max_chunks]
 
-        parts = ["## 知识库检索（自动匹配）\n"]
-        for _i, (_score, text, source) in enumerate(selected, 1):
-            truncated = text[:max(max_chars // 2, 200)] + ("..." if len(text) > max(max_chars // 2, 200) else "")
-            parts.append(f"[来源: {source}] {truncated}")
+        header = "## 知识库检索（自动匹配）\n"
+        budget = max_chars - len(header)
+
+        # 每条都有保底配额：实测有 chunk 的关键数字落在第 528 字处（全长 592），
+        # 配额压到 500 以下就会把答案截掉，本来能答对的问题反而答错。
+        # 预算放不下 n 条保底时就减少条数，而不是把每条都切短。
+        floor_each = _KB_PER_CHUNK_FLOOR
+        if budget < floor_each * len(selected):
+            selected = selected[: max(budget // floor_each, 1)]
+
+        # 富余预算全部补给排名第 1 的 chunk（它最可能含答案，长 chunk 的答案
+        # 常埋在中后段），其余按保底走。
+        leftover = max(budget - floor_each * len(selected), 0)
+
+        parts = [header]
+        for i, (_score, text, source) in enumerate(selected):
+            share = floor_each + leftover if i == 0 else floor_each
+            content = text[:share] + ("..." if len(text) > share else "")
+            parts.append(f"[来源: {source}] {content}")
 
         return "\n".join(parts)[:max_chars]
     except Exception as e:

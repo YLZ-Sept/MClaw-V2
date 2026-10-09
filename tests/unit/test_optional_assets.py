@@ -7,7 +7,7 @@ from scripts.prepare_optional_assets import _python_wheel_artifacts, parse_playw
 
 
 def test_optional_asset_mirror_override_joins_feature_path(monkeypatch) -> None:
-    monkeypatch.setenv("MCLAW_OPTIONAL_ASSET_MIRROR", "https://mirror.example/root/")
+    monkeypatch.setenv("OPENAKITA_OPTIONAL_ASSET_MIRROR", "https://mirror.example/root/")
 
     mirror = optional_assets.resolve_optional_asset_mirror(
         "browser.chromium",
@@ -20,8 +20,8 @@ def test_optional_asset_mirror_override_joins_feature_path(monkeypatch) -> None:
 
 
 def test_optional_asset_mirror_uses_matching_manifest_entry(monkeypatch) -> None:
-    monkeypatch.delenv("MCLAW_OPTIONAL_ASSET_MIRROR", raising=False)
-    monkeypatch.setenv("MCLAW_OPTIONAL_ASSET_MANIFEST", "https://assets.example/api.json")
+    monkeypatch.delenv("OPENAKITA_OPTIONAL_ASSET_MIRROR", raising=False)
+    monkeypatch.setenv("OPENAKITA_OPTIONAL_ASSET_MANIFEST", "https://assets.example/api.json")
     monkeypatch.setattr(
         optional_assets,
         "_fetch_manifest",

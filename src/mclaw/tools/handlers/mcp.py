@@ -397,7 +397,7 @@ def _build_mcp_envelope(
     }
     if error:
         payload["error"] = error[:400]
-    return f"[OPENAKITA_MCP] {json.dumps(payload, ensure_ascii=False)}"
+    return f"[MCLAW_MCP] {json.dumps(payload, ensure_ascii=False)}"
 
 
 def create_handler(agent: "Agent"):

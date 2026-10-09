@@ -75,7 +75,10 @@ OPENAKITA_SECRET_ENV_BLOCKLIST = {
     "ACTIONS_RUNTIME_URL",
 }
 
-OPENAKITA_SECRET_ENV_PREFIXES = ("OPENAKITA_FORCE_",)
+# 「强制注入密钥」的白名单前缀：命中该前缀的环境变量会被提升为原名放行，
+# 用于显式绕开子进程密钥清洗。新名优先，同时兼容上游老名（未文档化的安全开关，
+# 两边的调用方都不能失效）。
+OPENAKITA_SECRET_ENV_PREFIXES = ("MCLAW_FORCE_", "OPENAKITA_FORCE_")
 
 
 def _find_python_in_dir(directory: Path) -> Path | None:

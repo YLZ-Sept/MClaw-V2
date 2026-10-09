@@ -225,7 +225,7 @@ class _SupervisorConfig:
     max_stalls: int = 3
     max_turns: int = 30
     max_replans: int = 5
-    progress_ledger_max_retries: int = 10
+    progress_ledger_max_retries: int = 2
     progress_ledger_timeout_s: float = 60.0
 
 
@@ -264,7 +264,7 @@ class Supervisor:
         max_stalls: int = 3,
         max_turns: int = 30,
         max_replans: int = 5,
-        progress_ledger_max_retries: int = 10,
+        progress_ledger_max_retries: int = 2,
         progress_ledger_timeout_s: float = 60.0,
         wall_clock_soft_budget_s: float = 0.0,
         deliver_includes_recent_outputs: bool = True,
@@ -330,7 +330,7 @@ class Supervisor:
             max_stalls=max_stalls,
             max_turns=max_turns,
             max_replans=max_replans,
-            progress_ledger_max_retries=progress_ledger_max_retries,
+            progress_ledger_max_retries=max(0, int(progress_ledger_max_retries)),
             progress_ledger_timeout_s=max(0.01, float(progress_ledger_timeout_s)),
         )
         self.stall_detector = StallDetector(max_stalls=max_stalls, max_turns=max_turns)
@@ -1237,7 +1237,10 @@ class Supervisor:
                     turn_id=self.stall_detector.n_turns + 1,
                 )
         last_error: ProgressLedgerParseError | None = None
-        for attempt in range(self.cfg.progress_ledger_max_retries):
+        # ``progress_ledger_max_retries`` 指"首次之后的重试次数"，故实际尝试 = 重试 + 1。
+        # 默认 2 次重试 → 最多 3 次 LLM 调用，取代历史上的十次调用（parse storm）。
+        attempts = self.cfg.progress_ledger_max_retries + 1
+        for attempt in range(attempts):
             self.cancel_token.raise_if_cancelled()
             started = time.monotonic()
             await self.stream.emit(

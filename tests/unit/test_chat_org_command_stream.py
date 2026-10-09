@@ -82,12 +82,15 @@ async def _collect(
     session_manager: _SessionManager | None = None,
 ) -> list[dict[str, Any]]:
     request = SimpleNamespace(
+        # 真实的 FastAPI Request 同时有 request.state 和 request.app.state；
+        # 多用户化后 chat 路由会读 request.state.user_id，桩要一起补齐。
+        state=SimpleNamespace(user_id=None),
         app=SimpleNamespace(
             state=SimpleNamespace(
                 org_command_service=service,
                 session_manager=session_manager,
             )
-        )
+        ),
     )
     return [
         _decode_sse(event)

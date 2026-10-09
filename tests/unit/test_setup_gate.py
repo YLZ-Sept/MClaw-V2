@@ -4,13 +4,12 @@ Covers:
 - ``is_setup_complete`` / ``should_require_setup`` truth table.
 - Middleware path allowlist.
 - 428 envelope shape.
-- TRUST_PROXY-aware loopback bypass.
+- Loopback（本机）**不再豁免**：无论调用方来自哪里，未设密码一律 428。
+  这与 ``mclaw.api.auth`` 移除 localhost 认证豁免保持一致。
 - WS path unaffected (returns 404 from the handler chain, not 428 from gate).
 
 Why ``httpx.AsyncClient`` + ``ASGITransport``: that combo defaults the client
-host to ``127.0.0.1``, matching the existing auth-flow tests. Starlette's
-sync ``TestClient`` reports the client host as ``"testclient"`` which would
-defeat the loopback bypass we want to assert.
+host to ``127.0.0.1``；这里正是借它来断言：**即便是本机调用方，未完成 setup 也要被 428 拦住**。
 """
 
 from __future__ import annotations
@@ -46,25 +45,26 @@ def test_is_setup_complete_false_on_fresh(tmp_path):
 
 def test_is_setup_complete_true_after_setting_password(tmp_path):
     cfg = WebAccessConfig(tmp_path)
-    cfg.change_password("hunter22")
+    cfg.add_user("admin", "hunter22", role="admin")
     assert is_setup_complete(cfg) is True
 
 
 def test_should_require_setup_false_when_already_set(tmp_path):
     cfg = WebAccessConfig(tmp_path)
-    cfg.change_password("hunter22")
+    cfg.add_user("admin", "hunter22", role="admin")
     fake_request = mock.MagicMock()
     assert should_require_setup(fake_request, cfg) is False
 
 
-def test_should_require_setup_false_for_loopback_even_without_password(tmp_path):
+def test_should_require_setup_true_for_loopback_without_password(tmp_path):
+    """本机（loopback）不再豁免：未设密码时一样要求先完成 setup。"""
     cfg = WebAccessConfig(tmp_path)
     fake_request = mock.MagicMock()
     fake_request.client.host = "127.0.0.1"
     fake_request.headers = {}
     with mock.patch.dict(os.environ, {}, clear=False):
         os.environ.pop("TRUST_PROXY", None)
-        assert should_require_setup(fake_request, cfg) is False
+        assert should_require_setup(fake_request, cfg) is True
 
 
 def test_should_require_setup_true_for_lan_caller_without_password(tmp_path):
@@ -127,12 +127,13 @@ async def test_setup_gate_returns_428_for_lan_caller(tmp_path, monkeypatch):
     assert body["setup_url"].endswith("/setup")
 
 
-async def test_setup_gate_allows_loopback_through(tmp_path):
+async def test_setup_gate_blocks_loopback_until_setup(tmp_path):
+    """ASGITransport 的客户端 host 是 127.0.0.1——本机也要被 428 拦住。"""
     app, _cfg = _build_app_without_password(tmp_path)
     async with _make_async_client(app) as c:
         resp = await c.get("/api/secret")
-    assert resp.status_code == 200
-    assert resp.json() == {"ok": True}
+    assert resp.status_code == 428
+    assert resp.json()["error"] == "setup_required"
 
 
 async def test_setup_gate_passes_setup_endpoints_for_any_caller(tmp_path, monkeypatch):
@@ -154,7 +155,7 @@ async def test_setup_gate_passes_spa_shell(tmp_path, monkeypatch):
 
 async def test_setup_gate_skips_when_password_already_set(tmp_path, monkeypatch):
     cfg = WebAccessConfig(tmp_path)
-    cfg.change_password("hunter22")
+    cfg.add_user("admin", "hunter22", role="admin")
     app = FastAPI()
     app.middleware("http")(create_setup_gate_middleware(cfg))
 

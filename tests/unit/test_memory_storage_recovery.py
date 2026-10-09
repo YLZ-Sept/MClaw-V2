@@ -134,6 +134,6 @@ def test_last_shutdown_marker_from_previous_clean_stop_is_clean(monkeypatch, tmp
         '{"ts": 1000, "pid": 123, "version": "x", "spawn_started_at": 500}',
         encoding="utf-8",
     )
-    monkeypatch.setenv("MCLAW_SPAWN_STARTED_AT_MS", "2000")
+    monkeypatch.setenv("OPENAKITA_SPAWN_STARTED_AT_MS", "2000")
 
     assert health._read_last_shutdown_marker()["status"] == "clean"

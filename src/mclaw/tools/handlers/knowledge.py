@@ -11,6 +11,7 @@ Knowledge Base 搜索处理器
 # 详见 docs/policy_v2_research.md §4.21
 """
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -78,13 +79,19 @@ class KnowledgeHandler:
                         f"❌ 知识集合 '{collection_id}' 未绑定到此 Agent。"
                         f"绑定的集合: {', '.join(bound_collections)}"
                     )
-                results = km.search_with_chunks(query, collection_id=collection_id, top_k=top_k)
+                # to_thread：KB 检索含 embedding 编码 + reranker 精排，
+                # 都是同步 CPU 密集调用，直接跑会阻塞 agent 事件循环。
+                results = await asyncio.to_thread(
+                    km.search_with_chunks, query, collection_id, top_k
+                )
             else:
                 # Search all bound collections, merge results
                 all_results: list = []
                 for cid in bound_collections:
                     try:
-                        batch = km.search_with_chunks(query, collection_id=cid, top_k=top_k)
+                        batch = await asyncio.to_thread(
+                            km.search_with_chunks, query, cid, top_k
+                        )
                         all_results.extend(batch)
                     except Exception as e:
                         logger.warning(f"Knowledge search in collection {cid} failed: {e}")

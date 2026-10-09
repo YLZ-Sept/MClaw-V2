@@ -13,7 +13,7 @@
     from mclaw.memory.model_hub import load_embedding_model
 
     model = load_embedding_model(
-        model_name="shibing624/text2vec-base-chinese",
+        model_name="BAAI/bge-small-zh-v1.5",
         source="auto",
         device="cpu",
     )
@@ -48,6 +48,13 @@ class ModelSource(StrEnum):
 _MODELSCOPE_NAME_MAP: dict[str, str] = {
     # 已知一致的不需要映射
     # 如有不一致的模型可在此添加: "hf_org/hf_model": "ms_org/ms_model"
+    # BGE 系列：HuggingFace 的 BAAI org 与 ModelScope 的 AI-ModelScope 镜像
+    "BAAI/bge-small-zh-v1.5": "AI-ModelScope/bge-small-zh-v1.5",
+    "BAAI/bge-base-zh-v1.5": "AI-ModelScope/bge-base-zh-v1.5",
+    "BAAI/bge-large-zh-v1.5": "AI-ModelScope/bge-large-zh-v1.5",
+    "BAAI/bge-m3": "AI-ModelScope/bge-m3",
+    "BAAI/bge-reranker-base": "AI-ModelScope/bge-reranker-base",
+    "BAAI/bge-reranker-v2-m3": "AI-ModelScope/bge-reranker-v2-m3",
 }
 
 
@@ -381,6 +388,158 @@ def load_embedding_model(
                     "② 在设置中心切换模型下载源 "
                     "③ 手动下载模型到 ~/.cache/huggingface/hub/"
                 )
+
+    raise last_error  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# CrossEncoder（reranker）
+# ---------------------------------------------------------------------------
+
+
+def _modelscope_snapshot(model_name: str) -> str | None:
+    """通过 ModelScope 下载模型，返回本地路径；不可用/失败返回 None（不抛异常）"""
+    try:
+        from modelscope import snapshot_download
+    except ImportError:
+        logger.warning(
+            "[ModelHub] ⚠ modelscope 包未安装，无法使用 ModelScope 下载。"
+            "如需使用 ModelScope，请安装: pip install modelscope"
+        )
+        return None
+
+    ms_name = _modelscope_name(model_name)
+    try:
+        logger.info(f"[ModelHub] 从 ModelScope 下载模型: {ms_name}")
+        local_path = snapshot_download(ms_name)
+        logger.info(f"[ModelHub] 模型已下载到: {local_path}")
+        return str(local_path)
+    except Exception as e:
+        logger.warning(f"[ModelHub] ⚠ ModelScope 下载失败 ({e})")
+        return None
+
+
+def _build_cross_encoder(model_name: str, device: str, max_length: int):
+    """构造 CrossEncoder；仅当报错指向 trust_remote_code 时才放行
+
+    bge-reranker-v2-m3 这类仓库需要执行仓库内的自定义代码才能加载。
+    这里不做无条件放开（会在客户机器上下载并执行远端代码），只在报错
+    明确要求时重试一次。
+    """
+    from sentence_transformers import CrossEncoder
+
+    try:
+        return CrossEncoder(model_name, device=device, max_length=max_length)
+    except Exception as e:
+        if "trust_remote_code" not in str(e).lower():
+            raise
+
+        import inspect
+
+        if "trust_remote_code" not in inspect.signature(CrossEncoder.__init__).parameters:
+            # 旧版 sentence-transformers 不支持该参数，无法加载此模型
+            raise
+
+        logger.warning(
+            f"[ModelHub] reranker 需要 trust_remote_code（仓库含自定义加载代码）: {model_name}"
+        )
+        return CrossEncoder(
+            model_name, device=device, max_length=max_length, trust_remote_code=True
+        )
+
+
+def load_cross_encoder(
+    model_name: str,
+    source: str | ModelSource = "auto",
+    device: str = "cpu",
+    max_length: int = 512,
+    max_retries: int = 2,
+    initial_backoff: float = 3.0,
+):
+    """
+    加载 cross-encoder 精排模型（reranker）。
+
+    与 :func:`load_embedding_model` 共用同一套多源策略，避免 reranker 绕过
+    ModelScope 映射与回退链（否则源为 modelscope 时会直连 huggingface.co，
+    而那正是探测判定 HF 不可达才会选 ModelScope 的场景）。
+
+    回退顺序：当前源 → hf-mirror → ModelScope。
+
+    Args:
+        model_name: 模型名称 (如 "BAAI/bge-reranker-base")
+        source: 下载源 ("auto" | "huggingface" | "hf-mirror" | "modelscope")
+        device: 运行设备 ("cpu" | "cuda")
+        max_length: 输入截断长度
+        max_retries: 整体重试次数
+        initial_backoff: 首次重试等待秒数（后续指数增长）
+
+    Returns:
+        CrossEncoder 模型实例
+
+    Raises:
+        ImportError: sentence-transformers 未安装
+        Exception: 所有源与重试均失败
+    """
+    resolved = _resolve_source(source)
+
+    if resolved == ModelSource.AUTO:
+        # 已在本地缓存就直接离线加载，避免向 huggingface.co 发 HEAD 请求
+        if _is_model_cached(model_name):
+            logger.info(f"[ModelHub] reranker 已缓存，离线加载: {model_name}")
+            old_offline = os.environ.get("HF_HUB_OFFLINE")
+            os.environ["HF_HUB_OFFLINE"] = "1"
+            try:
+                return _build_cross_encoder(model_name, device, max_length)
+            except Exception as e:
+                logger.warning(f"[ModelHub] reranker 离线加载缓存失败 ({e})，将重新下载")
+            finally:
+                if old_offline is None:
+                    os.environ.pop("HF_HUB_OFFLINE", None)
+                else:
+                    os.environ["HF_HUB_OFFLINE"] = old_offline
+
+        resolved = detect_best_source()
+        logger.info(f"[ModelHub] auto 模式为 reranker 选择了: {resolved.value}")
+
+    _apply_source_env(resolved)
+
+    last_error: Exception | None = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.info(
+                f"[ModelHub] 加载 reranker '{model_name}' "
+                f"(源={resolved.value}, 设备={device}, 尝试 {attempt}/{max_retries})"
+            )
+
+            if resolved == ModelSource.MODELSCOPE:
+                local_path = _modelscope_snapshot(model_name)
+                if local_path:
+                    return _build_cross_encoder(local_path, device, max_length)
+                logger.info("[ModelHub] reranker 回退到 hf-mirror")
+                _apply_source_env(ModelSource.HF_MIRROR)
+                return _build_cross_encoder(model_name, device, max_length)
+
+            try:
+                return _build_cross_encoder(model_name, device, max_length)
+            except Exception as e:
+                # 当前源失败：先换国内镜像，与 embedding 路径的回退顺序一致
+                if HF_MIRROR_ENDPOINT not in os.environ.get("HF_ENDPOINT", ""):
+                    logger.warning(f"[ModelHub] reranker 当前源失败 ({e})，切换到 hf-mirror 重试...")
+                    _apply_source_env(ModelSource.HF_MIRROR)
+                    return _build_cross_encoder(model_name, device, max_length)
+                raise
+
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries:
+                backoff = initial_backoff * (2 ** (attempt - 1))
+                logger.warning(
+                    f"[ModelHub] ⚠ reranker 加载失败 (尝试 {attempt}/{max_retries}): {e}"
+                )
+                time.sleep(backoff)
+                _apply_source_env(resolved)
+            else:
+                logger.error(f"[ModelHub] ✗ reranker 加载最终失败 (已重试 {max_retries} 次): {e}")
 
     raise last_error  # type: ignore[misc]
 

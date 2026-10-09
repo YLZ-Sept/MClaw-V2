@@ -227,7 +227,7 @@ def test_workspace_resolver_default_behavior(monkeypatch):
         resolve_memory_workspace_id,
     )
 
-    monkeypatch.delenv("MCLAW_DESKTOP_PROJECT_WORKSPACE", raising=False)
+    monkeypatch.delenv("OPENAKITA_DESKTOP_PROJECT_WORKSPACE", raising=False)
 
     class _S:
         def __init__(self, channel="desktop", metadata=None, bot_instance_id=None):
@@ -287,7 +287,7 @@ def test_workspace_resolver_opt_in_project_mode(monkeypatch, tmp_path):
     assert is_project_workspace(via_meta)
 
     # 通过 env 切到 project 模式
-    monkeypatch.setenv("MCLAW_DESKTOP_PROJECT_WORKSPACE", "1")
+    monkeypatch.setenv("OPENAKITA_DESKTOP_PROJECT_WORKSPACE", "1")
     via_env = resolve_memory_workspace_id(_S(channel="desktop"))
     assert is_project_workspace(via_env)
 

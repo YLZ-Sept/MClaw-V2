@@ -56,7 +56,7 @@ def workspace(tmp_path, monkeypatch):
         },
         endpoint_type="relay_endpoints",
     )
-    monkeypatch.setenv("MCLAW_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("OPENAKITA_WORKSPACE", str(tmp_path))
     return tmp_path
 
 

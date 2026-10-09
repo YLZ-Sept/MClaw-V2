@@ -101,7 +101,7 @@ def test_safe_open_sync_rejects_sync_folder_path(tmp_path, monkeypatch):
     one_drive_dir = tmp_path / "OneDrive_personal"
     one_drive_dir.mkdir()
     target = one_drive_dir / "x.db"
-    monkeypatch.delenv("MCLAW_ALLOW_SYNC_FOLDER_DB", raising=False)
+    monkeypatch.delenv("OPENAKITA_ALLOW_SYNC_FOLDER_DB", raising=False)
     with pytest.raises(SQLiteUnavailable) as ei:
         safe_open_sync(target)
     assert ei.value.reason == "path_in_sync_folder"
@@ -111,7 +111,7 @@ def test_safe_open_sync_sync_folder_override(tmp_path, monkeypatch):
     one_drive_dir = tmp_path / "OneDrive_personal"
     one_drive_dir.mkdir()
     target = one_drive_dir / "x.db"
-    monkeypatch.setenv("MCLAW_ALLOW_SYNC_FOLDER_DB", "1")
+    monkeypatch.setenv("OPENAKITA_ALLOW_SYNC_FOLDER_DB", "1")
     conn = safe_open_sync(target)
     try:
         assert target.exists()
@@ -403,7 +403,7 @@ def test_no_lingering_event_loop():
 
 # Sanity: the env var override is restored between tests.
 def test_env_var_does_not_leak(monkeypatch, tmp_path):
-    assert os.environ.get("MCLAW_ALLOW_SYNC_FOLDER_DB") is None
+    assert os.environ.get("OPENAKITA_ALLOW_SYNC_FOLDER_DB") is None
     target = tmp_path / "plain.db"
     conn = safe_open_sync(target)
     conn.close()

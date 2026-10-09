@@ -149,13 +149,13 @@ def test_artifact_persistence_enabled_respects_env_var(
     snapshot) so a test fixture monkeypatch takes effect.
     """
 
-    monkeypatch.delenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
+    monkeypatch.delenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
     assert artifact_persistence_enabled() is True
-    monkeypatch.setenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", "0")
+    monkeypatch.setenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", "0")
     assert artifact_persistence_enabled() is False
-    monkeypatch.setenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", "false")
+    monkeypatch.setenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", "false")
     assert artifact_persistence_enabled() is False
-    monkeypatch.setenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", "1")
+    monkeypatch.setenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", "1")
     assert artifact_persistence_enabled() is True
 
 
@@ -171,7 +171,7 @@ def test_persist_node_artifact_writes_file_and_returns_path(
     stamp it into the ``agent_run_finished`` event payload.
     """
 
-    monkeypatch.delenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
+    monkeypatch.delenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
     path_str = persist_node_artifact(
         org_id="o1",
         command_id="cmd_a",
@@ -205,7 +205,7 @@ def test_persist_node_artifact_isolates_two_commands(
     later command never sees / mis-picks an earlier topic's artefact.
     """
 
-    monkeypatch.delenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
+    monkeypatch.delenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
     p1 = persist_node_artifact(
         org_id="o1",
         command_id="cmd_jianlai",
@@ -239,7 +239,7 @@ def test_persist_node_artifact_falls_back_to_idname_without_title(
     the delegation owner is still legible.
     """
 
-    monkeypatch.delenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
+    monkeypatch.delenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
     path_str = persist_node_artifact(
         org_id="o1",
         command_id="cmd_b",
@@ -263,7 +263,7 @@ def test_persist_node_artifact_semantic_title_leads_filename(
     uniqueness suffix.
     """
 
-    monkeypatch.delenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
+    monkeypatch.delenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
     path_str = persist_node_artifact(
         org_id="o1",
         command_id="cmd_c",
@@ -288,7 +288,7 @@ def test_persist_node_artifact_skipped_when_disabled(
     "persistence skipped" rather than blocking the event flow.
     """
 
-    monkeypatch.setenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", "0")
+    monkeypatch.setenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", "0")
     result = persist_node_artifact(
         org_id="o1",
         command_id="cmd_x",
@@ -309,7 +309,7 @@ def test_persist_node_artifact_skipped_when_output_blank(
     we skip rather than littering the directory with 0-byte files.
     """
 
-    monkeypatch.delenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
+    monkeypatch.delenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
     assert (
         persist_node_artifact(
             org_id="o1",
@@ -343,7 +343,7 @@ def test_persist_node_memory_short_output_is_verbatim(
     builder to read.
     """
 
-    monkeypatch.delenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
+    monkeypatch.delenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
     short = "short reply" * 5
     assert len(short) < MEMORY_SUMMARY_THRESHOLD
     path_str = persist_node_memory(
@@ -378,7 +378,7 @@ def test_persist_node_memory_long_output_is_summarised(
     artefact file -- ``memory/`` is the "summary" lane.
     """
 
-    monkeypatch.delenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
+    monkeypatch.delenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
     head = "A" * 500
     middle = "M" * 800
     tail = "Z" * 50
@@ -405,7 +405,7 @@ def test_persist_node_memory_skipped_when_disabled(
 ) -> None:
     """case id: p0_2.memory.kill_switch_blocks_write"""
 
-    monkeypatch.setenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", "off")
+    monkeypatch.setenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", "off")
     assert (
         persist_node_memory(
             org_id="o1",
@@ -500,7 +500,7 @@ def test_executor_persists_artifact_and_memory_on_success(
     payload field out as a usability gap).
     """
 
-    monkeypatch.delenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
+    monkeypatch.delenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
     bus = _RecordingBus()
     lookup = _Lookup(["producer"], org_dir=tmp_path)
     brain = _brain_with_replies(["producer text reply"])
@@ -543,7 +543,7 @@ def test_executor_strips_thinking_from_persisted_artifact_and_output(
     real document survives intact.
     """
 
-    monkeypatch.delenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
+    monkeypatch.delenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
     bus = _RecordingBus()
     lookup = _Lookup(["producer"], org_dir=tmp_path)
     leaky = (
@@ -582,7 +582,7 @@ def test_executor_skips_persistence_when_env_var_off(
     is stamped onto the payload and the per-org dirs stay empty.
     """
 
-    monkeypatch.setenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", "0")
+    monkeypatch.setenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", "0")
     bus = _RecordingBus()
     lookup = _Lookup(["producer"], org_dir=tmp_path)
     brain = _brain_with_replies(["reply"])
@@ -616,7 +616,7 @@ def test_executor_persists_child_with_parent_chain_filename(
 
     from mclaw.orgs import _runtime_dispatch as dispatch_mod
 
-    monkeypatch.delenv("MCLAW_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
+    monkeypatch.delenv("OPENAKITA_ORGS_V2_PERSIST_ARTIFACTS", raising=False)
     monkeypatch.setattr(
         dispatch_mod, "_resolve_delegation_log_dir", lambda: tmp_path / "_dl"
     )

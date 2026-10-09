@@ -73,7 +73,7 @@ class TestResponseHandlerStaticMethods:
 
 class TestRequestExpectsArtifactPrefixGuard:
     """request_expects_artifact 必须对系统/组织合成「被动通知」前缀返回 False，
-    避免汇总轮、root 节点收下属交付时命中正文中的『文件/附件/写一份.mclaw-promotion-plan.md』
+    避免汇总轮、root 节点收下属交付时命中正文中的『文件/附件/写一份/mclaw-promotion-plan.md』
     等关键词被误判为需要附件交付，进而触发 verify_incomplete + emit task_failed。"""
 
     def test_summary_round_does_not_expect_artifact(self):
@@ -92,13 +92,13 @@ class TestRequestExpectsArtifactPrefixGuard:
     def test_root_receives_task_delivered_does_not_expect_artifact(self):
         """回归 2026-04-28 13:42:53 _134209 失败链：
         editor-in-chief 收到 seo-opt 的 [收到任务交付]，正文里包含
-        『文件名.mclaw-promotion-plan.md』『写一份』等关键字，
+        『文件名 mclaw-promotion-plan.md』『写一份』等关键字，
         旧逻辑会强行要求附件交付 → INCOMPLETE → root emit task_failed
         → 用户看到「主编 未完成 任务验证未通过」噪音卡片。"""
         msg = (
             "[收到任务交付] 来自 seo-opt [任务链: 2026-04-28T0]:\n"
             "任务交付: # Mclaw SEO 优化建议交付物\n"
-            "...产出文件�.mclaw-promotion-plan.md，请帮我写一份汇总..."
+            "...产出文件：mclaw-promotion-plan.md，请帮我写一份汇总..."
         )
         assert request_expects_artifact(msg) is False
 
@@ -186,7 +186,7 @@ class TestVerifyTaskCompletionPrefixBypass:
             user_request=(
                 "[收到任务交付] 来自 seo-opt [任务链: 2026-04-28T0]:\n"
                 "任务交付: # Mclaw SEO 优化建议交付物\n"
-                "...产出文件�.mclaw-promotion-plan.md..."
+                "...产出文件：mclaw-promotion-plan.md..."
             ),
             assistant_response="## Mclaw 宣传计划汇总\n下属交付已收到，已综合输出汇总文档。",
             executed_tools=["org_accept_deliverable"],

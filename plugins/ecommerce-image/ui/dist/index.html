@@ -339,15 +339,15 @@ function directFetch(method, path, body) {
 }
 
 function apiCall(method, path, body) {
-  // Preferred: use the shared bootstrap.js bridge (window.OpenAkita.api) if it
+  // Preferred: use the shared bootstrap.js bridge (window.Mclaw.api) if it
   // has finished its handshake. Falls back to the legacy inline postMessage
   // plumbing when bootstrap is present but not yet ready, and finally to
   // directFetch in dev / non-iframe mode. 5s timeout protects against a host
   // that accepts the message but never answers.
-  if (window.OpenAkita && typeof window.OpenAkita.api === "function" && window.OpenAkita.__ready) {
+  if (window.Mclaw && typeof window.Mclaw.api === "function" && window.Mclaw.__ready) {
     var TIMEOUT_MARK = { __timeout: true };
     return Promise.race([
-      window.OpenAkita.api(method, path, body),
+      window.Mclaw.api(method, path, body),
       new Promise(function(resolve) { setTimeout(function() { resolve(TIMEOUT_MARK); }, 5000); })
     ]).then(function(r) {
       if (r === TIMEOUT_MARK) return directFetch(method, path, body);
@@ -426,8 +426,8 @@ async function downloadAsset(taskId, idx, isVideo) {
 
 function showToast(body, type) {
   type = type || "success";
-  if (window.OpenAkita && typeof window.OpenAkita.notify === "function" && window.OpenAkita.__ready) {
-    try { window.OpenAkita.notify({ title: "", body: body, type: type }); return; } catch (_) { /* fall through */ }
+  if (window.Mclaw && typeof window.Mclaw.notify === "function" && window.Mclaw.__ready) {
+    try { window.Mclaw.notify({ title: "", body: body, type: type }); return; } catch (_) { /* fall through */ }
   }
   if (_inIframe && _bridgeConnected) { post({ type: "bridge:notification", payload: { title: "", body: body, type: type } }); return; }
   var toast = document.createElement("div");
@@ -462,10 +462,10 @@ const KNOWN_ICONS = new Set([
   "party","confetti","upload","clipboard","file","book",
   "target","check","close","palette","brush","film",
 ]);
-// Names whose ecommerce sprite has a same-meaning OpenAkitaIcons sibling.
+// Names whose ecommerce sprite has a same-meaning MclawIcons sibling.
 // Render those via the shared UI Kit so all plugins use identical glyphs;
 // keep the inline sprite as authoritative source for the 19 ecommerce-only
-// icons that OpenAkitaIcons does not ship (clapperboard / camera / masks /
+// icons that MclawIcons does not ship (clapperboard / camera / masks /
 // copy / package / images / layers / ruler / rocket / message / megaphone /
 // party / confetti / clipboard / file / arrow-left / detail / poster / flame).
 const OA_ICON_KEYS = {
@@ -476,8 +476,8 @@ const OA_ICON_KEYS = {
 function Ic({ name, className = "", size }) {
   const cls = "ic" + (size === "lg" ? " ic-lg" : size === "xl" ? " ic-xl" : "") + (className ? " " + className : "");
   const oaName = OA_ICON_KEYS[name];
-  if (oaName && typeof window !== "undefined" && window.OpenAkitaIcons && typeof window.OpenAkitaIcons[oaName] === "function") {
-    return <span className={cls + " oa-icon"} dangerouslySetInnerHTML={{ __html: window.OpenAkitaIcons[oaName]() }} />;
+  if (oaName && typeof window !== "undefined" && window.MclawIcons && typeof window.MclawIcons[oaName] === "function") {
+    return <span className={cls + " oa-icon"} dangerouslySetInnerHTML={{ __html: window.MclawIcons[oaName]() }} />;
   }
   let id = name;
   if (id && !KNOWN_ICONS.has(id)) {
@@ -595,7 +595,7 @@ function ImageUpload({ value, onChange, label }) {
       ) : (
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
           <span className="oa-icon" style={{fontSize:24,opacity:.6}}
-            dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.upload() : ""}} />
+            dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.upload() : ""}} />
           <div>{label || "点击或拖拽上传图片"}</div>
         </div>
       )}
@@ -663,7 +663,7 @@ function MultiImageUpload({ value, onChange, label, max }) {
         ) : (
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
             <span className="oa-icon" style={{fontSize:24,opacity:.6}}
-              dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.upload() : ""}} />
+              dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.upload() : ""}} />
             <div>{label || "点击或拖拽上传多张图片"}</div>
           </div>
         )}
@@ -796,7 +796,7 @@ function DynamicForm({ feature, params, setParams, pluginApi }) {
                 {optimizing[p.id]
                   ? <span className="spinner-sm" style={{width:11,height:11,borderWidth:1.5}} />
                   : <span className="oa-ai-btn__icon"
-                      dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.sparkles() : ""}} />}
+                      dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.sparkles() : ""}} />}
                 AI 优化
               </button>
             </div>
@@ -1998,7 +1998,7 @@ function CreateTab({ features, activeModule, setActiveModule, selectedFeature, s
         ) : (
           <div className="oa-preview-empty">
             <span className="oa-preview-empty__icon"
-              dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.sparkles() : ""}} />
+              dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.sparkles() : ""}} />
             <div className="oa-preview-empty__title">选择一个功能开始创作</div>
             <div className="oa-preview-empty__hint">或查看历史记录</div>
           </div>
@@ -2106,7 +2106,7 @@ function TasksTab({ pluginApi }) {
         ) : (
           <div className="oa-preview-empty">
             <span className="oa-preview-empty__icon"
-              dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.listTask ? window.OpenAkitaIcons.listTask() : (window.OpenAkitaIcons.layers ? window.OpenAkitaIcons.layers() : "") : ""}} />
+              dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.listTask ? window.MclawIcons.listTask() : (window.MclawIcons.layers ? window.MclawIcons.layers() : "") : ""}} />
             <div className="oa-preview-empty__title">未选择任务</div>
             <div className="oa-preview-empty__hint">从左侧列表选择一个任务查看详情</div>
           </div>
@@ -2273,7 +2273,7 @@ function App() {
         && !cfgMeta.has_dashscope_key && !cfgMeta.has_ark_key && (
         <div className="oa-config-banner" role="alert" style={{margin:"12px 16px 0",flexShrink:0}}>
           <span className="oa-icon oa-config-banner__icon"
-                dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.warning() : ""}} />
+                dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.warning() : ""}} />
           <div className="oa-config-banner__text">
             <strong>未配置 API Key</strong>
             <div style={{fontSize:12,color:"var(--text-muted)",marginTop:2}}>
@@ -2283,7 +2283,7 @@ function App() {
           <button className="oa-config-banner__action" type="button" onClick={() => setTab("settings")}>
             前往设置
             <span className="oa-icon"
-                  dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.arrowRight() : ""}} />
+                  dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.arrowRight() : ""}} />
           </button>
         </div>
       )}
@@ -2351,8 +2351,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <PluginErrorBoundary><App /></PluginErrorBoundary>
 );
 // Tell the host its loading overlay can dismiss now (no-op outside iframe).
-try { window.OpenAkita && window.OpenAkita.ready && window.OpenAkita.ready(); } catch (_) {}
+try { window.Mclaw && window.Mclaw.ready && window.Mclaw.ready(); } catch (_) {}
 </script>
-<script src="./_assets/openakita-llm-selector.js" data-plugin-id="ecommerce-image"></script>
+<script src="./_assets/mclaw-llm-selector.js" data-plugin-id="ecommerce-image"></script>
 </body>
 </html>

@@ -147,13 +147,13 @@ jobs:
       - name: Verify wheel installs correctly
         run: |
           python -m venv /tmp/test-venv
-          /tmp/test-venv/bin/pip install dist.mclaw-*.whl
+          /tmp/test-venv/bin/pip install dist/mclaw-*.whl
           /tmp/test-venv/bin/openakita --help
 
       - name: Verify extras install correctly
         run: |
           python -m venv /tmp/test-all
-          WHL=$(ls dist.mclaw-*.whl)
+          WHL=$(ls dist/mclaw-*.whl)
           # --find-links dist/ 让 pip 优先从本地索引解析 mclaw-plugin-sdk，
           # 既能验证 wheel 自身的依赖声明，又不被 PyPI 滞后版本卡住。
           /tmp/test-all/bin/pip install --find-links dist/ "${WHL}[all]"
@@ -527,7 +527,7 @@ jobs:
             exit 1
           fi
 
-          PROFILE_NAME=.mclaw-notary"
+          PROFILE_NAME="mclaw-notary"
           xcrun notarytool store-credentials "${PROFILE_NAME}" \
             --apple-id "${APPLE_ID}" \
             --password "${APPLE_PASSWORD}" \
@@ -723,7 +723,7 @@ jobs:
             New-Item -ItemType Directory -Path $outDir -Force | Out-Null
           }
           # rustc converts crate-name dashes to underscores when emitting
-          # the symbol file .mclaw-setup-center -> mclaw_setup_center).
+          # the symbol file (mclaw-setup-center -> mclaw_setup_center).
           # The dryrun-1 log captured the actual filename as
           # mclaw_setup_center.pdb at 81 MB; the original dash-form
           # filter found nothing and silently warned.

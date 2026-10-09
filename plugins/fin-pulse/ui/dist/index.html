@@ -970,7 +970,7 @@ const I18N_DICT = {
     "tabs.radar": "雷达预警",
     "tabs.settings": "设置",
     "banner.noChannel.title": "尚未配置 IM 推送通道",
-    "banner.noChannel.desc": "请先在 OpenAkita 主程序配置至少一个 IM 通道（飞书/企微/钉钉）并授予 channel.send 权限。",
+    "banner.noChannel.desc": "请先在 Mclaw 主程序配置至少一个 IM 通道（飞书/企微/钉钉）并授予 channel.send 权限。",
     "banner.noChannel.cta": "前往设置",
     "err.title": "界面渲染异常",
     "err.retry": "重试",
@@ -1150,7 +1150,7 @@ const I18N_DICT = {
     "radar.history.delete": "删除",
     "radar.saved": "规则已保存到配置",
     "ask.title": "Agent 工具",
-    "ask.intro": "这些工具会被 OpenAkita 的大脑在对话中自动调用。你也可以在左侧复制自然语言 Prompt，粘贴到主对话窗口直接使用。",
+    "ask.intro": "这些工具会被 Mclaw 的大脑在对话中自动调用。你也可以在左侧复制自然语言 Prompt，粘贴到主对话窗口直接使用。",
     "ask.copy.prompt": "复制自然语言 Prompt",
     "ask.copy.schema": "复制 JSON 样例",
     "ask.copied": "已复制",
@@ -1202,7 +1202,7 @@ const I18N_DICT = {
     "settings.sources.nn.floor.unit": "秒",
     "settings.sources.nn.publicHint": "公共服务：https://newsnow.busiyi.world/api/s · 开源作者自费维护（v0.0.39），建议最小间隔不低于 {floor} 秒，避免过载。",
     "settings.translation.title": "AI 翻译",
-    "settings.translation.desc": "资讯卡片的翻译按钮会调用 OpenAkita 大脑，将标题和摘要翻译为目标语言。",
+    "settings.translation.desc": "资讯卡片的翻译按钮会调用 Mclaw 大脑，将标题和摘要翻译为目标语言。",
     "settings.translation.enabled": "启用卡片翻译",
     "settings.translation.target": "目标语言",
     "settings.translation.scope": "翻译范围",
@@ -1276,7 +1276,7 @@ const I18N_DICT = {
     "settings.newsnow.floor.label": "最小抓取间隔（秒，公共服务下限 300）",
     "settings.newsnow.rate_limited": "公共服务冷却中，{s} 秒后可再次抓取。",
     "settings.llm.title": "AI 大脑（继承宿主 LLM 工厂）",
-    "settings.llm.hint": "fin-pulse 直接复用 OpenAkita 的大脑调用；如需调整 provider / model / 温度，请前往宿主「设置 → 模型」页面修改。",
+    "settings.llm.hint": "fin-pulse 直接复用 Mclaw 的大脑调用；如需调整 provider / model / 温度，请前往宿主「设置 → 模型」页面修改。",
     "settings.save": "保存",
     "settings.saved": "已保存",
   },
@@ -1288,7 +1288,7 @@ const I18N_DICT = {
     "tabs.radar": "Radar",
     "tabs.settings": "Settings",
     "banner.noChannel.title": "No IM channel configured",
-    "banner.noChannel.desc": "Configure at least one IM channel in OpenAkita Settings and grant channel.send.",
+    "banner.noChannel.desc": "Configure at least one IM channel in Mclaw Settings and grant channel.send.",
     "banner.noChannel.cta": "Open Settings",
     "err.title": "UI render error",
     "err.retry": "Retry",
@@ -1468,7 +1468,7 @@ const I18N_DICT = {
     "radar.history.delete": "Delete",
     "radar.saved": "Rules saved to config",
     "ask.title": "Agent tools",
-    "ask.intro": "These tools are called automatically by the OpenAkita Brain. You can also copy a natural-language prompt to paste into the main chat window.",
+    "ask.intro": "These tools are called automatically by the Mclaw Brain. You can also copy a natural-language prompt to paste into the main chat window.",
     "ask.copy.prompt": "Copy NL prompt",
     "ask.copy.schema": "Copy JSON sample",
     "ask.copied": "Copied",
@@ -1520,7 +1520,7 @@ const I18N_DICT = {
     "settings.sources.nn.floor.unit": "sec",
     "settings.sources.nn.publicHint": "Public service: https://newsnow.busiyi.world/api/s · maintained at the author's cost (v0.0.39). Keep the interval at least {floor}s to avoid overload.",
     "settings.translation.title": "AI Translation",
-    "settings.translation.desc": "The translate button on news cards calls the OpenAkita Brain to translate titles and summaries.",
+    "settings.translation.desc": "The translate button on news cards calls the Mclaw Brain to translate titles and summaries.",
     "settings.translation.enabled": "Enable card translation",
     "settings.translation.target": "Target language",
     "settings.translation.scope": "Scope",
@@ -1594,16 +1594,16 @@ const I18N_DICT = {
     "settings.newsnow.floor.label": "Minimum fetch interval (seconds — public floor is 300)",
     "settings.newsnow.rate_limited": "Public service cooling down, try again in {s}s.",
     "settings.llm.title": "AI Brain (inherits host factory)",
-    "settings.llm.hint": "fin-pulse reuses the OpenAkita brain directly; change provider / model / temperature in the host Settings → Models page.",
+    "settings.llm.hint": "fin-pulse reuses the Mclaw brain directly; change provider / model / temperature in the host Settings → Models page.",
     "settings.save": "Save",
     "settings.saved": "Saved",
   },
 };
 
-if (window.OpenAkitaI18n && typeof window.OpenAkitaI18n.register === "function") {
-  window.OpenAkitaI18n.register(I18N_DICT);
+if (window.MclawI18n && typeof window.MclawI18n.register === "function") {
+  window.MclawI18n.register(I18N_DICT);
 }
-const _i18n = (window.OpenAkitaI18n && window.OpenAkitaI18n.api) || {
+const _i18n = (window.MclawI18n && window.MclawI18n.api) || {
   t: function (k) { var d = I18N_DICT.zh; return (d && d[k]) || k; },
   locale: function () { return "zh"; },
 };
@@ -1641,8 +1641,8 @@ function useT() {
   const [, setTick] = useState(0);
   useEffect(function () {
     function onLoc() { setTick(function (n) { return n + 1; }); }
-    window.addEventListener("openakita:locale-change", onLoc);
-    return function () { window.removeEventListener("openakita:locale-change", onLoc); };
+    window.addEventListener("mclaw:locale-change", onLoc);
+    return function () { window.removeEventListener("mclaw:locale-change", onLoc); };
   }, []);
   return function (k) { return _i18n.t(k); };
 }
@@ -1651,7 +1651,7 @@ function useT() {
 const TAB_IDS = ["today", "digests", "radar", "settings"];
 const TAB_ICONS = { today: "news", digests: "doc", radar: "radar", settings: "cog" };
 
-/* ── Icon shim — binds to window.OpenAkitaIcons (from icons.js).
+/* ── Icon shim — binds to window.MclawIcons (from icons.js).
    Short aliases keep call-sites terse while the bundle stays ~3KB. */
 const ICON_ALIAS = {
   /* tabs */
@@ -1687,7 +1687,7 @@ function Ico(props) {
   if (ICONIFY_SVG[name]) {
     return <span className="oa-icon" dangerouslySetInnerHTML={{__html: ICONIFY_SVG[name]}} />;
   }
-  const lib = window.OpenAkitaIcons;
+  const lib = window.MclawIcons;
   if (lib) {
     const key = (typeof lib[name] === "function") ? name
               : (typeof lib[ICON_ALIAS[name]] === "function") ? ICON_ALIAS[name] : "";
@@ -1796,8 +1796,8 @@ function _normalizeBridgeApiResult(res) {
 }
 async function api(method, path, body) {
   const fullPath = _finPulsePath(path);
-  if (window.OpenAkita && typeof window.OpenAkita.api === "function") {
-    const res = await window.OpenAkita.api(method, fullPath, body);
+  if (window.Mclaw && typeof window.Mclaw.api === "function") {
+    const res = await window.Mclaw.api(method, fullPath, body);
     return _normalizeBridgeApiResult(res);
   }
   const resp = await fetch(fullPath, {
@@ -2054,13 +2054,13 @@ window.oaConfirm = function (opts) {
 };
 window.oaToast = function (opts) {
   try {
-    if (window.OpenAkita && typeof window.OpenAkita.notify === "function") {
+    if (window.Mclaw && typeof window.Mclaw.notify === "function") {
       const level = (opts && opts.level) || "info";
       const message = (opts && opts.message) || "";
       /* Host PluginAppHost.handleNotification consumes `{type, body}`.
          Keep `{level, message}` for backward compatibility with any
          older bridges. */
-      window.OpenAkita.notify({
+      window.Mclaw.notify({
         type: level,
         body: message,
         level: level,
@@ -5646,7 +5646,7 @@ function App() {
 
   /* theme sync from host ctx */
   useEffect(function () {
-    return onEvent("openakita:theme-change", function (d) {
+    return onEvent("mclaw:theme-change", function (d) {
       const theme = (d && d.theme) || "light";
       document.documentElement.setAttribute("data-theme", theme.indexOf("dark") >= 0 ? "dark" : "light");
     });
@@ -5732,10 +5732,10 @@ class PluginErrorBoundary extends React.Component {
 ReactDOM.createRoot(document.getElementById("root")).render(
   <PluginErrorBoundary><App /></PluginErrorBoundary>
 );
-if (window.OpenAkita && typeof window.OpenAkita.ready === "function") {
-  window.OpenAkita.ready();
+if (window.Mclaw && typeof window.Mclaw.ready === "function") {
+  window.Mclaw.ready();
 }
   </script>
-<script src="./_assets/openakita-llm-selector.js" data-plugin-id="fin-pulse"></script>
+<script src="./_assets/mclaw-llm-selector.js" data-plugin-id="fin-pulse"></script>
 </body>
 </html>

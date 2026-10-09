@@ -52,7 +52,7 @@ def mcp_initialize(url: str) -> dict:
         {
             "protocolVersion": "2024-11-05",
             "capabilities": {},
-            "clientInfo": {"name": .mclaw-xiaodu", "version": "1.0.0"},
+            "clientInfo": {"name": "mclaw-xiaodu", "version": "1.0.0"},
         },
         req_id=0,
     )

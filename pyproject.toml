@@ -43,6 +43,10 @@ dependencies = [
     # Database
     "aiosqlite>=0.20.0",
 
+    # 中文分词（知识库 FTS 检索）。必须是硬依赖：缺失时索引侧与查询侧的
+    # 兜底分词方式不一致（逐字 vs 原文），会静默破坏中文召回。
+    "jieba>=0.42.1",
+
     # Data validation
     "pydantic>=2.5.0,<3",
     "pydantic-settings>=2.1.0",

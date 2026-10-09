@@ -7,7 +7,7 @@
   <!--
     Self-contained plugin UI. The shared UI kit (bootstrap / icons /
     i18n / markdown-mini / styles) lives verbatim under _assets/, same
-    as the other OpenAkita first-class plugins. We MUST NOT depend on
+    as the other Mclaw first-class plugins. We MUST NOT depend on
     host-mounted /api/plugins/_sdk/*. React / ReactDOM / Babel load
     from unpkg the same way avatar-studio does.
   -->
@@ -981,13 +981,13 @@ const I18N_DICT = {
     "omniPost.mp.status.trust.fail": "信任域未配置（需要 {domain}）",
     "omniPost.mp.install.title": "安装 / 更新 MultiPost-Extension",
     "omniPost.mp.install.desc": "推荐从 Chrome 商店或 Edge 商店安装 v{min}+ 版本；安装后点击「立即探测」重新识别。",
-    "omniPost.mp.install.desktopHint": "注意：Chrome/Edge 扩展只能在对应浏览器页面里运行；如果你正在使用 OpenAkita 桌面端内嵌页面，请用已安装扩展的 Chrome/Edge 打开 OpenAkita Web 地址后再探测。",
+    "omniPost.mp.install.desktopHint": "注意：Chrome/Edge 扩展只能在对应浏览器页面里运行；如果你正在使用 Mclaw 桌面端内嵌页面，请用已安装扩展的 Chrome/Edge 打开 Mclaw Web 地址后再探测。",
     "omniPost.mp.install.iframeHint": "当前插件页在 iframe 中；如果扩展没有响应，请打开顶层检测页，它会让 MultiPost content script 更稳定地注入。",
     "omniPost.mp.install.openDirect": "打开顶层检测页",
     "omniPost.mp.install.cws": "Chrome 应用商店",
     "omniPost.mp.install.github": "GitHub 仓库",
     "omniPost.mp.trust.title": "配置信任域",
-    "omniPost.mp.trust.desc": "扩展需要允许 OpenAkita 宿主域名（{domain}）才能接收发布指令。",
+    "omniPost.mp.trust.desc": "扩展需要允许 Mclaw 宿主域名（{domain}）才能接收发布指令。",
     "omniPost.mp.trust.manual": "如果授权后仍失败，请打开 MultiPost 扩展侧边栏/设置，在 Trusted Domains 中手动添加 hostname：{domain}。不要填写协议、端口或路径。",
     "omniPost.mp.trust.request": "授权当前域名",
     "omniPost.mp.trust.openChrome": "打开 Chrome 授权页",
@@ -1217,13 +1217,13 @@ const I18N_DICT = {
     "omniPost.mp.status.trust.fail": "Trusted domain missing (need {domain})",
     "omniPost.mp.install.title": "Install / Update MultiPost-Extension",
     "omniPost.mp.install.desc": "Install v{min}+ from the Chrome Web Store or Edge Add-ons; then click \"Probe now\" to re-detect.",
-    "omniPost.mp.install.desktopHint": "Note: Chrome/Edge extensions only run inside their browser pages. If you are using the OpenAkita desktop shell, open the OpenAkita web URL in the browser where MultiPost is installed, then probe again.",
+    "omniPost.mp.install.desktopHint": "Note: Chrome/Edge extensions only run inside their browser pages. If you are using the Mclaw desktop shell, open the Mclaw web URL in the browser where MultiPost is installed, then probe again.",
     "omniPost.mp.install.iframeHint": "This plugin page is inside an iframe. If the extension does not respond, open the top-level probe page so the MultiPost content script can inject more reliably.",
     "omniPost.mp.install.openDirect": "Open top-level probe",
     "omniPost.mp.install.cws": "Chrome Web Store",
     "omniPost.mp.install.github": "GitHub repo",
     "omniPost.mp.trust.title": "Configure trusted domain",
-    "omniPost.mp.trust.desc": "The extension must allow the OpenAkita host domain ({domain}) to accept publish requests.",
+    "omniPost.mp.trust.desc": "The extension must allow the Mclaw host domain ({domain}) to accept publish requests.",
     "omniPost.mp.trust.manual": "If it still fails after authorization, open the MultiPost extension side panel/settings and manually add this hostname under Trusted Domains: {domain}. Do not include protocol, port, or path.",
     "omniPost.mp.trust.request": "Authorize current domain",
     "omniPost.mp.trust.openChrome": "Open Chrome trust page",
@@ -1297,16 +1297,16 @@ const I18N_DICT = {
     "omniPost.common.cancel": "Cancel",
   },
 };
-if (window.OpenAkitaI18n && typeof window.OpenAkitaI18n.register === "function") {
-  window.OpenAkitaI18n.register(I18N_DICT);
+if (window.MclawI18n && typeof window.MclawI18n.register === "function") {
+  window.MclawI18n.register(I18N_DICT);
 }
 function useT() {
   const [loc, setLoc] = useState(function () {
-    return (window.OpenAkitaI18n && window.OpenAkitaI18n.locale && window.OpenAkitaI18n.locale()) || "zh";
+    return (window.MclawI18n && window.MclawI18n.locale && window.MclawI18n.locale()) || "zh";
   });
   useEffect(function () {
-    if (!window.OpenAkitaI18n || !window.OpenAkitaI18n.onChange) return;
-    return window.OpenAkitaI18n.onChange(function (l) { setLoc(l); });
+    if (!window.MclawI18n || !window.MclawI18n.onChange) return;
+    return window.MclawI18n.onChange(function (l) { setLoc(l); });
   }, []);
   return useCallback(function (k, vars) {
     const base = (loc || "zh").split(/[-_]/)[0];
@@ -3840,8 +3840,8 @@ function App() {
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<App />);
-if (window.OpenAkita && typeof window.OpenAkita.ready === "function") {
-  window.OpenAkita.ready();
+if (window.Mclaw && typeof window.Mclaw.ready === "function") {
+  window.Mclaw.ready();
 }
 </script>
 </body>

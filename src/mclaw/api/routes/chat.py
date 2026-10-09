@@ -19,6 +19,13 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 
+# 工具 → 聊天路由的内部协议标记（in-band，随工具结果文本传递）。
+# 主名用 MClaw；同时接受上游老标记，避免仍在发旧标记的插件/技能失配。
+_SOURCE_MARKERS = ("[MCLAW_SOURCE]", "[OPENAKITA_SOURCE]")
+_MCP_MARKERS = ("[MCLAW_MCP]", "[OPENAKITA_MCP]")
+_ORG_MARKERS = ("[MCLAW_ORG]", "[OPENAKITA_ORG]")
+
+
 def _chat_user(request: Request) -> str:
     """Return the authenticated user_id for chat session binding."""
     return getattr(request.state, "user_id", None) or "desktop_user"
@@ -747,8 +754,8 @@ def _extract_source_used(event: dict) -> dict | None:
         payload = dict(source)
     else:
         result = str(event.get("result", ""))
-        marker = "[OPENAKITA_SOURCE]"
-        if marker not in result:
+        marker = next((m for m in _SOURCE_MARKERS if m in result), "")
+        if not marker:
             return None
         line = result[result.index(marker) + len(marker) :].strip().splitlines()[0].strip()
         try:
@@ -779,8 +786,8 @@ def _extract_mcp_call(event: dict) -> dict | None:
     if (event.get("tool_name") or event.get("tool", "")) != "call_mcp_tool":
         return None
     result = str(event.get("result", ""))
-    marker = "[OPENAKITA_MCP]"
-    if marker not in result:
+    marker = next((m for m in _MCP_MARKERS if m in result), "")
+    if not marker:
         return None
     try:
         line = result[result.index(marker) + len(marker) :].strip().splitlines()[0].strip()
@@ -804,8 +811,8 @@ def _extract_org_structure_change(event: dict) -> dict | None:
     if (event.get("tool_name") or event.get("tool", "")) != "setup_organization":
         return None
     result = str(event.get("result", ""))
-    marker = "[OPENAKITA_ORG]"
-    if marker not in result:
+    marker = next((m for m in _ORG_MARKERS if m in result), "")
+    if not marker:
         return None
     try:
         line = result[result.index(marker) + len(marker) :].strip().splitlines()[0].strip()
@@ -824,10 +831,14 @@ def _extract_org_structure_change(event: dict) -> dict | None:
 def _strip_org_structure_marker(event: dict) -> dict:
     """Hide the Mclaw org marker from frontend tool-result rendering."""
     result = event.get("result")
-    if not isinstance(result, str) or "[OPENAKITA_ORG]" not in result:
+    if not isinstance(result, str) or not any(m in result for m in _ORG_MARKERS):
         return event
     next_event = dict(event)
-    lines = [line for line in result.splitlines() if not line.strip().startswith("[OPENAKITA_ORG]")]
+    lines = [
+        line
+        for line in result.splitlines()
+        if not any(line.strip().startswith(m) for m in _ORG_MARKERS)
+    ]
     next_event["result"] = "\n".join(lines).rstrip()
     return next_event
 

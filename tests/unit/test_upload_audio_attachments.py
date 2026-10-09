@@ -13,8 +13,8 @@ def _client(tmp_path, monkeypatch) -> TestClient:
 
 
 def test_audio_upload_uses_relaxed_audio_limit(tmp_path, monkeypatch):
-    monkeypatch.setenv("MCLAW_MAX_UPLOAD_MB", "0.000001")
-    monkeypatch.setenv("MCLAW_MAX_AUDIO_UPLOAD_MB", "1")
+    monkeypatch.setenv("OPENAKITA_MAX_UPLOAD_MB", "0.000001")
+    monkeypatch.setenv("OPENAKITA_MAX_AUDIO_UPLOAD_MB", "1")
     client = _client(tmp_path, monkeypatch)
 
     response = client.post(
@@ -31,7 +31,7 @@ def test_audio_upload_uses_relaxed_audio_limit(tmp_path, monkeypatch):
 
 
 def test_non_audio_upload_still_has_general_limit(tmp_path, monkeypatch):
-    monkeypatch.setenv("MCLAW_MAX_UPLOAD_MB", "0.000001")
+    monkeypatch.setenv("OPENAKITA_MAX_UPLOAD_MB", "0.000001")
     client = _client(tmp_path, monkeypatch)
 
     response = client.post(

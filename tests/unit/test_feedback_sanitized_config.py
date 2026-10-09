@@ -80,7 +80,7 @@ async def test_bug_report_zip_includes_org_json_state(monkeypatch, tmp_path):
 async def test_bug_report_zip_includes_desktop_runtime_diagnostics(monkeypatch, tmp_path):
     data_dir = tmp_path / "workspaces" / "default" / "data"
     data_dir.mkdir(parents=True)
-    home_dir = tmp_path / .mclaw-home"
+    home_dir = tmp_path / "mclaw-home"
     global_logs = home_dir / "logs"
     runtime_logs = home_dir / "runtime" / "logs"
     global_logs.mkdir(parents=True)

@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -49,7 +50,7 @@ def _dist_name_from_spec(spec: str) -> str | None:
 
 def _pip_output_excerpt(proc: subprocess.CompletedProcess[str], *, limit: int = 4000) -> str:
     """Build a compact pip failure excerpt suitable for logs and API errors."""
-    text = (proc.stderr or proc.stdout or "").strip()
+    text = safe_install_error(proc.stderr or proc.stdout or "")
     if not text:
         return f"pip exited with code {proc.returncode} and produced no output"
     lines = [line.rstrip() for line in text.splitlines() if line.strip()]
@@ -87,6 +88,27 @@ def _pip_install_context(
 class PluginInstallError(Exception):
     """Installation could not complete."""
 
+    def __init__(self, message: str, *, reason: str = "") -> None:
+        super().__init__(safe_install_error(message))
+        self.reason = reason
+
+
+def safe_install_error(value: object) -> str:
+    """Bound diagnostic output and remove credentials before persisting/displaying it."""
+    from mclaw.utils.redaction import redact_text
+
+    text = redact_text(value)
+    text = re.sub(r"(?i)(https?://)[^/\s]*@", r"\1[REDACTED]@", text)
+    text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
+    return text.strip()[-4000:]
+
+
+def _pip_network_failure(output: str) -> bool:
+    return any(marker in output.lower() for marker in (
+        "incompleteread", "connection broken", "connection reset", "read timed out",
+        "readtimeout", "connection aborted", "temporary failure in name resolution",
+    ))
+
 
 # ---------------------------------------------------------------------------
 # Phase 3 deferred validator (NOT yet active).
@@ -107,9 +129,7 @@ class PluginInstallError(Exception):
 # ---------------------------------------------------------------------------
 
 
-def _validate_tool_classes_completeness(
-    manifest: Any, *, mode: str = "off"
-) -> list[str]:
+def _validate_tool_classes_completeness(manifest: Any, *, mode: str = "off") -> list[str]:
     """Return the list of tool names missing ``tool_classes`` declarations.
 
     Args:
@@ -312,11 +332,15 @@ class InstallProgress:
         self._error = ""
         self._result: dict[str, Any] = {}
         self._updated_at = time.monotonic()
+        self._dependency = ""
 
-    def update(self, stage: str, message: str, percent: float = -1) -> None:
+    def update(
+        self, stage: str, message: str, percent: float = -1, *, dependency: str = ""
+    ) -> None:
         with self._lock:
             self._stage = stage
             self._message = message
+            self._dependency = dependency
             if percent >= 0:
                 self._percent = min(percent, 100.0)
             self._updated_at = time.monotonic()
@@ -338,6 +362,7 @@ class InstallProgress:
                 "percent": self._percent,
                 "finished": self._finished,
                 "error": self._error,
+                "dependency": self._dependency,
             }
             if self._result:
                 snap["result"] = dict(self._result)
@@ -479,19 +504,126 @@ def _resolve_pip_runner() -> tuple[str, list[str]]:
     return py, extra
 
 
-def install_pip_deps(plugin_dir: Path, manifest_requires: dict) -> bool:
+def _pip_progress_line(line: str, progress: InstallProgress) -> None:
+    # Extract only package names, never forward pip's URLs, local paths or credentials.
+    patterns = (
+        (r"^Collecting ([A-Za-z0-9][A-Za-z0-9_.-]*)(?=[\s<>=!~\[;]|$)", "dependency_resolving"),
+        (
+            r"^\s*(?:Downloading|Using cached) ([A-Za-z0-9][A-Za-z0-9_.-]*)\.(?:whl|tar\.gz|zip)(?:\s|$)",
+            "dependency_downloading",
+        ),
+        (r"^\s*Building wheel for ([A-Za-z0-9][A-Za-z0-9_.-]*)(?:\s|$)", "dependency_building"),
+    )
+    for pattern, stage in patterns:
+        match = re.search(pattern, line)
+        if match:
+            name = (
+                re.split(r"-(?=\d)", match[1], maxsplit=1)[0]
+                if stage == "dependency_downloading"
+                else match[1]
+            )
+            progress.update(stage, "正在准备依赖", dependency=name[:100])
+            return
+    if line.lstrip().startswith(
+        (
+            "Preparing metadata",
+            "Installing build dependencies",
+            "Getting requirements to build wheel",
+        )
+    ):
+        progress.update(
+            "dependency_building", "正在构建依赖", dependency=progress.snapshot()["dependency"]
+        )
+    if line.startswith("Installing collected packages:"):
+        names = line.partition(":")[2].strip()
+        if re.fullmatch(r"[A-Za-z0-9_.-]+(?:, [A-Za-z0-9_.-]+)*", names):
+            progress.update("dependency_installing", "正在安装依赖", dependency=names[:300])
+
+
+def _run_pip_with_progress(
+    cmd: list[str], env: dict[str, str], progress: InstallProgress, *, timeout: float = 600
+) -> subprocess.CompletedProcess[str]:
+    # Separate file handles avoid pipe backpressure and allow a timeout even when
+    # pip is silent. Keep only a bounded tail in memory for failure diagnostics.
+    with tempfile.TemporaryDirectory(prefix="mclaw-pip-") as temp:
+        path = Path(temp) / "output.log"
+        with (
+            path.open("wb") as output,
+            path.open(encoding="utf-8", errors="replace") as reader,
+            subprocess.Popen(
+                cmd,
+                stdout=output,
+                stderr=subprocess.STDOUT,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+                start_new_session=sys.platform != "win32",
+            ) as proc,
+        ):
+            started = time.monotonic()
+            tail = ""
+            pending = ""
+
+            def drain() -> None:
+                nonlocal tail, pending
+                while chunk := reader.read(4096):
+                    tail = (tail + chunk)[-8000:]
+                    lines = (pending + chunk).split("\n")
+                    pending = lines.pop()[-4096:]
+                    for line in lines:
+                        _pip_progress_line(line.rstrip("\r"), progress)
+
+            try:
+                while proc.poll() is None:
+                    drain()
+                    if time.monotonic() - started >= timeout:
+                        raise subprocess.TimeoutExpired(cmd, timeout)
+                    time.sleep(0.2)
+                drain()
+                if pending:
+                    _pip_progress_line(pending, progress)
+                return subprocess.CompletedProcess(cmd, proc.returncode, tail, "")
+            finally:
+                if proc.poll() is None:
+                    # Build backends may spawn children that hold the log and
+                    # target directory open. Stop the whole owned process tree.
+                    try:
+                        if sys.platform == "win32":
+                            subprocess.run(
+                                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                                timeout=10,
+                                check=False,
+                                creationflags=subprocess.CREATE_NO_WINDOW,
+                            )
+                        else:
+                            os.killpg(proc.pid, signal.SIGKILL)
+                    except (OSError, subprocess.TimeoutExpired):
+                        pass
+                    if proc.poll() is None:
+                        proc.kill()
+                proc.wait()
+
+
+def install_pip_deps(
+    plugin_dir: Path, manifest_requires: dict, *, progress: InstallProgress | None = None,
+    raise_on_error: bool = False,
+) -> bool:
     """Install the plugin's ``requires.pip`` packages into ``<plugin_dir>/deps``.
 
     The deps directory is appended to ``sys.path`` by ``PluginManager._load_python_plugin``
     when the plugin loads, so packages installed here are private to this
     plugin and don't leak into the host or other plugins.
 
-    Returns ``False`` on any pip failure / timeout — callers decide whether to
-    propagate that as an install error or merely log it.
+    Returns ``False`` on failure for runtime callers. Explicit installation uses
+    ``raise_on_error`` to retain the pip diagnostic through directory rollback.
     """
     specs = _parse_pip_specs(manifest_requires)
     if not specs:
         return True
+    if progress:
+        progress.update("dependencies", "正在解析依赖")
 
     deps_dir = plugin_dir / "deps"
     deps_dir.mkdir(parents=True, exist_ok=True)
@@ -514,17 +646,39 @@ def install_pip_deps(plugin_dir: Path, manifest_requires: dict) -> bool:
         *extra_args,
         *specs,
     ]
+    def failed(message: str, reason: str) -> bool:
+        if raise_on_error:
+            raise PluginInstallError(message, reason=reason)
+        return False
+
     try:
-        proc = subprocess.run(
-            cmd,
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            env=_pip_subprocess_env(py),
-            timeout=600,
-        )
+        deadline = time.monotonic() + 600
+        for attempt in range(2):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(cmd, 600)
+            attempt_cmd = [*cmd, *(["--no-cache-dir"] if attempt else [])]
+            if progress:
+                proc = _run_pip_with_progress(
+                    [*attempt_cmd, "--progress-bar", "off"],
+                    {**_pip_subprocess_env(py), "PYTHONUNBUFFERED": "1"},
+                    progress, timeout=remaining,
+                )
+            else:
+                proc = subprocess.run(
+                    attempt_cmd, check=False, capture_output=True, text=True,
+                    encoding="utf-8", errors="replace", env=_pip_subprocess_env(py),
+                    timeout=remaining,
+                )
+            if proc.returncode == 0:
+                return True
+            excerpt = _pip_output_excerpt(proc)
+            if attempt == 0 and _pip_network_failure(excerpt):
+                logger.warning("Plugin dependency download interrupted; retrying without cache")
+                if progress:
+                    progress.update("dependency_retrying", "依赖下载中断，正在绕过缓存重试")
+                continue
+            break
     except subprocess.TimeoutExpired as exc:
         logger.error(
             "pip install timed out for %s after %ss (%s)",
@@ -532,14 +686,15 @@ def install_pip_deps(plugin_dir: Path, manifest_requires: dict) -> bool:
             exc.timeout,
             context,
         )
-        return False
+        return failed("pip dependency installation timed out (600s)", "dependency_timeout")
     except OSError as exc:
         logger.error("pip install failed to start for %s: %s (%s)", plugin_dir, exc, context)
-        return False
+        return failed(f"{type(exc).__name__}: {exc}", "dependency_runtime")
     if proc.returncode != 0:
         excerpt = _pip_output_excerpt(proc)
         logger.error("pip install failed for %s (%s): %s", plugin_dir, context, excerpt)
-        return False
+        return failed(excerpt, "dependency_network" if _pip_network_failure(excerpt)
+                      else "dependency_install")
     return True
 
 
@@ -581,14 +736,24 @@ def deps_appear_installed(plugin_dir: Path, manifest_requires: dict) -> bool:
     return expected.issubset(found)
 
 
-def _finalize_install(plugin_dir: Path, *, remove_on_failure: bool = True) -> str:
+def _finalize_install(
+    plugin_dir: Path, *, remove_on_failure: bool = True, progress: InstallProgress | None = None
+) -> str:
     try:
         manifest = parse_manifest(plugin_dir)
     except ManifestError as e:
         if remove_on_failure:
             shutil.rmtree(plugin_dir, ignore_errors=True)
         raise PluginInstallError(str(e)) from e
-    if not install_pip_deps(plugin_dir, manifest.requires):
+    try:
+        installed = install_pip_deps(
+            plugin_dir, manifest.requires, progress=progress, raise_on_error=True,
+        )
+    except PluginInstallError:
+        if remove_on_failure:
+            shutil.rmtree(plugin_dir, ignore_errors=True)
+        raise
+    if not installed:
         if remove_on_failure:
             shutil.rmtree(plugin_dir, ignore_errors=True)
         raise PluginInstallError(
@@ -726,7 +891,7 @@ def install_from_git(
         progress.update("dependencies", "正在安装依赖", 80)
 
     try:
-        result = _finalize_install(dest)
+        result = _finalize_install(dest, progress=progress)
     except PluginInstallError:
         if backup is not None and backup.exists():
             try:
@@ -815,7 +980,7 @@ def install_from_url(
         progress.update("dependencies", "正在安装依赖", 80)
 
     try:
-        result = _finalize_install(dest)
+        result = _finalize_install(dest, progress=progress)
     except PluginInstallError:
         if backup is not None and backup.exists():
             try:
@@ -839,6 +1004,7 @@ def install_from_path(
     plugins_dir: Path,
     *,
     dev_mode: bool = False,
+    progress: InstallProgress | None = None,
 ) -> str:
     """Install a plugin from a local directory.
 
@@ -849,6 +1015,8 @@ def install_from_path(
     """
     source = source.resolve()
     plugins_dir = plugins_dir.resolve()
+    if progress:
+        progress.update("installing", "正在复制插件文件")
     if not source.is_dir():
         raise PluginInstallError(f"Not a directory: {source}")
 
@@ -867,12 +1035,12 @@ def install_from_path(
         except OSError:
             same = False
         if same:
-            return _finalize_install(dest, remove_on_failure=False)
+            return _finalize_install(dest, remove_on_failure=False, progress=progress)
         # If dest is already a symlink pointing at source, just refresh.
         if dest.is_symlink():
             try:
                 if Path(os.readlink(dest)).resolve() == source:
-                    return _finalize_install(dest, remove_on_failure=False)
+                    return _finalize_install(dest, remove_on_failure=False, progress=progress)
             except OSError:
                 pass
         backup = dest.with_suffix(".bak")
@@ -903,7 +1071,7 @@ def install_from_path(
             raise PluginInstallError(f"Could not copy plugin: {e}") from e
 
     try:
-        result = _finalize_install(dest)
+        result = _finalize_install(dest, progress=progress)
     except PluginInstallError:
         if backup is not None and backup.exists():
             try:
@@ -1023,7 +1191,9 @@ def uninstall(
     return out
 
 
-def install_bundle(source: str, plugins_dir: Path) -> str:
+def install_bundle(
+    source: str, plugins_dir: Path, *, progress: InstallProgress | None = None
+) -> str:
     path = Path(source).expanduser().resolve()
     plugins_dir = plugins_dir.resolve()
     if not path.is_dir():
@@ -1088,4 +1258,4 @@ def install_bundle(source: str, plugins_dir: Path) -> str:
         except OSError:
             pass
 
-    return _finalize_install(dest)
+    return _finalize_install(dest, progress=progress)

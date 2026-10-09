@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>财务自动化</title>
     <link rel="icon" href="./icon.svg" />
-    <!-- OpenAkita 共享 UI Kit（oa-* 组件 + 主题变量）。
+    <!-- Mclaw 共享 UI Kit（oa-* 组件 + 主题变量）。
          运行环境的 /api/plugins/_sdk/ui-kit/styles.css 已在 SDK 0.7.0 下线，
          按 avatar-studio 的自带做法把同一份 Kit 内联到本插件 _assets 下。 -->
     <link rel="stylesheet" href="./_assets/ui-kit.css" />
@@ -52,7 +52,7 @@
       // The 4 Tauri commands registered in
       // `apps/setup-center/src-tauri/src/finance.rs` cannot be invoked
       // directly from this iframe because Tauri's `__TAURI_INTERNALS__`
-      // is per-webview. Instead the OpenAkita PluginAppHost advertises
+      // is per-webview. Instead the Mclaw PluginAppHost advertises
       // a "finance-native" capability during handshake; when present
       // we round-trip a `bridge:finance-native-invoke` request and
       // resolve on `bridge:finance-native-ack`. Capability absence
@@ -62,14 +62,14 @@
       let _tauriProbeDone = false;
       const _pendingNativeReqs = new Map();
 
-      // ----- 与主程通信桥（OpenAkita PluginAppHost 协议） -----
+      // ----- 与主程通信桥（Mclaw PluginAppHost 协议） -----
       // bridge:handshake / bridge:ready 用于声明 SPA 已挂好；bridge:render-ready
       // 在 React 首帧渲染后发，让主程立即收起 loading 罩。
       function postBridge(message) {
         if (_inIframe) window.parent.postMessage({ __akita_bridge: true, ...message }, "*");
       }
 
-      // ----- 主题同步（跟随 OpenAkita 宿主 / 系统偏好，与共享 UI Kit 一致） -----
+      // ----- 主题同步（跟随 Mclaw 宿主 / 系统偏好，与共享 UI Kit 一致） -----
       // 共享 Kit 的 oa-* 暗色规则挂在 [data-theme="dark"] 上；本插件令牌同理。
       // 宿主在 bridge:init / bridge:theme 里下发当前主题；脱离宿主独立预览时
       // 回退到系统 prefers-color-scheme。query string ?theme=dark|light 可强制。
@@ -189,7 +189,7 @@
         // 优先用宿主 bootstrap 注入的 apiBase（若存在）；finance 目前未加载
         // 宿主 bootstrap.js，这一步通常为 no-op，仅作前向兼容。
         try {
-          const injected = window.OpenAkita && window.OpenAkita.meta && window.OpenAkita.meta.apiBase;
+          const injected = window.Mclaw && window.Mclaw.meta && window.Mclaw.meta.apiBase;
           if (injected) return String(injected).replace(/\/$/, "");
         } catch (_) { /* 无宿主注入时回退到 origin 探测 */ }
         // 在 iframe 内部时 location.origin 已经是主程的 origin（同源静态挂载）。
@@ -219,7 +219,7 @@
         const headers = {};
         try {
           const uid = localStorage.getItem("finance.user.id");
-          if (uid) headers["X-OpenAkita-User-Id"] = uid;
+          if (uid) headers["X-Mclaw-User-Id"] = uid;
         } catch { /* localStorage 不可用时不带身份 header */ }
         if (!isForm && body != null) headers["Content-Type"] = "application/json";
         try {
@@ -3847,7 +3847,7 @@
       // 不可切换——既符合「独立单机使用」的产品定位，也避免误导用户以为
       // 切换 demo 角色会真正改变权限。
       // 仅当后端返回真实多用户（hasRealUsers）或处于演示模式（?ai_mock=1）
-      // 时，才渲染可切换的下拉列表；此时 api() 会带上 X-OpenAkita-User-Id，
+      // 时，才渲染可切换的下拉列表；此时 api() 会带上 X-Mclaw-User-Id，
       // 切换才真正对后端 RBAC 生效。
       function UserSwitcher({ toast }) {
         const user = useUser();
@@ -5904,7 +5904,7 @@
           system_info: {
             tauri_version: "2.0.0",
             os: "Windows 10",
-            openakita_version: "0.3.0-dev",
+            mclaw_version: "0.3.0-dev",
             key_store_backend: "OS keychain (mock)",
           },
         };
@@ -5975,7 +5975,7 @@
           try {
             await api("POST", "/admin/key-rotate", { org_id: confirmRotate.org_id });
             toast(`已轮换 ${confirmRotate.org_id} 的密钥`);
-            _notifyNative("OpenAkita · 密钥已轮换", `账套 ${confirmRotate.org_id} 的 KDF 已升级到下一版`);
+            _notifyNative("Mclaw · 密钥已轮换", `账套 ${confirmRotate.org_id} 的 KDF 已升级到下一版`);
           } catch (e) {
             if (e.status === 404 && DEMO_MOCK) {
               const s = _loadKmMock();
@@ -5996,7 +5996,7 @@
           try {
             await api("POST", `/admin/backups/${confirmRestore.id}/restore`, { passphrase: restorePass });
             toast("已恢复");
-            _notifyNative("OpenAkita · 备份已恢复", `备份 ${confirmRestore.id} 已应用到当前账套`);
+            _notifyNative("Mclaw · 备份已恢复", `备份 ${confirmRestore.id} 已应用到当前账套`);
           } catch (e) {
             if (e.status === 404) { toast("后端不可用，恢复操作未生效", "err"); setBusy(false); return; }
             else { toast(`恢复失败：${e.message}`, "err"); setBusy(false); return; }
@@ -6010,7 +6010,7 @@
           try {
             await api("POST", "/admin/backups", { org_id: createOrgId.trim(), passphrase: createPass });
             toast("备份已创建");
-            _notifyNative("OpenAkita · 备份已创建", `账套 ${createOrgId.trim()} 的加密备份已落地`);
+            _notifyNative("Mclaw · 备份已创建", `账套 ${createOrgId.trim()} 的加密备份已落地`);
             setCreateOrgId(""); setCreatePass("");
           } catch (e) {
             if (e.status === 404 && DEMO_MOCK) {
@@ -6046,7 +6046,7 @@
             const blob = await resp.blob();
             _triggerDownload(blob, `${b.id}.bak`);
             toast(`已导出到 ${picked.value}`);
-            _notifyNative("OpenAkita · 备份导出完成", picked.value);
+            _notifyNative("Mclaw · 备份导出完成", picked.value);
           } catch (e) {
             toast(`导出失败：${e.message}`, "err");
           }
@@ -6161,7 +6161,7 @@
                 <div className="row cols-2" style={{ gap: 10 }}>
                   <div><label className="oa-label">Tauri 版本</label><div className="mono text-xs" data-testid="km-sysinfo-tauri-version">{sysInfo.tauri_version || "—"}</div></div>
                   <div><label className="oa-label">操作系统</label><div className="mono text-xs">{sysInfo.os || (sysInfo.arch ? `${sysInfo.os || ""} ${sysInfo.arch}` : "—")}</div></div>
-                  <div><label className="oa-label">OpenAkita 版本</label><div className="mono text-xs">{sysInfo.openakita_version || "—"}</div></div>
+                  <div><label className="oa-label">Mclaw 版本</label><div className="mono text-xs">{sysInfo.mclaw_version || "—"}</div></div>
                   <div><label className="oa-label">密钥存储后端</label><div className="mono text-xs">{sysInfo.key_store_backend || "—"}</div></div>
                 </div>
               </div>
@@ -6891,6 +6891,6 @@
       const root = ReactDOM.createRoot(document.getElementById("root"));
       root.render(<App />);
     </script>
-  <script src="./_assets/openakita-llm-selector.js" data-plugin-id="finance-auto"></script>
+  <script src="./_assets/mclaw-llm-selector.js" data-plugin-id="finance-auto"></script>
 </body>
 </html>

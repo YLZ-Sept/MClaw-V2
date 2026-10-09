@@ -88,7 +88,7 @@ def wired_app(
     app = create_app()
     # Satisfy the setup gate: provision a web password on the same config
     # instance the gate middleware closed over (``app.state.web_access_config``).
-    app.state.web_access_config.change_password("contract-test-setup-pass")
+    app.state.web_access_config.add_user("admin", "contract-test-setup-pass", role="admin")
     token = app.state.web_access_config.create_access_token()
     client = TestClient(app, raise_server_exceptions=True)
     client.headers.update({"Authorization": f"Bearer {token}"})

@@ -472,7 +472,7 @@
                 <p className="card-desc">登记已有 `.xlsx` 模板，后端会诊断 Sheet、冻结窗格、公式、合并区域和命名区域。</p>
                 <div className="field">
                   <label>服务端模板路径</label>
-                  <input placeholder="D:\OpenAkita\test-materials\excel-maker\report_template.xlsx" value={path} onChange={(e) => setPath(e.target.value)} />
+                  <input placeholder="D:\Mclaw\test-materials\excel-maker\report_template.xlsx" value={path} onChange={(e) => setPath(e.target.value)} />
                 </div>
                 <button className="btn primary" onClick={() => pluginFetch("/templates", { method: "POST", body: JSON.stringify({ path }) }).then(load).catch((e) => setError(e.message))}>登记模板</button>
               </div>
@@ -681,7 +681,7 @@
                 <div className="card-title"><Ico>⌁</Ico> 系统组件与依赖下载</div>
                 <div className="deps-help">
                   <strong>可选依赖只服务于对应能力，不会影响基础报表生成。</strong>
-                  <div>Excel 表格读取、旧格式支持、图表渲染和模板增强按需安装。这里使用白名单依赖组，禁止输入任意 pip 包名；安装会调用当前 OpenAkita 使用的 Python 环境执行 pip。</div>
+                  <div>Excel 表格读取、旧格式支持、图表渲染和模板增强按需安装。这里使用白名单依赖组，禁止输入任意 pip 包名；安装会调用当前 Mclaw 使用的 Python 环境执行 pip。</div>
                 </div>
                 <div className="settings-actions">
                   <button className="btn primary" onClick={() => checkHealth().catch((e) => setError(e.message))} disabled={checking}>{checking ? "检查中..." : "健康检查"}</button>
@@ -723,7 +723,7 @@
                     </div>
                     {directoryPicker?.key === "data_dir" && (
                       <div className="directory-picker">
-                        <input value={directoryPicker.value} onChange={(e) => setDirectoryPicker({ ...directoryPicker, value: e.target.value })} placeholder="输入本机文件夹路径，例如 D:\OpenAkita\data\excel-maker" />
+                        <input value={directoryPicker.value} onChange={(e) => setDirectoryPicker({ ...directoryPicker, value: e.target.value })} placeholder="输入本机文件夹路径，例如 D:\Mclaw\data\excel-maker" />
                         <button className="btn primary" onClick={() => applyDirectoryPicker().catch((e) => setError(e.message))}>应用目录</button>
                         <button className="btn" onClick={() => setDirectoryPicker(null)}>取消</button>
                       </div>
@@ -879,6 +879,6 @@
 
       ReactDOM.createRoot(document.getElementById("root")).render(<App />);
     </script>
-  <script src="./_assets/openakita-llm-selector.js" data-plugin-id="excel-maker"></script>
+  <script src="./_assets/mclaw-llm-selector.js" data-plugin-id="excel-maker"></script>
 </body>
 </html>

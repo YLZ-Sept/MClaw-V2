@@ -359,7 +359,7 @@ def build_supervisor_for_command(
     max_stalls: int = 3,
     max_turns: int = 30,
     max_replans: int = 5,
-    progress_ledger_max_retries: int = 10,
+    progress_ledger_max_retries: int = 2,
     progress_ledger_timeout_s: float = 60.0,
     wall_clock_soft_budget_s: float = 0.0,
     force_root_finalization: bool = False,

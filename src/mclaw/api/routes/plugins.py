@@ -497,8 +497,10 @@ def _install_plugin_source(
         return installer.install_from_url(src, plugins_dir, progress=progress)
     local = Path(src)
     if (local / "plugin.json").is_file():
-        return installer.install_from_path(local, plugins_dir, dev_mode=dev_mode)
-    return installer.install_bundle(local, plugins_dir)
+        return installer.install_from_path(
+            local, plugins_dir, dev_mode=dev_mode, progress=progress
+        )
+    return installer.install_bundle(local, plugins_dir, progress=progress)
 
 
 async def _stage_plugin_update(

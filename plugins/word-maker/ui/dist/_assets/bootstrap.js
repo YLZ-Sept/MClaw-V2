@@ -1,10 +1,10 @@
 /**
- * OpenAkita Plugin UI Bootstrap (self-contained copy for word-maker).
+ * Mclaw Plugin UI Bootstrap (self-contained copy for word-maker).
  */
 (function () {
   if (typeof window === "undefined") return;
   if (window.parent === window) return;
-  if (window.OpenAkita && window.OpenAkita.__bootstrapped) return;
+  if (window.Mclaw && window.Mclaw.__bootstrapped) return;
 
   var BRIDGE_VERSION = 1;
   var meta = { theme: "light", locale: "zh-CN", apiBase: "", pluginId: "word-maker" };
@@ -64,7 +64,7 @@
     });
   }
 
-  window.OpenAkita = {
+  window.Mclaw = {
     __bootstrapped: true,
     __ready: false,
     meta: meta,
@@ -85,21 +85,21 @@
     if (message.type === "bridge:init") {
       Object.assign(meta, message.payload || {});
       applyTheme(meta.theme);
-      if (!window.OpenAkita.__ready) {
-        window.OpenAkita.__ready = true;
-        dispatch("openakita:ready", Object.assign({}, meta));
+      if (!window.Mclaw.__ready) {
+        window.Mclaw.__ready = true;
+        dispatch("mclaw:ready", Object.assign({}, meta));
       }
       return;
     }
     if (message.type === "bridge:theme-change") {
       meta.theme = message.payload && message.payload.theme || "light";
       applyTheme(meta.theme);
-      dispatch("openakita:theme-change", { theme: meta.theme });
+      dispatch("mclaw:theme-change", { theme: meta.theme });
       return;
     }
     if (message.type === "bridge:locale-change") {
       meta.locale = message.payload && message.payload.locale || "zh-CN";
-      dispatch("openakita:locale-change", { locale: meta.locale });
+      dispatch("mclaw:locale-change", { locale: meta.locale });
       return;
     }
     if (message.type === "bridge:api-response" && message.requestId && pending[message.requestId]) {

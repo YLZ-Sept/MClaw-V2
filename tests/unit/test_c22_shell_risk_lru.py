@@ -263,18 +263,18 @@ def test_env_override_for_lru_size_documented() -> None:
     from mclaw.core.policy_v2.shell_risk import _shell_lru_size
 
     # Unset → fallback default
-    os.environ.pop("MCLAW_SHELL_LRU_SIZE", None)
+    os.environ.pop("OPENAKITA_SHELL_LRU_SIZE", None)
     assert _shell_lru_size() == 512
 
-    os.environ["MCLAW_SHELL_LRU_SIZE"] = "256"
+    os.environ["OPENAKITA_SHELL_LRU_SIZE"] = "256"
     try:
         assert _shell_lru_size() == 256
     finally:
-        os.environ.pop("MCLAW_SHELL_LRU_SIZE", None)
+        os.environ.pop("OPENAKITA_SHELL_LRU_SIZE", None)
 
     # Bad values → fallback default (defensive)
-    os.environ["MCLAW_SHELL_LRU_SIZE"] = "abc"
+    os.environ["OPENAKITA_SHELL_LRU_SIZE"] = "abc"
     try:
         assert _shell_lru_size() == 512
     finally:
-        os.environ.pop("MCLAW_SHELL_LRU_SIZE", None)
+        os.environ.pop("OPENAKITA_SHELL_LRU_SIZE", None)

@@ -152,7 +152,7 @@ def test_task_delivered_message_skips_risk_gate():
         "[收到任务交付] 来自 seo-opt [任务链: 2026-04-28T0]:\n"
         "任务交付: # Mclaw SEO 优化建议交付物\n"
         "## 交付文件\n"
-        "- .mclaw-seo-plan.md` - 完整 SEO 优化建议文档（含执行时间线和关键指标监控）\n"
+        "- `mclaw-seo-plan.md` - 完整 SEO 优化建议文档（含执行时间线和关键指标监控）\n"
         "## 建议后续行动\n"
         "1. 优先执行 Phase 1（官网和 GitHub 基础优化）\n"
     )

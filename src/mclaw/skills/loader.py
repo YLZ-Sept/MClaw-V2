@@ -102,6 +102,9 @@ SYSTEM_SKILL_DIRECTORIES = [
 # 用户通过前端面板手动勾选后会创建 skills.json，之后以用户选择为准。
 DEFAULT_DISABLED_SKILLS: frozenset[str] = frozenset(
     {
+        # 随包发布的外部技能默认关闭，由用户按需开启（agent-browser 此前漏登记，
+        # 是打包清单里唯一没进本名单的 external 技能）。
+        "agent-browser",
         "algorithmic-art",
         "apify-scraper",
         "bilibili-watcher",

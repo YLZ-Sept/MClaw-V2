@@ -34,7 +34,7 @@ def app(monkeypatch, tmp_path):
     from mclaw.config import settings
 
     monkeypatch.setattr(settings, "project_root", tmp_path)
-    monkeypatch.delenv("MCLAW_WEB_PASSWORD", raising=False)
+    monkeypatch.delenv("OPENAKITA_WEB_PASSWORD", raising=False)
     monkeypatch.delenv("TRUST_PROXY", raising=False)
     return create_app()
 
@@ -54,13 +54,15 @@ async def client(app) -> AsyncIterator[httpx.AsyncClient]:
 
 
 class TestSetupStatus:
-    async def test_fresh_install_loopback_reports_not_required(self, client):
-        # Trusted local: bypass even though no password is set.
+    async def test_fresh_install_loopback_reports_required(self, client):
+        # 本机不再豁免：未设密码时即便来自 127.0.0.1 也要求先完成 setup。
+        # （routes/auth.py 里那个 reason="loopback_trusted" 分支已不可达——
+        #   should_require_setup 未完成时恒为 True。）
         resp = await client.get("/api/auth/setup-status")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["setup_required"] is False
-        assert body["reason"] == "loopback_trusted"
+        assert body["setup_required"] is True
+        assert body["reason"] == "password_not_set"
 
     async def test_fresh_install_lan_caller_reports_required(self, client, monkeypatch):
         monkeypatch.setenv("TRUST_PROXY", "true")
@@ -75,7 +77,7 @@ class TestSetupStatus:
 
     async def test_after_setup_reports_not_required(self, client, app, monkeypatch):
         cfg = app.state.web_access_config
-        cfg.change_password("hunter22!")
+        cfg.add_user("admin", "hunter22!", role="admin")
         monkeypatch.setenv("TRUST_PROXY", "true")
         resp = await client.get(
             "/api/auth/setup-status",
@@ -104,7 +106,7 @@ class TestSetupEndpoint:
         assert body["access_token"]
         assert body["token_type"] == "bearer"
         assert app.state.web_access_config.has_password_set
-        assert app.state.web_access_config.verify_password("hunter22!")
+        assert app.state.web_access_config.verify_password("admin", "hunter22!")
 
     async def test_setup_sets_httponly_refresh_cookie(self, client):
         resp = await client.post("/api/auth/setup", json={"new_password": "hunter22!"})
@@ -147,8 +149,8 @@ class TestSetupEndpoint:
         assert second.status_code == 409
         assert second.json()["detail"] == "already_set"
         # And the original password still wins.
-        assert app.state.web_access_config.verify_password("hunter22!")
-        assert not app.state.web_access_config.verify_password("someoneElseTried99!")
+        assert app.state.web_access_config.verify_password("admin", "hunter22!")
+        assert not app.state.web_access_config.verify_password("admin", "someoneElseTried99!")
 
 
 # ---------------------------------------------------------------------------
@@ -198,12 +200,21 @@ class TestSetupGate428:
 
 
 class TestChangePasswordFirstRun:
-    async def test_loopback_can_set_initial_password_via_change_password(self, client, app):
-        """Local-loopback users can call change-password without current_password
-        even on a fresh install."""
+    async def test_first_run_password_must_go_through_setup(self, client, app):
+        """首启设密码只能走 ``POST /api/auth/setup``。
+
+        ``/api/auth/change-password`` 不在 ``AUTH_EXEMPT_PATHS`` 里，认证中间件会
+        先对无 token 的请求返回 401，因此路由里那段
+        「未设密码 + 本机 → 允许」（routes/auth.py:362）实际不可达；
+        同理 ``SETUP_GATE_ALLOW_PATHS`` 中的 change-password 条目也是改名/加固后的残留。
+        """
         resp = await client.post("/api/auth/change-password", json={"new_password": "hunter22!"})
-        assert resp.status_code == 200, resp.text
-        assert app.state.web_access_config.verify_password("hunter22!")
+        assert resp.status_code == 401
+        assert not app.state.web_access_config.has_password_set
+
+        ok = await client.post("/api/auth/setup", json={"new_password": "hunter22!"})
+        assert ok.status_code == 200, ok.text
+        assert app.state.web_access_config.verify_password("admin", "hunter22!")
 
     async def test_remote_cannot_set_initial_password_via_change_password(
         self, client, monkeypatch
@@ -240,7 +251,7 @@ class TestClearPassword:
         from mclaw.api.auth import WebAccessConfig
 
         cfg = WebAccessConfig(tmp_path)
-        cfg.change_password("hunter22!")
+        cfg.add_user("admin", "hunter22!", role="admin")
         assert cfg.has_password_set
         old_version = cfg.token_version
 
@@ -256,8 +267,8 @@ class TestClearPassword:
         from mclaw.api.auth import WebAccessConfig
 
         cfg = WebAccessConfig(tmp_path)
-        cfg.change_password("hunter22!")
-        token = cfg.create_access_token()
+        cfg.add_user("admin", "hunter22!", role="admin")
+        token = cfg.create_access_token("admin")
         assert cfg.validate_access_token(token)
 
         cfg.clear_password()

@@ -1,5 +1,5 @@
-/* OpenAkita Plugin UI Kit — shared styles
- * Minimal, theme-aware (uses OpenAkita CSS variables when present).
+/* Mclaw Plugin UI Kit — shared styles
+ * Minimal, theme-aware (uses Mclaw CSS variables when present).
  * Plugins include this with:
  *   <link rel="stylesheet" href="/api/plugins/_sdk/ui-kit/styles.css">
  */
@@ -7,7 +7,7 @@
 /*
  * Variable fallback chain notes:
  *   --oa-surface intentionally falls back to --bg-card before the literal,
- *   so plugins that follow the OpenAkita color system (--bg page color,
+ *   so plugins that follow the Mclaw color system (--bg page color,
  *   --bg-card raised card color) automatically get a contrasting surface
  *   for oa-preview-area / oa-settings-section / oa-collapse without having
  *   to declare --surface themselves.

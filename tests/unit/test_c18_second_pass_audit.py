@@ -235,7 +235,7 @@ class TestBugC1AuditLoggerSingletonRefresh:
 
         # Now flip via ENV and rebuild.
         second_log = tmp_path / "second.jsonl"
-        monkeypatch.setenv("MCLAW_AUDIT_LOG_PATH", str(second_log))
+        monkeypatch.setenv("OPENAKITA_AUDIT_LOG_PATH", str(second_log))
         global_engine.rebuild_engine_v2(yaml_path=policies)
         al.get_audit_logger().log(tool_name="probe2", decision="allow", reason="after env")
 
@@ -282,7 +282,7 @@ class TestBugC2NoDeadlockOnEnvOverrideUnderLock:
 
         # Trigger Phase C ENV path: any of the 4 registered overrides
         # works; pick AUTO_CONFIRM since it touches the lightest field.
-        monkeypatch.setenv("MCLAW_AUTO_CONFIRM", "1")
+        monkeypatch.setenv("OPENAKITA_AUTO_CONFIRM", "1")
 
         # Wipe singleton so _audit_env_overrides would otherwise be
         # forced to re-init via get_config_v2() under the lock.
@@ -319,7 +319,7 @@ class TestBugC2NoDeadlockOnEnvOverrideUnderLock:
         between each. Any per-call lock leak would compound here."""
         import threading
 
-        monkeypatch.setenv("MCLAW_AUTO_CONFIRM", "1")
+        monkeypatch.setenv("OPENAKITA_AUTO_CONFIRM", "1")
         policies = tmp_path / "POLICIES.yaml"
         policies.write_text(_VALID_YAML, encoding="utf-8")
 

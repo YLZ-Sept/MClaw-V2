@@ -54,6 +54,9 @@ Pillow>=10.0.0             # Image format conversion/processing
 
 # === Document Processing ===
 pdfplumber>=0.10.0         # PDF parsing for knowledge base ingestion
+# 中文分词：知识库 FTS 检索依赖它。缺失会导致索引/查询分词口径不一致，
+# 中文召回静默失效（2026-08 与 2026-10 各踩过一次）。
+jieba>=0.42.1              # Chinese word segmentation for KB FTS
 
 # === Offline License ===
 # Ed25519 signature verification. Core dependency — license checks run on

@@ -143,6 +143,6 @@ def test_supports_model_mirrors_endpoint_config(workspace_with_relays):
 def test_workspace_resolution_falls_back_to_env(workspace_with_relays, monkeypatch):
     """MCLAW_WORKSPACE is set by mclaw serve; honour it when
     the caller doesn't pass an explicit workspace_dir."""
-    monkeypatch.setenv("MCLAW_WORKSPACE", str(workspace_with_relays))
+    monkeypatch.setenv("OPENAKITA_WORKSPACE", str(workspace_with_relays))
     names = [r.name for r in list_relay_endpoints()]
     assert "yunwu-image" in names

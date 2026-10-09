@@ -69,7 +69,7 @@ def shutdown_app(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> TestClient:
     monkeypatch.setattr("mclaw.config.settings.project_root", tmp_path)
     shutdown_event = asyncio.Event()
     app = create_app(shutdown_event=shutdown_event)
-    app.state.web_access_config.change_password("shutdown-test-password")
+    app.state.web_access_config.add_user("admin", "shutdown-test-password", role="admin")
     token = app.state.web_access_config.create_access_token()
     client = TestClient(app)
     client.headers.update(

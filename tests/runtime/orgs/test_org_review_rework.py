@@ -210,8 +210,8 @@ def test_parse_review_verdict(text: str, expect_ok: bool) -> None:
 
 
 def test_parent_review_accepts_first_pass(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MCLAW_ORG_REVIEW_ENABLED", "1")
-    monkeypatch.setenv("MCLAW_ORG_NODE_TIMEOUT_S", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_REVIEW_ENABLED", "1")
+    monkeypatch.setenv("OPENAKITA_ORG_NODE_TIMEOUT_S", "0")
     bus = _RecordingBus()
     lookup = _Lookup(["n0", "n1"])
 
@@ -251,9 +251,9 @@ def test_structured_review_is_not_overridden_by_prose_tokens(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Only the JSON decision controls review; child prose is not classified."""
-    monkeypatch.setenv("MCLAW_ORG_REVIEW_ENABLED", "1")
-    monkeypatch.setenv("MCLAW_ORG_REWORK_MAX", "1")
-    monkeypatch.setenv("MCLAW_ORG_NODE_TIMEOUT_S", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_REVIEW_ENABLED", "1")
+    monkeypatch.setenv("OPENAKITA_ORG_REWORK_MAX", "1")
+    monkeypatch.setenv("OPENAKITA_ORG_NODE_TIMEOUT_S", "0")
     bus = _RecordingBus()
     lookup = _Lookup(["n0", "n1"])
 
@@ -292,9 +292,9 @@ def test_structured_review_is_not_overridden_by_prose_tokens(
 def test_hard_gate_can_be_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     """With the hard gate OFF, a lenient model verdict is honoured (no rework)
     — proves the override is gated by MCLAW_ORG_REVIEW_HARD_GATE."""
-    monkeypatch.setenv("MCLAW_ORG_REVIEW_ENABLED", "1")
-    monkeypatch.setenv("MCLAW_ORG_REWORK_MAX", "1")
-    monkeypatch.setenv("MCLAW_ORG_NODE_TIMEOUT_S", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_REVIEW_ENABLED", "1")
+    monkeypatch.setenv("OPENAKITA_ORG_REWORK_MAX", "1")
+    monkeypatch.setenv("OPENAKITA_ORG_NODE_TIMEOUT_S", "0")
     monkeypatch.setenv("MCLAW_ORG_REVIEW_HARD_GATE", "0")
     bus = _RecordingBus()
     lookup = _Lookup(["n0", "n1"])
@@ -329,9 +329,9 @@ def test_hard_gate_can_be_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_reject_triggers_rework_then_accept(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MCLAW_ORG_REVIEW_ENABLED", "1")
-    monkeypatch.setenv("MCLAW_ORG_REWORK_MAX", "2")
-    monkeypatch.setenv("MCLAW_ORG_NODE_TIMEOUT_S", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_REVIEW_ENABLED", "1")
+    monkeypatch.setenv("OPENAKITA_ORG_REWORK_MAX", "2")
+    monkeypatch.setenv("OPENAKITA_ORG_NODE_TIMEOUT_S", "0")
     bus = _RecordingBus()
     lookup = _Lookup(["n0", "n1"])
 
@@ -381,8 +381,8 @@ def test_reject_triggers_rework_then_accept(monkeypatch: pytest.MonkeyPatch) -> 
 def test_deterministic_media_failure_reworks_even_when_llm_review_is_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("MCLAW_ORG_REVIEW_ENABLED", "0")
-    monkeypatch.setenv("MCLAW_ORG_REWORK_MAX", "1")
+    monkeypatch.setenv("OPENAKITA_ORG_REVIEW_ENABLED", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_REWORK_MAX", "1")
     bus = _RecordingBus()
     executor = _make_executor(
         bus=bus,
@@ -438,8 +438,8 @@ def test_deterministic_media_failure_reworks_even_when_llm_review_is_disabled(
 def test_exhausted_media_failure_propagates_to_parent_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("MCLAW_ORG_REVIEW_ENABLED", "0")
-    monkeypatch.setenv("MCLAW_ORG_REWORK_MAX", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_REVIEW_ENABLED", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_REWORK_MAX", "0")
     bus = _RecordingBus()
     executor = _make_executor(
         bus=bus,
@@ -484,7 +484,7 @@ def test_root_run_with_media_failure_is_not_marked_passed_or_persisted(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("MCLAW_ORG_NODE_TIMEOUT_S", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_NODE_TIMEOUT_S", "0")
     bus = _RecordingBus()
     executor = _make_executor(
         bus=bus,
@@ -525,7 +525,7 @@ def test_root_video_claim_without_registered_asset_is_rejected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("MCLAW_ORG_NODE_TIMEOUT_S", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_NODE_TIMEOUT_S", "0")
     artifact_ledger.clear()
     bus = _RecordingBus()
     executor = _make_executor(
@@ -590,7 +590,7 @@ def test_coordinator_preserves_child_output_and_exposes_child_manifest(
 ) -> None:
     from mclaw.orgs._runtime_node_tools import record_node_file_output
 
-    monkeypatch.setenv("MCLAW_ORG_NODE_TIMEOUT_S", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_NODE_TIMEOUT_S", "0")
     delivery_manifest_ledger.clear()
     bus = _RecordingBus()
     executor = _make_executor(
@@ -664,9 +664,9 @@ def test_coordinator_preserves_child_output_and_exposes_child_manifest(
 
 
 def test_rework_exhaustion_escalates(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MCLAW_ORG_REVIEW_ENABLED", "1")
-    monkeypatch.setenv("MCLAW_ORG_REWORK_MAX", "1")
-    monkeypatch.setenv("MCLAW_ORG_NODE_TIMEOUT_S", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_REVIEW_ENABLED", "1")
+    monkeypatch.setenv("OPENAKITA_ORG_REWORK_MAX", "1")
+    monkeypatch.setenv("OPENAKITA_ORG_NODE_TIMEOUT_S", "0")
     bus = _RecordingBus()
     lookup = _Lookup(["n0", "n1"])
 
@@ -848,8 +848,8 @@ def test_direct_retry_restores_child_topology_assignment_and_declarative_context
 
 
 def test_node_timeout_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MCLAW_ORG_REVIEW_ENABLED", "0")
-    monkeypatch.setenv("MCLAW_ORG_NODE_TIMEOUT_S", "1")
+    monkeypatch.setenv("OPENAKITA_ORG_REVIEW_ENABLED", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_NODE_TIMEOUT_S", "1")
     bus = _RecordingBus()
     lookup = _Lookup(["n0"])
 
@@ -894,8 +894,8 @@ def test_topology_guard_blocks_skip_level_dispatch(monkeypatch: pytest.MonkeyPat
     this guarantees adjacency structurally regardless of what the LLM emits.
     A valid dispatch to a real direct child still runs.
     """
-    monkeypatch.setenv("MCLAW_ORG_REVIEW_ENABLED", "0")
-    monkeypatch.setenv("MCLAW_ORG_NODE_TIMEOUT_S", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_REVIEW_ENABLED", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_NODE_TIMEOUT_S", "0")
     bus = _RecordingBus()
     # n0 -> n1 -> n2 chain. n0's ONLY direct report is n1; n2 is a grandchild.
     edges = [_Edge("n0", "n1"), _Edge("n1", "n2")]
@@ -946,8 +946,8 @@ def test_topology_guard_fails_open_without_edges(monkeypatch: pytest.MonkeyPatch
     legacy existence-only check, so the guard never breaks a topology it
     cannot read.
     """
-    monkeypatch.setenv("MCLAW_ORG_REVIEW_ENABLED", "0")
-    monkeypatch.setenv("MCLAW_ORG_NODE_TIMEOUT_S", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_REVIEW_ENABLED", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_NODE_TIMEOUT_S", "0")
     bus = _RecordingBus()
     lookup = _Lookup(["n0", "n1"])  # no edges -> fail-open
 

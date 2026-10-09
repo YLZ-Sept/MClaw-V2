@@ -159,7 +159,7 @@ def test_release_contract_can_scope_collision_check_to_mobile_assets() -> None:
                 "object": {"type": "commit", "sha": commit}
             },
             "repos/mclaw/mclaw/releases/tags/v1.2.3": {
-                "assets": [{"name": .mclaw-1.2.3-py3-none-any.whl"}]
+                "assets": [{"name": "mclaw-1.2.3-py3-none-any.whl"}]
             },
         }
     )

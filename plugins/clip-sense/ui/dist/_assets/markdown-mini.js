@@ -1,5 +1,5 @@
 /**
- * OpenAkita Plugin UI Kit — markdown-mini.js
+ * Mclaw Plugin UI Kit — markdown-mini.js
  *
  * Minimal Markdown -> safe HTML renderer (zero dependency, ~80 lines).
  *
@@ -25,7 +25,7 @@
  */
 (function () {
   if (typeof window === "undefined") return;
-  if (window.OpenAkitaMD) return;
+  if (window.MclawMD) return;
 
   function escapeHtml(s) {
     return String(s == null ? "" : s)
@@ -148,5 +148,5 @@
     return out.join("\n");
   }
 
-  window.OpenAkitaMD = { render: render, escapeHtml: escapeHtml };
+  window.MclawMD = { render: render, escapeHtml: escapeHtml };
 })();

@@ -82,9 +82,9 @@ def test_apply_execution_environment_prefers_managed_python(monkeypatch, tmp_pat
 
     env = apply_execution_environment({"PATH": "base"}, spec)
 
-    assert env["MCLAW_EXECUTION_ENV_SCOPE"] == "agent"
-    assert env["MCLAW_AGENT_PYTHON"] == str(spec.python_path)
-    assert env["MCLAW_EXECUTION_DEPS_HASH"] == spec.deps_hash
+    assert env["OPENAKITA_EXECUTION_ENV_SCOPE"] == "agent"
+    assert env["OPENAKITA_AGENT_PYTHON"] == str(spec.python_path)
+    assert env["OPENAKITA_EXECUTION_DEPS_HASH"] == spec.deps_hash
     assert env["PATH"].startswith(str(spec.bin_path))
     assert env["PYTHONNOUSERSITE"] == "1"
 

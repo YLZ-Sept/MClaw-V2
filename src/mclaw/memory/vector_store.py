@@ -78,6 +78,29 @@ def _lazy_import():
     return True
 
 
+def needs_vector_rebuild(
+    metadata: dict | None, existing_count: int, model_name: str
+) -> bool:
+    """判断向量 collection 是否需要全量重建。
+
+    向量维度由 embedding 模型决定（text2vec-base-chinese=768 维 →
+    bge-small-zh-v1.5=512 维），指纹不一致的存量向量与新模型不兼容：查询
+    会因维度不符抛错，被调用方吞掉后静默退化成"搜不到"。这类向量已经不可用，
+    重建是唯一出路。
+
+    三种重建情形：
+      1. 指纹存在且与当前模型不同 —— 明确的模型切换
+      2. 指纹缺失但集合非空 —— 旧版本（引入指纹之前）建的存量向量，模型未知
+      3. reindex_pending —— 上次重建中途退出（进程被杀/重启），回来接着做
+    指纹缺失且集合为空时无数据可重建，调用方补记指纹即可。
+    """
+    meta = metadata or {}
+    existing_model = meta.get("embedding_model", "")
+    switched_model = bool(existing_model) and existing_model != model_name
+    legacy_vectors = bool(existing_count) and not existing_model
+    return switched_model or legacy_vectors or bool(meta.get("reindex_pending"))
+
+
 class VectorStore:
     """
     向量存储 - 基于 ChromaDB
@@ -91,8 +114,8 @@ class VectorStore:
     - 下载失败后有冷却重试机制
     """
 
-    # 默认使用中文优化的 embedding 模型
-    DEFAULT_MODEL = "shibing624/text2vec-base-chinese"
+    # 默认使用中文优化的 embedding 模型（BGE，C-MTEB 中文检索精度优于 text2vec）
+    DEFAULT_MODEL = "BAAI/bge-small-zh-v1.5"
 
     def __init__(
         self,
@@ -106,7 +129,7 @@ class VectorStore:
 
         Args:
             data_dir: 数据目录
-            model_name: embedding 模型名称 (默认 shibing624/text2vec-base-chinese)
+            model_name: embedding 模型名称 (默认 BAAI/bge-small-zh-v1.5)
             device: 设备 (cpu 或 cuda)
             download_source: 下载源 ("auto" | "huggingface" | "hf-mirror" | "modelscope")
         """
@@ -119,6 +142,12 @@ class VectorStore:
         self._client = None
         self._collection = None
         self._enabled = False
+
+        # embedding 模型切换（向量维度不兼容）后的重建状态
+        self._needs_rebuild = False
+        self._rebuild_started = False
+        # 由 MemoryManager 注入：返回全部记忆 [{"id","content","type",...}]
+        self._rebuild_provider = None
 
         # 初始化状态机
         self._init_state = "idle"  # idle → loading → ready / failed
@@ -211,11 +240,47 @@ class VectorStore:
                 settings=Settings(anonymized_telemetry=False),
             )
 
-            # 获取或创建 collection
+            # 获取或创建 collection（metadata 记录 embedding 模型指纹）
             collection = client.get_or_create_collection(
                 name="memories",
                 metadata={"hnsw:space": "cosine"},
             )
+
+            # ── embedding 模型指纹检测 ──
+            # 与 KnowledgeManager 同款问题：向量维度由模型决定
+            # （text2vec=768 维 → bge-small=512 维），旧向量与新模型不兼容，
+            # 混在一个 collection 里会让查询抛错并静默退化成"搜不到"。
+            metadata = collection.metadata or {}
+            existing_model = metadata.get("embedding_model", "")
+            existing_count = collection.count()
+            needs_rebuild = needs_vector_rebuild(metadata, existing_count, self.model_name)
+
+            if needs_rebuild:
+                logger.warning(
+                    f"[VectorStore] 重建记忆向量: "
+                    f"{existing_model or '(旧版无模型指纹)'} → {self.model_name}"
+                    f"（存量向量 {existing_count} 条，维度不兼容）"
+                )
+                try:
+                    client.delete_collection("memories")
+                except Exception:
+                    pass
+                collection = client.get_or_create_collection(
+                    name="memories",
+                    metadata={
+                        "hnsw:space": "cosine",
+                        "embedding_model": self.model_name,
+                        # 重建完成后清除；中途退出则下次启动重试
+                        "reindex_pending": True,
+                    },
+                )
+            elif not existing_model:
+                try:
+                    collection.modify(
+                        metadata={**metadata, "embedding_model": self.model_name}
+                    )
+                except Exception as e:
+                    logger.debug(f"[VectorStore] 写入 embedding 指纹失败: {e}")
 
             # 全部成功，原子性地设置状态
             with self._lock:
@@ -227,8 +292,12 @@ class VectorStore:
                 self._init_failed = False
                 self._import_missing = False
                 self._retry_count = 0
+                self._needs_rebuild = needs_rebuild
 
             logger.info(f"[VectorStore] ✓ 初始化完成，已加载 {collection.count()} 条记忆")
+
+            if needs_rebuild:
+                self._start_background_rebuild()
 
         except Exception as e:
             err_msg = str(e)
@@ -301,6 +370,92 @@ class VectorStore:
     def enabled(self) -> bool:
         """是否可用"""
         return self._ensure_initialized()
+
+    # ── embedding 模型切换后的重建 ────────────────────────────────────────────
+
+    @property
+    def needs_rebuild(self) -> bool:
+        """本次初始化是否因模型切换清空了向量库（等待重建）"""
+        with self._lock:
+            return self._needs_rebuild
+
+    def set_rebuild_provider(self, provider) -> None:
+        """注入"返回全部记忆"的取数回调，并在需要时启动重建。
+
+        VectorStore 自己不持有记忆正文（正文在 MemoryManager 的 SQLite 里），
+        所以重建只能由外部喂数据。init 在后台线程跑，provider 可能在 init
+        之前或之后才注入，两个入口都会尝试启动重建，由 _rebuild_started 去重。
+        """
+        self._rebuild_provider = provider
+        if self.needs_rebuild:
+            self._start_background_rebuild()
+
+    def _start_background_rebuild(self) -> None:
+        """后台线程把既有记忆重新灌入向量库（不阻塞检索）"""
+        if self._rebuild_provider is None:
+            # provider 还没注入：set_rebuild_provider 会接手
+            return
+        with self._lock:
+            if self._rebuild_started:
+                return
+            self._rebuild_started = True
+
+        t = threading.Thread(
+            target=self._run_rebuild,
+            name="VectorStore-rebuild",
+            daemon=True,
+        )
+        t.start()
+
+    def _run_rebuild(self) -> None:
+        try:
+            items = self._rebuild_provider() or []
+            logger.info(f"[VectorStore] 开始重建记忆向量: {len(items)} 条")
+            added = self.rebuild(items)
+            logger.info(f"[VectorStore] 记忆向量重建完成: {added}/{len(items)} 条")
+        except Exception as e:
+            logger.error(f"[VectorStore] 记忆向量重建失败: {e}", exc_info=True)
+        finally:
+            with self._lock:
+                self._rebuild_started = False
+
+    def rebuild(self, memories: list[dict]) -> int:
+        """按外部提供的记忆全量重嵌入；全部成功才清除 pending 标记"""
+        if not memories:
+            # 没有记忆可灌（全新库）：直接收尾，否则标志位会一直挂着 True
+            with self._lock:
+                self._needs_rebuild = False
+            self._clear_reindex_pending()
+            return 0
+
+        added = self.batch_add(memories)
+        if added == len(memories):
+            self._clear_reindex_pending()
+        else:
+            logger.warning(
+                f"[VectorStore] 记忆向量重建不完整 ({added}/{len(memories)})，"
+                f"保留 pending 标记，下次启动重试"
+            )
+        with self._lock:
+            self._needs_rebuild = added != len(memories)
+        return added
+
+    def _clear_reindex_pending(self) -> None:
+        """重建成功后清除 collection 上的 pending 标记"""
+        with self._lock:
+            coll = self._collection
+        if coll is None:
+            return
+        try:
+            coll.modify(
+                metadata={
+                    **(coll.metadata or {}),
+                    "embedding_model": self.model_name,
+                    "reindex_pending": False,
+                }
+            )
+        except Exception as e:
+            logger.debug(f"[VectorStore] 清除 reindex_pending 失败: {e}")
 
     def add_memory(
         self,

@@ -92,7 +92,7 @@ def test_threading_watchdog_registers_named_daemon_timer(
         _arm_force_exit_watchdog_sync(app)
         timer = app.state._force_exit_task  # type: ignore[attr-defined]
         assert isinstance(timer, threading.Timer)
-        assert timer.name == .mclaw-force-exit-watchdog"
+        assert timer.name == "mclaw-force-exit-watchdog"
         assert timer.daemon is True
         assert timer.is_alive(), "watchdog timer should be running"
 

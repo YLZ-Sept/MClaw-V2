@@ -791,12 +791,12 @@ function showToast(body, type) {
   console.log("[Toast]", type, body);
 }
 
-// Bridge-layer i18n shim: prefers OpenAkitaI18n (which has built-in bridge.*
+// Bridge-layer i18n shim: prefers MclawI18n (which has built-in bridge.*
 // defaults, see ui-kit/i18n.js), and falls back to the literal English text
 // when i18n.js is not yet loaded so we never show raw "bridge.x.y" keys.
 function _bt(key, vars, fallback) {
-  if (window.OpenAkitaI18n && typeof window.OpenAkitaI18n.t === "function") {
-    var v = window.OpenAkitaI18n.t(key, vars);
+  if (window.MclawI18n && typeof window.MclawI18n.t === "function") {
+    var v = window.MclawI18n.t(key, vars);
     if (v && v !== key) return v;
   }
   if (!fallback) return key;
@@ -1244,7 +1244,7 @@ const I18N_DICT = {
     "settings.system.intro.body": "文生视频 / 图生视频 / 任务列表 / 提示词指南等核心功能不依赖 FFmpeg。如果你不需要长视频拼接，可以暂时跳过安装。\n\nFFmpeg 是系统级组件（共享 PATH 安装），并非本插件私有——任何已经装好 ffmpeg 的机器都会自动检测到，无需重复安装；同样，安装/卸载也会影响其他用到 ffmpeg 的插件和程序。",
     "settings.system.platform.win": "Windows: 「一键安装」会调用 winget 自动安装 Gyan.FFmpeg，无需管理员权限。",
     "settings.system.platform.mac": "macOS: 「一键安装」会调用 Homebrew 自动安装 ffmpeg。",
-    "settings.system.platform.linux": "Linux: apt / dnf 需要 root 权限。如果 OpenAkita 以普通用户身份运行，请按提示在终端执行 sudo apt-get install ffmpeg。",
+    "settings.system.platform.linux": "Linux: apt / dnf 需要 root 权限。如果 Mclaw 以普通用户身份运行，请按提示在终端执行 sudo apt-get install ffmpeg。",
     "settings.system.detecting": "正在检测...",
     "settings.system.status.found": "已安装 v{ver}",
     "settings.system.status.foundNoVer": "已安装",
@@ -1267,7 +1267,7 @@ const I18N_DICT = {
     "settings.system.installFailed": "安装失败：{msg}",
     "settings.system.uninstalled": "FFmpeg 已卸载",
     "settings.system.uninstallFailed": "卸载失败：{msg}",
-    "settings.system.uninstallConfirm": "确定要卸载 FFmpeg 吗？\n\n注意：FFmpeg 是系统级组件（装在 Windows 用户 PATH / macOS Homebrew / Linux /usr/bin），不是 Seedance 插件私有的——卸载会影响 OpenAkita 上所有依赖 FFmpeg 的插件（如字幕生成、视频翻译、配音等），以及你系统上其他用到 ffmpeg 的程序。\n\n本插件中将不可用：分镜工作台长视频拼接、素材库视频缩略预览。",
+    "settings.system.uninstallConfirm": "确定要卸载 FFmpeg 吗？\n\n注意：FFmpeg 是系统级组件（装在 Windows 用户 PATH / macOS Homebrew / Linux /usr/bin），不是 Seedance 插件私有的——卸载会影响 Mclaw 上所有依赖 FFmpeg 的插件（如字幕生成、视频翻译、配音等），以及你系统上其他用到 ffmpeg 的程序。\n\n本插件中将不可用：分镜工作台长视频拼接、素材库视频缩略预览。",
     "settings.system.requiresSudo": "Linux 需要 root 权限。请在终端手动执行：",
     "settings.system.requiresSudoUninstall": "Linux 需要 root 权限。请在终端手动执行：",
     "settings.system.noMethod": "当前系统暂无自动安装方案，请前往官方文档手动下载。",
@@ -1336,7 +1336,7 @@ const I18N_DICT = {
     "settings.toast.keyError": "服务端回读的 API Key 与你填的不一致，可能未保存成功，请检查后端日志或重试",
     "settings.toast.saveFailed": "保存失败: {msg}",
     "settings.toast.saveFailedHttp": "保存失败 (HTTP {status})：{detail}",
-    "settings.toast.saveFailedNet": "无法连接后端：{detail} — 请确认 OpenAkita 服务是否运行",
+    "settings.toast.saveFailedNet": "无法连接后端：{detail} — 请确认 Mclaw 服务是否运行",
     "settings.toast.saveNoConfig": "服务端未返回配置，可能存储异常，请重试或查看后端日志",
     "settings.toast.keyEmpty": "API Key 不能为空白，请粘贴有效的密钥",
     "settings.toast.valueMismatch": "保存失败：{key} 服务端回读为 {actual}，与你设置的 {expected} 不一致 — 配置可能未真正落库，请检查后端日志",
@@ -1699,7 +1699,7 @@ const I18N_DICT = {
     "settings.system.intro.body": "Text-to-video, image-to-video, the task list and prompt guide do not depend on FFmpeg. If you do not need long-video stitching you may skip this install.\n\nFFmpeg is a system-wide component (shared PATH install), not private to this plugin — any machine that already has ffmpeg will auto-detect it without re-installing; conversely, installing/uninstalling will affect every other plugin and program that uses ffmpeg.",
     "settings.system.platform.win": "Windows: \"One-click install\" calls winget to install Gyan.FFmpeg without admin rights.",
     "settings.system.platform.mac": "macOS: \"One-click install\" uses Homebrew to install ffmpeg.",
-    "settings.system.platform.linux": "Linux: apt / dnf require root. If OpenAkita is running as a normal user, run sudo apt-get install ffmpeg in a terminal as your packaging policy permits.",
+    "settings.system.platform.linux": "Linux: apt / dnf require root. If Mclaw is running as a normal user, run sudo apt-get install ffmpeg in a terminal as your packaging policy permits.",
     "settings.system.detecting": "Detecting...",
     "settings.system.status.found": "Installed v{ver}",
     "settings.system.status.foundNoVer": "Installed",
@@ -1722,7 +1722,7 @@ const I18N_DICT = {
     "settings.system.installFailed": "Install failed: {msg}",
     "settings.system.uninstalled": "FFmpeg uninstalled",
     "settings.system.uninstallFailed": "Uninstall failed: {msg}",
-    "settings.system.uninstallConfirm": "Uninstall FFmpeg?\n\nNote: FFmpeg is a SYSTEM-WIDE component (Windows user PATH / macOS Homebrew / Linux /usr/bin), not private to the Seedance plugin — uninstalling will affect every OpenAkita plugin that depends on it (subtitles, video translation, dubbing, etc.) as well as any other software on your system that uses ffmpeg.\n\nIn this plugin, you will lose: long-video stitching (Storyboard tab) and video thumbnail previews (Asset library).",
+    "settings.system.uninstallConfirm": "Uninstall FFmpeg?\n\nNote: FFmpeg is a SYSTEM-WIDE component (Windows user PATH / macOS Homebrew / Linux /usr/bin), not private to the Seedance plugin — uninstalling will affect every Mclaw plugin that depends on it (subtitles, video translation, dubbing, etc.) as well as any other software on your system that uses ffmpeg.\n\nIn this plugin, you will lose: long-video stitching (Storyboard tab) and video thumbnail previews (Asset library).",
     "settings.system.requiresSudo": "Linux requires root. Run this in a terminal:",
     "settings.system.requiresSudoUninstall": "Linux requires root. Run this in a terminal:",
     "settings.system.noMethod": "No automated installer for this OS — open the homepage to download manually.",
@@ -1791,7 +1791,7 @@ const I18N_DICT = {
     "settings.toast.keyError": "Server returned a different key than the one you sent — save likely failed. Check backend logs and retry.",
     "settings.toast.saveFailed": "Save failed: {msg}",
     "settings.toast.saveFailedHttp": "Save failed (HTTP {status}): {detail}",
-    "settings.toast.saveFailedNet": "Cannot reach backend: {detail} — make sure OpenAkita is running.",
+    "settings.toast.saveFailedNet": "Cannot reach backend: {detail} — make sure Mclaw is running.",
     "settings.toast.saveNoConfig": "Server didn't return the saved config — storage may be broken. Retry or check backend logs.",
     "settings.toast.keyEmpty": "API Key cannot be blank — paste a valid key.",
     "settings.toast.valueMismatch": "Save failed: server returned {actual} for {key} but you set {expected} — the value may not have actually been persisted. Check backend logs.",
@@ -1867,9 +1867,9 @@ const I18N_DICT = {
 };
 
 const _i18n = (function () {
-  if (window.OpenAkitaI18n && window.OpenAkitaI18n.register) {
-    window.OpenAkitaI18n.register(I18N_DICT);
-    return window.OpenAkitaI18n;
+  if (window.MclawI18n && window.MclawI18n.register) {
+    window.MclawI18n.register(I18N_DICT);
+    return window.MclawI18n;
   }
   let loc = (navigator && navigator.language) || "zh";
   const subs = new Set();
@@ -1903,8 +1903,8 @@ function useLocale() {
 }
 
 function _tr(key, vars, fallback) {
-  if (window.OpenAkitaI18n && window.OpenAkitaI18n.t) {
-    const v = window.OpenAkitaI18n.t(key, vars);
+  if (window.MclawI18n && window.MclawI18n.t) {
+    const v = window.MclawI18n.t(key, vars);
     if (v && v !== key) return v;
   }
   if (fallback) {
@@ -3670,8 +3670,8 @@ function PromptGuideTab() {
     !search || t.name.includes(search) || (t.name_en||"").toLowerCase().includes(search.toLowerCase()) || t.description.includes(search)
   );
 
-  const tipsHtml = (window.OpenAkitaMD && typeof window.OpenAkitaMD.render === "function")
-    ? window.OpenAkitaMD.render(t("guide.tips.body"))
+  const tipsHtml = (window.MclawMD && typeof window.MclawMD.render === "function")
+    ? window.MclawMD.render(t("guide.tips.body"))
     : null;
 
   return (
@@ -4078,8 +4078,8 @@ function StoryboardTab({ onGoToSettings }) {
   const segCountEst = Math.max(1, Math.round(totalDuration / segDuration));
 
   if (step === "input") {
-    const usageHtml = (window.OpenAkitaMD && typeof window.OpenAkitaMD.render === "function")
-      ? window.OpenAkitaMD.render(t("story.usage.body") + "\n\n" + t("story.usage.warn"))
+    const usageHtml = (window.MclawMD && typeof window.MclawMD.render === "function")
+      ? window.MclawMD.render(t("story.usage.body") + "\n\n" + t("story.usage.warn"))
       : null;
     return (
       <div className="storyboard-workspace">
@@ -5490,7 +5490,7 @@ function App() {
         <div className="oa-config-banner" role="alert"
              style={{margin:"12px 16px 0", flexShrink:0}}>
           <span className="oa-icon oa-config-banner__icon"
-                dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.warning() : ""}} />
+                dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.warning() : ""}} />
           <div className="oa-config-banner__text">
             <strong>{t("banner.noKey.title")}</strong>
             <div style={{fontSize:12, color:"var(--text-muted)", marginTop:2}}>
@@ -5501,7 +5501,7 @@ function App() {
                   onClick={() => setActiveTab(settingsIdx)}>
             {t("banner.noKey.cta")}
             <span className="oa-icon"
-                  dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.arrowRight() : ""}} />
+                  dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.arrowRight() : ""}} />
           </button>
         </div>
       )}
@@ -5511,7 +5511,7 @@ function App() {
                      borderColor:"var(--warning, #f59e0b)"}}>
           <span className="oa-icon oa-config-banner__icon"
                 style={{color:"var(--warning, #f59e0b)"}}
-                dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.warning() : ""}} />
+                dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.warning() : ""}} />
           <div className="oa-config-banner__text">
             <strong>{t("banner.perms.title")}</strong>
             <div style={{fontSize:12, color:"var(--text-muted)", marginTop:2}}>
@@ -5522,7 +5522,7 @@ function App() {
                   onClick={() => setActiveTab(settingsIdx)}>
             {t("banner.perms.cta")}
             <span className="oa-icon"
-                  dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.arrowRight() : ""}} />
+                  dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.arrowRight() : ""}} />
           </button>
         </div>
       )}
@@ -5581,7 +5581,7 @@ class PluginErrorBoundary extends React.Component {
       <div style={{padding: 24, maxWidth: 820, margin: "0 auto"}}>
         <div className="oa-config-banner" role="alert" style={{borderColor: "var(--danger, #ef4444)"}}>
           <span className="oa-icon oa-config-banner__icon" style={{color: "var(--danger, #ef4444)"}}
-                dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.warning() : ""}} />
+                dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.warning() : ""}} />
           <div className="oa-config-banner__text">
             <strong>{tr("err.title")}</strong>
             <div style={{fontSize: 12, color: "var(--text-muted)", marginTop: 4}}>
@@ -5610,10 +5610,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(
 // Tell the host we have rendered the first frame so it can dismiss the
 // loading overlay accurately (instead of guessing from iframe.onLoad,
 // which fires before Babel-standalone compiles this script).
-if (window.OpenAkita && typeof window.OpenAkita.ready === "function") {
-  window.OpenAkita.ready();
+if (window.Mclaw && typeof window.Mclaw.ready === "function") {
+  window.Mclaw.ready();
 }
 </script>
-<script src="./_assets/openakita-llm-selector.js" data-plugin-id="seedance-video"></script>
+<script src="./_assets/mclaw-llm-selector.js" data-plugin-id="seedance-video"></script>
 </body>
 </html>

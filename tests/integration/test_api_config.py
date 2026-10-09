@@ -20,9 +20,14 @@ def app():
 
 @pytest.fixture
 async def client(app):
+    cfg = app.state.web_access_config
+    if not cfg.has_password_set:
+        cfg.add_user("admin", "test-pw", role="admin")
+    auth = {"Authorization": f"Bearer {cfg.create_access_token('admin')}"}
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
+        headers=auth,
     ) as c:
         yield c
 

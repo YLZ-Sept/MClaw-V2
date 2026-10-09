@@ -128,8 +128,8 @@ def test_video_tools_declare_model_catalog_and_idempotency_contract():
     by_name = {t["name"]: t for t in tools}
     for tool_name in ("hh_t2v", "hh_i2v", "hh_r2v", "hh_video_edit"):
         tool = by_name[tool_name]
-        assert tool["x.mclaw-idempotency-param"] == "client_request_id"
-        contract = tool["x.mclaw-media-contract"]
+        assert tool["x-mclaw-idempotency-param"] == "client_request_id"
+        contract = tool["x-mclaw-media-contract"]
         assert contract["kind"] == "video"
         assert contract["default_model"] in contract["models"]
         assert all(

@@ -542,13 +542,63 @@ class Settings(BaseSettings):
     )
 
     # === Embedding 模型配置 ===
+    # 默认 BGE (BAAI/bge-small-zh-v1.5, 512 维, ~100MB)：C-MTEB 中文检索
+    # 精度显著优于旧默认 shibing624/text2vec-base-chinese (768 维)。
+    # 注意：切换模型后已有向量索引需要重建（KnowledgeManager 会自动检测并后台重建）。
     embedding_model: str = Field(
-        default="shibing624/text2vec-base-chinese",
-        description="Embedding 模型名称 (如 shibing624/text2vec-base-chinese)",
+        default="BAAI/bge-small-zh-v1.5",
+        description="Embedding 模型名称 (如 BAAI/bge-small-zh-v1.5)",
     )
     embedding_device: str = Field(
         default="cpu",
         description="Embedding 模型运行设备 (cpu 或 cuda)",
+    )
+
+    # === 知识库查询扩展（同义词/缩略语）===
+    # 未装 vector-memory（约 2.5GB）时知识库只有 BM25 关键词检索，问"等保"
+    # 而文档写"等级保护测评"就搜不到。开启后命中同义词组即补召回（结果降权，
+    # 只补不抢排序）。词表：内置 src/mclaw/memory/kb_synonyms.json +
+    # 用户 data/knowledge/synonyms.json（可覆盖/追加自己的项目名与产品别名）。
+    kb_query_expansion_enabled: bool = Field(
+        default=True,
+        description="知识库检索是否启用同义词/缩略语查询扩展（零依赖，纯 FTS5 下同样生效）",
+    )
+
+    # === 知识库 Reranker 精排配置 ===
+    # 在 BM25+向量 RRF 融合之后，用 cross-encoder 对候选 chunk 逐对精排，
+    # 显著提升 top-k 准确率。与向量模式解耦：在线 API 零依赖（只要 httpx），
+    # 纯 FTS5 模式下同样对 BM25 候选生效；未就绪或失败时自动沿用原排序。
+    #
+    # 默认不跑本地模型：bge-reranker-base 约 1.1GB，首启会在后台静默下载并
+    # 常驻内存，对离线安装包不友好。三态取值：
+    #   不设置 → 仅在配置了在线 Rerank API 时启用（无额外下载与内存占用）
+    #   true   → 启用（本地 CrossEncoder，首次使用后台下载模型）
+    #   false  → 关闭
+    kb_reranker_enabled: bool | None = Field(
+        default=None,
+        description=(
+            "知识库检索是否启用 reranker 精排（需向量模式可用，纯 FTS5 时自动跳过）。"
+            "不设置=仅在配置在线 Rerank API 时启用；true=启用本地模型；false=关闭"
+        ),
+    )
+    # 本地 reranker 模型（CrossEncoder，首次使用时后台下载）
+    kb_reranker_model: str = Field(
+        default="BAAI/bge-reranker-base",
+        description="本地 reranker 模型名称 (CrossEncoder)",
+    )
+    # 在线 Rerank API（可选，设置 api_base + api_key 后优先于本地模型）
+    # 兼容 SiliconFlow / Jina 等标准 /rerank 接口
+    kb_reranker_api_base: str = Field(
+        default="",
+        description="Rerank API 地址 (如 https://api.siliconflow.cn/v1，设置后走在线 API)",
+    )
+    kb_reranker_api_key: str = Field(
+        default="",
+        description="Rerank API Key",
+    )
+    kb_reranker_api_model: str = Field(
+        default="BAAI/bge-reranker-v2-m3",
+        description="Rerank API 模型名称",
     )
 
     # === 搜索后端配置 (v2) ===

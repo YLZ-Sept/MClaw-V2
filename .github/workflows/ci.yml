@@ -624,13 +624,13 @@ jobs:
         include:
           - os: ubuntu-latest
             target_platform: linux-x64
-            unicode_dir: "测试目录.mclaw-${{ github.run_id }}"
+            unicode_dir: "测试目录-mclaw-${{ github.run_id }}"
           - os: macos-latest
             target_platform: mac-arm64
-            unicode_dir: "测试目录.mclaw-${{ github.run_id }}"
+            unicode_dir: "测试目录-mclaw-${{ github.run_id }}"
           - os: windows-latest
             target_platform: win-x64
-            unicode_dir: "测试目录.mclaw-${{ github.run_id }}"
+            unicode_dir: "测试目录-mclaw-${{ github.run_id }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:

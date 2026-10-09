@@ -63,7 +63,7 @@ const TASK_MODE_LABELS = {
 };
 
 function apiBase() {
-  const meta = (window.OpenAkita && window.OpenAkita.meta) || {};
+  const meta = (window.Mclaw && window.Mclaw.meta) || {};
   const injected = (meta.apiBase || "").replace(/\/$/, "");
   if (injected.includes("/api/plugins/")) {
     return injected;
@@ -84,8 +84,8 @@ class ApiError extends Error {
 }
 
 async function api(method, path, body) {
-  if (window.OpenAkita && typeof window.OpenAkita.api === "function") {
-    const result = await window.OpenAkita.api(
+  if (window.Mclaw && typeof window.Mclaw.api === "function") {
+    const result = await window.Mclaw.api(
       method,
       `/api/plugins/${PLUGIN_ID}${path}`,
       body,
@@ -127,8 +127,8 @@ async function api(method, path, body) {
 async function uploadAsset(file) {
   const fd = new FormData();
   fd.append("file", file);
-  if (window.OpenAkita && typeof window.OpenAkita.upload === "function") {
-    const result = await window.OpenAkita.upload(
+  if (window.Mclaw && typeof window.Mclaw.upload === "function") {
+    const result = await window.Mclaw.upload(
       `/api/plugins/${PLUGIN_ID}/upload`,
       fd,
     );
@@ -419,7 +419,7 @@ const ICONIFY_ICONS = {
 
 function iconSvg(name) {
   const iconName = (name || "").includes(":") ? name.split(":").pop() : name;
-  const factory = window.OpenAkitaIcons && window.OpenAkitaIcons[iconName];
+  const factory = window.MclawIcons && window.MclawIcons[iconName];
   if (typeof factory === "function") return factory();
   const inner = ICONIFY_ICONS[iconName] || ICONIFY_ICONS.info;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
@@ -1668,8 +1668,8 @@ async function downloadTaskArtifact(task) {
   );
   if (bridged?.ok) return bridged;
 
-  if (window.OpenAkita?.download && dl.url) {
-    const r = await window.OpenAkita.download(dl.url, dl.filename);
+  if (window.Mclaw?.download && dl.url) {
+    const r = await window.Mclaw.download(dl.url, dl.filename);
     if (r?.ok) return r;
   }
 
@@ -1748,7 +1748,7 @@ function TaskPreviewPane({ taskId, task, costPreview, onGoTasks, onOpenStoryboar
       activeStep: "segments",
     });
     setStoryboardApplied(true);
-    window.OpenAkita?.notify?.({
+    window.Mclaw?.notify?.({
       type: "success",
       title: "已应用分镜草稿",
       body: "已同步到「分镜 → 编辑分镜」，可继续修改并提交生成视频。",
@@ -1758,8 +1758,8 @@ function TaskPreviewPane({ taskId, task, costPreview, onGoTasks, onOpenStoryboar
 
   const copyImageUrl = async (url) => {
     try {
-      if (window.OpenAkita?.clipboard) {
-        const r = await window.OpenAkita.clipboard(url);
+      if (window.Mclaw?.clipboard) {
+        const r = await window.Mclaw.clipboard(url);
         if (r && r.ok === false) throw new Error(r.error || "bridge clipboard failed");
       } else {
         await navigator.clipboard.writeText(url);
@@ -1781,8 +1781,8 @@ function TaskPreviewPane({ taskId, task, costPreview, onGoTasks, onOpenStoryboar
   const openImageUrl = async (url) => {
     setOpenStatus((prev) => ({ ...prev, [url]: "opening" }));
     try {
-      if (window.OpenAkita?.openExternal) {
-        const r = await window.OpenAkita.openExternal(url);
+      if (window.Mclaw?.openExternal) {
+        const r = await window.Mclaw.openExternal(url);
         if (r?.ok) {
           setOpenStatus((prev) => ({ ...prev, [url]: "opened" }));
           setTimeout(() => setOpenStatus((prev) => ({ ...prev, [url]: "" })), 1800);
@@ -1809,7 +1809,7 @@ function TaskPreviewPane({ taskId, task, costPreview, onGoTasks, onOpenStoryboar
     } catch (_) {
       await copyImageUrl(url);
       setOpenStatus((prev) => ({ ...prev, [url]: "copied" }));
-      window.OpenAkita?.notify?.({
+      window.Mclaw?.notify?.({
         type: "warning",
         title: "无法直接打开链接",
         body: "安装版未能弹出浏览器，图片 URL 已复制到剪贴板。",
@@ -1839,7 +1839,7 @@ function TaskPreviewPane({ taskId, task, costPreview, onGoTasks, onOpenStoryboar
     try {
       const r = await downloadTaskArtifact(liveTask);
       if (!r?.cancelled) {
-        window.OpenAkita?.notify?.({
+        window.Mclaw?.notify?.({
           type: "success",
           title: "下载已开始",
           body: r?.path ? `已保存到：${r.path}` : "已交给系统下载处理。",
@@ -5574,7 +5574,7 @@ function StorageSettings({ form, setFormValue }) {
   }, [refresh]);
 
   const pick = async (key) => {
-    const picked = await window.OpenAkita?.pickFolder?.(`选择 ${key}`);
+    const picked = await window.Mclaw?.pickFolder?.(`选择 ${key}`);
     if (!picked) return;
     await setFormValue(key, picked, { immediate: true });
     refresh();
@@ -5611,12 +5611,12 @@ function StorageSettings({ form, setFormValue }) {
 
   return (
     <div>
-      <SettingField label="数据目录" hint={dataDirPath ? `当前生效：${dataDirPath}` : "留空 = 使用默认目录（由 OpenAkita 管理）"}>
+      <SettingField label="数据目录" hint={dataDirPath ? `当前生效：${dataDirPath}` : "留空 = 使用默认目录（由 Mclaw 管理）"}>
         <div className="folder-row">
           <input
             value={form.custom_data_dir || ""}
             onChange={(e) => setFormValue("custom_data_dir", e.target.value)}
-            placeholder="留空 = 使用默认目录（由 OpenAkita 管理）"
+            placeholder="留空 = 使用默认目录（由 Mclaw 管理）"
           />
           <button className="btn btn-sm btn-ghost" onClick={() => pick("custom_data_dir")}>浏览</button>
           <button className="btn btn-sm btn-ghost" onClick={() => open(dataDirPath)}>打开</button>
@@ -6489,7 +6489,7 @@ function App() {
 
   useEffect(() => {
     loadAll();
-    if (window.OpenAkita?.ready) window.OpenAkita.ready();
+    if (window.Mclaw?.ready) window.Mclaw.ready();
     return () => clearTimeout(toastTimer.current);
   }, [loadAll]);
 
@@ -6594,6 +6594,6 @@ function App() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   </script>
-<script src="./_assets/openakita-llm-selector.js" data-plugin-id="happyhorse-video"></script>
+<script src="./_assets/mclaw-llm-selector.js" data-plugin-id="happyhorse-video"></script>
 </body>
 </html>

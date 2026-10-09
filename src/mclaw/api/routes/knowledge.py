@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from pathlib import Path
@@ -425,11 +426,37 @@ async def reindex_document(request: Request, doc_id: str):
     return doc.to_dict()
 
 
+# ── 全量重建路由 ───────────────────────────────────────────────────────────────
+
+@router.post("/reindex")
+async def reindex_all(request: Request):
+    """触发全量重建索引（后台线程，立即返回）。
+
+    用途：embedding 模型切换导致新旧向量维度不兼容时，重新分块 + 重嵌入
+    全部文档。FTS5 数据不受影响，重建期间检索仍可用（向量结果逐步恢复）。
+    """
+    user_id, _ws = _current_owner(request)
+    if not _is_admin(request, user_id):
+        raise HTTPException(status_code=403, detail="全量重建索引仅限管理员操作")
+
+    km = get_knowledge_manager()
+    started = km.schedule_reindex_all(reason=f"API 手动触发 by {user_id}")
+    logger.info(f"[Knowledge] 全量重建请求 by {user_id}: started={started}")
+    return {"started": started, **km.reindex_status()}
+
+
+@router.get("/reindex/status")
+async def reindex_status(request: Request):
+    """查询全量重建进度（running / progress / last）"""
+    km = get_knowledge_manager()
+    return km.reindex_status()
+
+
 # ── Search 路由 ────────────────────────────────────────────────────────────────
 
 @router.post("/search", response_model=list[SearchResultResponse])
 async def search_knowledge(request: Request, body: SearchRequest):
-    """混合搜索知识库（BM25 + 向量 + RRF 融合）"""
+    """混合搜索知识库（BM25 + 向量 + RRF 融合 + Reranker 精排）"""
     km = get_knowledge_manager()
 
     if not body.query.strip():
@@ -443,10 +470,13 @@ async def search_knowledge(request: Request, body: SearchRequest):
         coll = km.get_collection(body.collection_id)
         _require_collection_exists(coll)
 
-    results = km.search_with_chunks(
-        query=body.query.strip(),
-        collection_id=body.collection_id,
-        top_k=body.top_k,
+    # 放到线程池：编码 + reranker 精排都是 CPU 密集的同步调用，
+    # 直接在事件循环里跑会阻塞整个 API（含 SSE 与其他会话）。
+    results = await asyncio.to_thread(
+        km.search_with_chunks,
+        body.query.strip(),
+        body.collection_id,
+        body.top_k,
     )
 
     return [r.to_dict() for r in results]

@@ -73,9 +73,15 @@ async def app_with_fake_agent(tmp_path: Path, monkeypatch):
 @pytest.fixture
 async def client(app_with_fake_agent):
     app, _ = app_with_fake_agent
+    # 未设密码时 setup 门禁对所有受保护接口返回 428，这里先建 admin 并带凭证。
+    cfg = app.state.web_access_config
+    if not cfg.has_password_set:
+        cfg.add_user("admin", "test-pw", role="admin")
+    auth = {"Authorization": f"Bearer {cfg.create_access_token('admin')}"}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=auth,
     ) as c:
         yield c
 

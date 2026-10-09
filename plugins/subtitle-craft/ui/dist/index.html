@@ -595,8 +595,8 @@ window.addEventListener("message", function(e) {
   if (d.type === "bridge:init" && d.payload) {
     _ctx = d.payload; _bridgeConnected = true;
     if (_ctx.theme) document.documentElement.setAttribute("data-theme", _ctx.theme.includes("dark") ? "dark" : "light");
-    if (_ctx.locale && window.OpenAkitaI18n && window.OpenAkitaI18n.setLocale) {
-      window.OpenAkitaI18n.setLocale(_ctx.locale.startsWith("zh") ? "zh" : "en");
+    if (_ctx.locale && window.MclawI18n && window.MclawI18n.setLocale) {
+      window.MclawI18n.setLocale(_ctx.locale.startsWith("zh") ? "zh" : "en");
     }
   }
   if (d.type === "bridge:handshake-ack" && d.payload) { _caps = d.payload.capabilities || []; _bridgeConnected = true; }
@@ -607,8 +607,8 @@ window.addEventListener("message", function(e) {
   if (d.type === "bridge:theme-change" && d.payload) {
     document.documentElement.setAttribute("data-theme", (d.payload.theme || "").includes("dark") ? "dark" : "light");
   }
-  if (d.type === "bridge:locale-change" && d.payload && window.OpenAkitaI18n && window.OpenAkitaI18n.setLocale) {
-    window.OpenAkitaI18n.setLocale((d.payload.locale || "").startsWith("zh") ? "zh" : "en");
+  if (d.type === "bridge:locale-change" && d.payload && window.MclawI18n && window.MclawI18n.setLocale) {
+    window.MclawI18n.setLocale((d.payload.locale || "").startsWith("zh") ? "zh" : "en");
   }
   if (d.type === "bridge:event" && d.payload) {
     var h = _handlers[d.payload.eventType];
@@ -631,8 +631,8 @@ function uploadFile(file) {
 }
 
 function _tr(key, vars, fallback) {
-  if (window.OpenAkitaI18n && window.OpenAkitaI18n.t) {
-    var v = window.OpenAkitaI18n.t(key, vars);
+  if (window.MclawI18n && window.MclawI18n.t) {
+    var v = window.MclawI18n.t(key, vars);
     if (v && v !== key) return v;
   }
   if (fallback) {
@@ -705,13 +705,13 @@ console.log("[subtitle-craft] CDN loaded: React=" + typeof React + ", ReactDOM="
 console.log("[subtitle-craft] Babel script executing...");
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-// Plugin-local SVG icon set — extends the shared OpenAkitaIcons registry
+// Plugin-local SVG icon set — extends the shared MclawIcons registry
 // (icons.js, byte-identical across plugins) with a small handful of icons
 // the shared kit does not include yet. We add them via in-place patch so
-// `OpenAkitaIcons.subtitles()` etc. work the same as any other icon and
+// `MclawIcons.subtitles()` etc. work the same as any other icon and
 // the patch is idempotent across hot reloads.
 (function patchIcons() {
-  if (!window.OpenAkitaIcons) return;
+  if (!window.MclawIcons) return;
   function svg(inner) {
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>';
   }
@@ -719,8 +719,8 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
   // caption text bars inside. More representative of a subtitle tool
   // than the generic "mic" icon (which signals ASR only and misses the
   // translate / repair / burn modes).
-  if (!window.OpenAkitaIcons.subtitles) {
-    window.OpenAkitaIcons.subtitles = function () {
+  if (!window.MclawIcons.subtitles) {
+    window.MclawIcons.subtitles = function () {
       return svg(
         '<rect x="2.5" y="5" width="19" height="14" rx="2.5" ry="2.5"/>' +
         '<line x1="6" y1="11" x2="11" y2="11"/>' +
@@ -731,16 +731,16 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
     };
   }
   // Wrench / build — used in the "repair" mode tile
-  if (!window.OpenAkitaIcons.wrench) {
-    window.OpenAkitaIcons.wrench = function () {
+  if (!window.MclawIcons.wrench) {
+    window.MclawIcons.wrench = function () {
       return svg(
         '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-2.5z"/>'
       );
     };
   }
   // Translate / language — used in the "translate" mode tile
-  if (!window.OpenAkitaIcons.translate) {
-    window.OpenAkitaIcons.translate = function () {
+  if (!window.MclawIcons.translate) {
+    window.MclawIcons.translate = function () {
       return svg(
         '<path d="M4 5h7"/>' +
         '<path d="M9 3v2c0 4.42-2.69 8-6 8"/>' +
@@ -751,16 +751,16 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
     };
   }
   // Flame / burn — used in the "burn" mode tile
-  if (!window.OpenAkitaIcons.flame) {
-    window.OpenAkitaIcons.flame = function () {
+  if (!window.MclawIcons.flame) {
+    window.MclawIcons.flame = function () {
       return svg(
         '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>'
       );
     };
   }
   // Package — system component card icon (mirror of seedance's I.package)
-  if (!window.OpenAkitaIcons.package) {
-    window.OpenAkitaIcons.package = function () {
+  if (!window.MclawIcons.package) {
+    window.MclawIcons.package = function () {
       return svg(
         '<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/>' +
         '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>' +
@@ -770,8 +770,8 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
     };
   }
   // Trash — uninstall button on system component card
-  if (!window.OpenAkitaIcons.trash) {
-    window.OpenAkitaIcons.trash = function () {
+  if (!window.MclawIcons.trash) {
+    window.MclawIcons.trash = function () {
       return svg(
         '<polyline points="3,6 5,6 21,6"/>' +
         '<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'
@@ -779,8 +779,8 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
     };
   }
   // Link — "open homepage" external link
-  if (!window.OpenAkitaIcons.link) {
-    window.OpenAkitaIcons.link = function () {
+  if (!window.MclawIcons.link) {
+    window.MclawIcons.link = function () {
       return svg(
         '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>' +
         '<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'
@@ -796,7 +796,7 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
   // that mode tiles / pills already use elsewhere.  Force-overwrites
   // (not guarded by `if (!...)`) so the hero always uses our mark even
   // if the host registry preloads a different ``subtitleCraft`` later.
-  window.OpenAkitaIcons.subtitleCraft = function () {
+  window.MclawIcons.subtitleCraft = function () {
     return (
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" ' +
         'fill="none" stroke="currentColor" stroke-width="1.7" ' +
@@ -825,13 +825,13 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
   };
 })();
 
-// Tiny inline icon helper — wraps OpenAkitaIcons in an `oa-icon` span so
+// Tiny inline icon helper — wraps MclawIcons in an `oa-icon` span so
 // every icon usage stays consistent (16x16, currentColor). Falls back to
 // a no-op span if the icon name isn't registered, so a typo never breaks
 // the whole React tree.
 function OAIcon({ name, size }) {
-  const svg = window.OpenAkitaIcons && window.OpenAkitaIcons[name]
-    ? window.OpenAkitaIcons[name]() : "";
+  const svg = window.MclawIcons && window.MclawIcons[name]
+    ? window.MclawIcons[name]() : "";
   const style = size ? { width: size, height: size } : undefined;
   return <span className="oa-icon" style={style}
                dangerouslySetInnerHTML={{__html: svg}} />;
@@ -853,13 +853,13 @@ const I18N_DICT = {
     "tabs.settings": "设置",
     // banner (no API key)
     "banner.noKey.title": "尚未配置 DashScope API Key",
-    "banner.noKey.desc": "Paraformer 听写会失败；翻译仍使用所选 OpenAkita 文本模型。请为 ASR 配置 DashScope API Key。",
+    "banner.noKey.desc": "Paraformer 听写会失败；翻译仍使用所选 Mclaw 文本模型。请为 ASR 配置 DashScope API Key。",
     "banner.noKey.cta": "前往配置",
     // modes
     "modes.auto_subtitle": "自动字幕",
     "modes.auto_subtitle.desc": "视频/音频 → Paraformer-v2 词级听写 → SRT/VTT,可选烧制",
     "modes.translate": "字幕翻译",
-    "modes.translate.desc": "现有 SRT → OpenAkita 文本模型多语言翻译,支持双语字幕",
+    "modes.translate.desc": "现有 SRT → Mclaw 文本模型多语言翻译,支持双语字幕",
     "modes.repair": "字幕修复",
     "modes.repair.desc": "时间轴对齐、断行重排、消除重叠",
     "modes.burn": "字幕烧制",
@@ -933,7 +933,7 @@ const I18N_DICT = {
     "create.cost.refresh": "刷新预估",
     "create.cost.total": "合计",
     "create.cost.itemAsr": "Paraformer-v2 听写",
-    "create.cost.itemMt": "OpenAkita 文本翻译",
+    "create.cost.itemMt": "Mclaw 文本翻译",
     "create.cost.itemVl": "Qwen-VL 角色识别",
     "create.cost.itemBurn": "本地烧制 (无 API 费用)",
     "create.cost.unitMin": "{n} 分钟",
@@ -955,7 +955,7 @@ const I18N_DICT = {
     "create.preview.section.cost": "费用明细",
     "create.preview.section.notes": "计费说明",
     "create.cost.note.asr": "Paraformer-v2 听写: ¥0.0008 / 秒(按音频时长)",
-    "create.cost.note.mt": "文本费用由所选 OpenAkita 端点决定",
+    "create.cost.note.mt": "文本费用由所选 Mclaw 端点决定",
     "create.cost.note.vl": "Qwen-VL Max 角色识别: 仅在角色分离 + 角色识别同时开启时计费",
     "create.cost.note.burn": "本地烧制(FFmpeg / Playwright HTML): 不消耗 API,免费",
     // tasks tab
@@ -994,7 +994,7 @@ const I18N_DICT = {
     // create tab features (rendered as feature cards in the empty preview)
     "create.feature.asr.title": "Paraformer-v2 词级听写",
     "create.feature.asr.desc": "中英日韩等 11 种语言,自动断句 + 时间戳",
-    "create.feature.mt.title": "OpenAkita 多语言翻译",
+    "create.feature.mt.title": "Mclaw 多语言翻译",
     "create.feature.mt.desc": "Flash / Plus / Lite 三档,支持双语字幕",
     "create.feature.repair.title": "时间轴修复",
     "create.feature.repair.desc": "重叠剔除、断行重排、短 cue 合并",
@@ -1052,7 +1052,7 @@ const I18N_DICT = {
     "settings.system.intro.body": "自动字幕 / 翻译 / 修复 三个模式不依赖 FFmpeg;只有「字幕烧制」与基于 HTML+Playwright 的高级渲染需要它。FFmpeg 安装在系统 PATH(Windows 用户目录 / macOS Homebrew / Linux /usr/bin),不是本插件私有,会被任何已安装它的机器自动检测到。Chromium 由 Playwright 单独管理,首次安装运行 `python -m playwright install chromium` 即可。",
     "settings.system.platform.win": "Windows: 「一键安装」会调用 winget 自动安装 Gyan.FFmpeg,无需管理员权限。",
     "settings.system.platform.mac": "macOS: 「一键安装」会调用 Homebrew 自动安装 ffmpeg。",
-    "settings.system.platform.linux": "Linux: apt / dnf 需要 root 权限。如果 OpenAkita 以普通用户身份运行,请按提示在终端执行 sudo apt-get install ffmpeg。",
+    "settings.system.platform.linux": "Linux: apt / dnf 需要 root 权限。如果 Mclaw 以普通用户身份运行,请按提示在终端执行 sudo apt-get install ffmpeg。",
     "settings.system.detecting": "正在检测...",
     "settings.system.status.found": "已安装 v{ver}",
     "settings.system.status.foundNoVer": "已安装",
@@ -1092,7 +1092,7 @@ const I18N_DICT = {
     "settings.system.health.browserInstalled": "Playwright Chromium 安装成功",
     "settings.system.health.browserInstallFailed": "Playwright Chromium 安装失败:{msg}",
     "settings.system.health.playwrightRequired": "需要先安装 Playwright 包",
-    "settings.system.health.intro": "HTML 字幕渲染使用 Playwright 专用 Chromium；DashScope API Key 仅用于 ASR，文本任务使用 OpenAkita 模型。",
+    "settings.system.health.intro": "HTML 字幕渲染使用 Playwright 专用 Chromium；DashScope API Key 仅用于 ASR，文本任务使用 Mclaw 模型。",
     "settings.storage.title": "存储统计",
     "settings.storage.totalFiles": "文件总数",
     "settings.storage.totalSize": "总大小",
@@ -1130,7 +1130,7 @@ const I18N_DICT = {
     "common.refresh": "刷新",
     // hook_picker (v1.1) — mode tile + tag
     "modes.hook_picker": "AI 选 Hook",
-    "modes.hook_picker.desc": "OpenAkita 文本模型挑选短视频开场金句,输出 hook.srt + 时间码",
+    "modes.hook_picker.desc": "Mclaw 文本模型挑选短视频开场金句,输出 hook.srt + 时间码",
     "modes.tag.hook_picker": "AI 选段",
     // hook_picker — left pane source picker
     "hook.source.label": "字幕来源",
@@ -1163,11 +1163,11 @@ const I18N_DICT = {
     "create.summary.hook.window": "窗口策略",
     "create.summary.hook.model": "AI 模型",
     "create.preview.hook.empty.title": "AI 选 Hook 等待启动",
-    "create.preview.hook.empty.hint": "上传或挑选已有 SRT 后，所选 OpenAkita 模型会用三轮窗口策略锁定最佳开场金句。",
+    "create.preview.hook.empty.hint": "上传或挑选已有 SRT 后，所选 Mclaw 模型会用三轮窗口策略锁定最佳开场金句。",
     "create.hookFeature.load.title": "加载 SRT",
     "create.hookFeature.load.desc": "支持新上传或复用已有任务的字幕",
     "create.hookFeature.ai.title": "AI 选段",
-    "create.hookFeature.ai.desc": "OpenAkita 模型三轮窗口策略,带模糊匹配回退",
+    "create.hookFeature.ai.desc": "Mclaw 模型三轮窗口策略,带模糊匹配回退",
     "create.hookFeature.duration.title": "时长校验",
     "create.hookFeature.duration.desc": "自动落入目标 ±5s 区间,不达标自动重选",
     "create.hookFeature.timecode.title": "导出时间码",
@@ -1202,12 +1202,12 @@ const I18N_DICT = {
     "tabs.library": "Library",
     "tabs.settings": "Settings",
     "banner.noKey.title": "DashScope API Key not configured",
-    "banner.noKey.desc": "Paraformer ASR will fail; translation still uses the selected OpenAkita text model. Configure this key for ASR.",
+    "banner.noKey.desc": "Paraformer ASR will fail; translation still uses the selected Mclaw text model. Configure this key for ASR.",
     "banner.noKey.cta": "Open Settings",
     "modes.auto_subtitle": "Auto Subtitle",
     "modes.auto_subtitle.desc": "Video/audio → Paraformer-v2 word-level ASR → SRT/VTT, optional burn",
     "modes.translate": "Translate",
-    "modes.translate.desc": "Existing SRT → OpenAkita text model translation, optional bilingual",
+    "modes.translate.desc": "Existing SRT → Mclaw text model translation, optional bilingual",
     "modes.repair": "Repair",
     "modes.repair.desc": "Timeline alignment, line wrapping, overlap removal",
     "modes.burn": "Burn",
@@ -1278,7 +1278,7 @@ const I18N_DICT = {
     "create.cost.refresh": "Refresh estimate",
     "create.cost.total": "Total",
     "create.cost.itemAsr": "Paraformer-v2 ASR",
-    "create.cost.itemMt": "OpenAkita text translation",
+    "create.cost.itemMt": "Mclaw text translation",
     "create.cost.itemVl": "Qwen-VL identification",
     "create.cost.itemBurn": "Local burn (no API cost)",
     "create.cost.unitMin": "{n} min",
@@ -1300,7 +1300,7 @@ const I18N_DICT = {
     "create.preview.section.cost": "Cost breakdown",
     "create.preview.section.notes": "Pricing notes",
     "create.cost.note.asr": "Paraformer-v2 ASR: ¥0.0008 / sec of audio",
-    "create.cost.note.mt": "Text billing is determined by the selected OpenAkita endpoint",
+    "create.cost.note.mt": "Text billing is determined by the selected Mclaw endpoint",
     "create.cost.note.vl": "Qwen-VL Max character ID: charged only when diarization AND character-ID are both on",
     "create.cost.note.burn": "Local burn (FFmpeg / Playwright HTML): no API cost",
     "tasks.filter.status": "Status",
@@ -1337,7 +1337,7 @@ const I18N_DICT = {
     "create.feature.asr.title": "Word-level ASR",
     "create.feature.asr.desc": "Paraformer-v2, 11 languages, auto sentence + timestamps",
     "create.feature.mt.title": "Multi-lingual MT",
-    "create.feature.mt.desc": "Selected OpenAkita text model, optional bilingual subs",
+    "create.feature.mt.desc": "Selected Mclaw text model, optional bilingual subs",
     "create.feature.repair.title": "Timeline repair",
     "create.feature.repair.desc": "Overlap removal, line wrapping, short cue merging",
     "create.feature.burn.title": "Local burn",
@@ -1391,7 +1391,7 @@ const I18N_DICT = {
     "settings.system.intro.body": "Auto-subtitle / Translate / Repair do NOT need FFmpeg — only the Burn mode and the HTML+Playwright high-end renderer do. FFmpeg lives in the system PATH (Windows user dir / macOS Homebrew / Linux /usr/bin), is not plugin-private, and any machine that already has it will be auto-detected. Chromium is managed separately by Playwright; install once with `python -m playwright install chromium`.",
     "settings.system.platform.win": "Windows: \"One-click install\" calls winget to install Gyan.FFmpeg without admin rights.",
     "settings.system.platform.mac": "macOS: \"One-click install\" calls Homebrew to install ffmpeg.",
-    "settings.system.platform.linux": "Linux: apt / dnf needs root. If OpenAkita runs as a normal user, follow the prompt and run `sudo apt-get install ffmpeg` in a terminal.",
+    "settings.system.platform.linux": "Linux: apt / dnf needs root. If Mclaw runs as a normal user, follow the prompt and run `sudo apt-get install ffmpeg` in a terminal.",
     "settings.system.detecting": "Detecting...",
     "settings.system.status.found": "Installed v{ver}",
     "settings.system.status.foundNoVer": "Installed",
@@ -1466,7 +1466,7 @@ const I18N_DICT = {
     "common.refresh": "Refresh",
     // hook_picker (v1.1) — mode tile + tag
     "modes.hook_picker": "AI Hook Picker",
-    "modes.hook_picker.desc": "The selected OpenAkita model finds the strongest opening dialogue and returns hook.srt + timecode",
+    "modes.hook_picker.desc": "The selected Mclaw model finds the strongest opening dialogue and returns hook.srt + timecode",
     "modes.tag.hook_picker": "AI Hook",
     // hook_picker — left pane source picker
     "hook.source.label": "Subtitle source",
@@ -1499,11 +1499,11 @@ const I18N_DICT = {
     "create.summary.hook.window": "Window strategy",
     "create.summary.hook.model": "AI model",
     "create.preview.hook.empty.title": "AI Hook Picker is ready",
-    "create.preview.hook.empty.hint": "Upload or pick an existing SRT — the selected OpenAkita model will run a 3-window strategy.",
+    "create.preview.hook.empty.hint": "Upload or pick an existing SRT — the selected Mclaw model will run a 3-window strategy.",
     "create.hookFeature.load.title": "Load SRT",
     "create.hookFeature.load.desc": "Upload new file or reuse an existing task's subtitle",
     "create.hookFeature.ai.title": "AI selection",
-    "create.hookFeature.ai.desc": "OpenAkita model 3-window strategy with fuzzy-match fallback",
+    "create.hookFeature.ai.desc": "Mclaw model 3-window strategy with fuzzy-match fallback",
     "create.hookFeature.duration.title": "Duration check",
     "create.hookFeature.duration.desc": "Auto-rejects clips outside target ±5s and retries",
     "create.hookFeature.timecode.title": "Export timecode",
@@ -1536,22 +1536,22 @@ const I18N_DICT = {
 // (_assets/i18n.js exposes `register` / `t` / `locale` / `onChange` —
 // NOT `registerDict` / `getLocale`, which were the original typos that
 // caused every visible label to render as the raw dot-notation key).
-if (window.OpenAkitaI18n && typeof window.OpenAkitaI18n.register === "function") {
-  window.OpenAkitaI18n.register(I18N_DICT);
+if (window.MclawI18n && typeof window.MclawI18n.register === "function") {
+  window.MclawI18n.register(I18N_DICT);
 }
 
 function useT() {
   const [, force] = useState(0);
   useEffect(() => {
-    if (!window.OpenAkitaI18n || !window.OpenAkitaI18n.onChange) return;
-    return window.OpenAkitaI18n.onChange(() => force(n => n + 1));
+    if (!window.MclawI18n || !window.MclawI18n.onChange) return;
+    return window.MclawI18n.onChange(() => force(n => n + 1));
   }, []);
   return useCallback((key, vars) => _tr(key, vars, key), []);
 }
 
 function useLocale() {
   const _read = () => {
-    const i = window.OpenAkitaI18n;
+    const i = window.MclawI18n;
     if (!i) return "zh";
     if (typeof i.locale === "function") return i.locale() || "zh";
     if (typeof i.getLocale === "function") return i.getLocale() || "zh";
@@ -1559,8 +1559,8 @@ function useLocale() {
   };
   const [loc, setLoc] = useState(_read);
   useEffect(() => {
-    if (!window.OpenAkitaI18n || !window.OpenAkitaI18n.onChange) return;
-    return window.OpenAkitaI18n.onChange(() => setLoc(_read()));
+    if (!window.MclawI18n || !window.MclawI18n.onChange) return;
+    return window.MclawI18n.onChange(() => setLoc(_read()));
   }, []);
   return loc;
 }
@@ -1763,7 +1763,7 @@ function App() {
         <div className="oa-config-banner" role="alert"
              style={{margin:"12px 16px 0", flexShrink:0}}>
           <span className="oa-icon oa-config-banner__icon"
-                dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.warning() : ""}} />
+                dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.warning() : ""}} />
           <div className="oa-config-banner__text">
             <strong>{t("banner.noKey.title")}</strong>
             <div style={{fontSize:12, color:"var(--text-muted)", marginTop:2}}>
@@ -1774,7 +1774,7 @@ function App() {
                   onClick={() => goToTab("settings")}>
             {t("banner.noKey.cta")}
             <span className="oa-icon"
-                  dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.arrowRight() : ""}} />
+                  dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.arrowRight() : ""}} />
           </button>
         </div>
       )}
@@ -2134,7 +2134,7 @@ function CreateTab({ apiReady, goToTasks }) {
               </div>
             </div>
             <div className="text-xs text-dim">
-              翻译使用右下角“AI 模型”选择器中的 OpenAkita 文本端点。
+              翻译使用右下角“AI 模型”选择器中的 Mclaw 文本端点。
             </div>
             <div className="form-row">
               <div className="switch-row">
@@ -2326,7 +2326,7 @@ function CreateTab({ apiReady, goToTasks }) {
                          onChange={e => setRandomAttempts(parseInt(e.target.value, 10))} />
                 </div>
                 <div className="text-xs text-dim">
-                  Hook 分析使用右下角“AI 模型”选择器中的 OpenAkita 文本端点。
+                  Hook 分析使用右下角“AI 模型”选择器中的 Mclaw 文本端点。
                 </div>
               </details>
             </div>
@@ -2359,7 +2359,7 @@ function CreateTab({ apiReady, goToTasks }) {
             <div className="oa-preview-card__head">
               <h3 className="oa-preview-card__title">
                 <span className="oa-preview-card__title-chip"
-                      dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons && window.OpenAkitaIcons.sparkles ? window.OpenAkitaIcons.sparkles() : ""}} />
+                      dangerouslySetInnerHTML={{__html: window.MclawIcons && window.MclawIcons.sparkles ? window.MclawIcons.sparkles() : ""}} />
                 {t("create.preview.title")}
               </h3>
               <button className={"oa-preview-card__refresh" + (costRefreshing ? " is-spinning" : "")}
@@ -2436,7 +2436,7 @@ function CreateTab({ apiReady, goToTasks }) {
                   </div>
                   <div className="oa-summary-pill">
                     <div className="oa-summary-pill__label">{t("create.summary.translate.model")}</div>
-                    <div className="oa-summary-pill__value">OpenAkita</div>
+                    <div className="oa-summary-pill__value">Mclaw</div>
                   </div>
                 </>
               )}
@@ -4001,8 +4001,8 @@ try {
     '<div style="padding:24px;color:#ef4444"><b>[subtitle-craft mount error]</b><pre style="margin-top:8px;white-space:pre-wrap;font-size:11px">' +
     (mountErr && mountErr.stack ? mountErr.stack : String(mountErr)) + '</pre></div>';
 }
-if (window.OpenAkita && typeof window.OpenAkita.ready === "function") {
-  window.OpenAkita.ready();
+if (window.Mclaw && typeof window.Mclaw.ready === "function") {
+  window.Mclaw.ready();
 }
 </script>
 
@@ -4041,6 +4041,6 @@ if (window.OpenAkita && typeof window.OpenAkita.ready === "function") {
   }
 })();
 </script>
-<script src="./_assets/openakita-llm-selector.js" data-plugin-id="subtitle-craft"></script>
+<script src="./_assets/mclaw-llm-selector.js" data-plugin-id="subtitle-craft"></script>
 </body>
 </html>

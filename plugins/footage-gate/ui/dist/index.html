@@ -334,8 +334,8 @@ function uploadFile(file) {
 }
 
 function _tr(key, vars, fallback) {
-  if (window.OpenAkitaI18n && window.OpenAkitaI18n.t) {
-    var v = window.OpenAkitaI18n.t(key, vars);
+  if (window.MclawI18n && window.MclawI18n.t) {
+    var v = window.MclawI18n.t(key, vars);
     if (v && v !== key) return v;
   }
   if (fallback) {
@@ -767,14 +767,14 @@ const I18N_DICT = {
   },
 };
 
-if (window.OpenAkitaI18n && typeof window.OpenAkitaI18n.register === "function") {
-  window.OpenAkitaI18n.register(I18N_DICT);
+if (window.MclawI18n && typeof window.MclawI18n.register === "function") {
+  window.MclawI18n.register(I18N_DICT);
 }
 
 function _currentLocale() {
-  if (window.OpenAkitaI18n) {
-    if (typeof window.OpenAkitaI18n.locale === "function") return window.OpenAkitaI18n.locale();
-    if (typeof window.OpenAkitaI18n.getLocale === "function") return window.OpenAkitaI18n.getLocale();
+  if (window.MclawI18n) {
+    if (typeof window.MclawI18n.locale === "function") return window.MclawI18n.locale();
+    if (typeof window.MclawI18n.getLocale === "function") return window.MclawI18n.getLocale();
   }
   return "zh";
 }
@@ -792,16 +792,16 @@ function _localT(key, vars) {
 
 const _i18n = {
   t: function(key, vars) {
-    if (window.OpenAkitaI18n && typeof window.OpenAkitaI18n.t === "function") {
-      const v = window.OpenAkitaI18n.t(key, vars);
+    if (window.MclawI18n && typeof window.MclawI18n.t === "function") {
+      const v = window.MclawI18n.t(key, vars);
       if (v && v !== key) return v;
     }
     return _localT(key, vars);
   },
   locale: _currentLocale,
   onChange: function(fn) {
-    if (window.OpenAkitaI18n && typeof window.OpenAkitaI18n.onChange === "function") {
-      return window.OpenAkitaI18n.onChange(fn);
+    if (window.MclawI18n && typeof window.MclawI18n.onChange === "function") {
+      return window.MclawI18n.onChange(fn);
     }
     return function(){};
   },
@@ -810,8 +810,8 @@ const _i18n = {
 function useT() {
   const [, force] = useState(0);
   useEffect(() => {
-    if (window.OpenAkitaI18n && typeof window.OpenAkitaI18n.onChange === "function") {
-      return window.OpenAkitaI18n.onChange(() => force(n => n + 1));
+    if (window.MclawI18n && typeof window.MclawI18n.onChange === "function") {
+      return window.MclawI18n.onChange(() => force(n => n + 1));
     }
     return undefined;
   }, []);
@@ -821,8 +821,8 @@ function useT() {
 function useLocale() {
   const [locale, setLocale] = useState(() => (_i18n.locale && _i18n.locale()) || "zh");
   useEffect(() => {
-    if (window.OpenAkitaI18n && typeof window.OpenAkitaI18n.onChange === "function") {
-      return window.OpenAkitaI18n.onChange(() => setLocale(_i18n.locale()));
+    if (window.MclawI18n && typeof window.MclawI18n.onChange === "function") {
+      return window.MclawI18n.onChange(() => setLocale(_i18n.locale()));
     }
     return undefined;
   }, []);
@@ -873,7 +873,7 @@ const ICONIFY_SVG = {
 function Ico(props) {
   const name = props.name || "";
   if (ICONIFY_SVG[name]) return <span className="oa-icon" dangerouslySetInnerHTML={{__html: ICONIFY_SVG[name]}} />;
-  const lib = window.OpenAkitaIcons;
+  const lib = window.MclawIcons;
   if (lib) {
     const key = typeof lib[name] === "function" ? name
               : typeof lib[ICON_ALIAS[name]] === "function" ? ICON_ALIAS[name] : "";
@@ -2419,8 +2419,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   </PluginErrorBoundary>
 );
 
-if (window.OpenAkita && typeof window.OpenAkita.ready === "function") {
-  window.OpenAkita.ready();
+if (window.Mclaw && typeof window.Mclaw.ready === "function") {
+  window.Mclaw.ready();
 }
 </script>
 </body>

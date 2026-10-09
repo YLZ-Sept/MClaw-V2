@@ -25,9 +25,16 @@ async def test_update_runtime_refs_attaches_late_agent_plugin_routes() -> None:
 
     assert update_runtime_refs(api_task, agent=agent) is True
 
+    # 插件路由在 /api/ 下，需要认证（本机不再豁免）
+    cfg = app.state.web_access_config
+    if not cfg.has_password_set:
+        cfg.add_user("admin", "test-pw", role="admin")
+    auth = {"Authorization": f"Bearer {cfg.create_access_token('admin')}"}
+
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
+        headers=auth,
     ) as client:
         resp = await client.get("/api/plugins/late_plugin/ping")
 

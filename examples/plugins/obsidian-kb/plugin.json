@@ -9,7 +9,7 @@
   "entry": "plugin.py",
   "permissions": ["tools.register", "hooks.retrieve", "retrieval.register", "config.read", "config.write", "log", "skill"],
   "requires": {
-    "mclaw": ">=1.27.0",
+    "mclaw": ">=1.2.0",
     "plugin_api": "~1",
     "python": ">=3.11"
   },

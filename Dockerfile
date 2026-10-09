@@ -36,7 +36,7 @@ RUN mkdir -p docs-site/.vitepress/dist
 #     docker build --build-arg INSTALL_FINANCE_AUTO=1 -t openakita:fa .
 # Docs: plugins/finance-auto/docs/DEPLOY_DOCKER.md §3.
 ARG INSTALL_FINANCE_AUTO=0
-ARG OPENAKITA_BUILD_GIT_HASH=dev
+ARG MCLAW_BUILD_GIT_HASH=dev
 
 RUN if [ "$INSTALL_FINANCE_AUTO" = "1" ]; then \
         pip install --no-cache-dir ".[finance-auto]"; \

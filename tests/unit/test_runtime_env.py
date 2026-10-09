@@ -151,7 +151,7 @@ def test_runtime_pip_environment_scrubs_python_conda_and_secret_env(monkeypatch)
     assert "PIP_TARGET" not in env
     assert "ANTHROPIC_API_KEY" not in env
     assert env["PYTHONNOUSERSITE"] == "1"
-    assert env["MCLAW_SUBPROCESS_SECRET_SCRUB"] == "1"
+    assert env["OPENAKITA_SUBPROCESS_SECRET_SCRUB"] == "1"
 
 
 def test_subprocess_secret_scrub_allows_force_prefix():
@@ -185,7 +185,7 @@ def test_user_subprocess_environment_empty_overrides_inherit_host(monkeypatch, t
     assert env["HOME"] == str(tmp_path / "home")
     assert env["HTTP_PROXY"] == "http://proxy.invalid:8080"
     assert "ANTHROPIC_API_KEY" not in env
-    assert env["MCLAW_ENV_TRUST_SOURCE"] == "user-subprocess"
+    assert env["OPENAKITA_ENV_TRUST_SOURCE"] == "user-subprocess"
 
 
 def test_user_subprocess_environment_overrides_host_after_merge(monkeypatch, tmp_path):
@@ -234,7 +234,7 @@ def test_bootstrap_manifest_path_prefers_explicit_env(monkeypatch, tmp_path):
     manifest = bootstrap / "manifest.json"
     manifest.write_text("{}", encoding="utf-8")
 
-    monkeypatch.setenv("MCLAW_BOOTSTRAP_DIR", str(bootstrap))
+    monkeypatch.setenv("OPENAKITA_BOOTSTRAP_DIR", str(bootstrap))
 
     assert get_bootstrap_manifest_path() == manifest
 
@@ -249,7 +249,7 @@ def test_bootstrap_manifest_path_resolves_dual_venv_home(monkeypatch, tmp_path):
     scripts = venv / "Scripts"
     scripts.mkdir(parents=True)
     monkeypatch.setattr(sys, "executable", str(scripts / "python.exe"))
-    monkeypatch.delenv("MCLAW_BOOTSTRAP_DIR", raising=False)
+    monkeypatch.delenv("OPENAKITA_BOOTSTRAP_DIR", raising=False)
     (venv / "pyvenv.cfg").write_text(f"home = {bootstrap / 'python'}\n", encoding="utf-8")
 
     assert get_bootstrap_manifest_path() == manifest
@@ -266,8 +266,8 @@ def test_managed_node_environment_uses_runtime_cache(monkeypatch, tmp_path):
 
     env = apply_managed_node_environment({"PATH": "base"})
 
-    assert env["MCLAW_NODE"] == str(node)
-    assert env["MCLAW_NODE_BIN"] == str(node.parent)
+    assert env["OPENAKITA_NODE"] == str(node)
+    assert env["OPENAKITA_NODE_BIN"] == str(node.parent)
     assert env["PATH"].startswith(str(node.parent))
     assert env["NPM_CONFIG_CACHE"] == str(tmp_path / "cache" / "npm-cache")
     assert env["NPM_CONFIG_PREFIX"] == str(tmp_path / "cache" / "npm-prefix")
@@ -279,7 +279,7 @@ def test_readonly_seed_roots_and_node_command(monkeypatch, tmp_path):
     node = seed / "node" / ("node.exe" if sys.platform == "win32" else "node")
     node.parent.mkdir(parents=True)
     node.write_text("", encoding="utf-8")
-    monkeypatch.setenv("MCLAW_READONLY_SEED_DIRS", str(seed))
+    monkeypatch.setenv("OPENAKITA_READONLY_SEED_DIRS", str(seed))
     monkeypatch.setattr("mclaw.runtime_env.get_bootstrap_manifest_path", lambda: None)
     monkeypatch.setattr("mclaw.runtime_env.get_managed_node_seed", lambda: "")
     monkeypatch.setattr("shutil.which", lambda command: None)

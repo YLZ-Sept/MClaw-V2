@@ -137,7 +137,7 @@
       };
       function esc(v) { return String(v == null ? "" : v).replace(/[&<>"]/g, function (ch) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]; }); }
       function api(method, path, body) {
-        if (window.OpenAkita && window.OpenAkita.request) return window.OpenAkita.request(path, { method: method, body: body });
+        if (window.Mclaw && window.Mclaw.request) return window.Mclaw.request(path, { method: method, body: body });
         return fetch("/api/plugins/word-maker" + path, { method: method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }).then(function (r) { return r.json(); });
       }
       function toast(msg, bad) { state.notice = msg; state.error = bad ? msg : ""; render(); setTimeout(function () { state.notice = ""; render(); }, 2200); }
@@ -316,7 +316,7 @@
         });
       }
       function oaConfirm(message) {
-        if (window.OpenAkita && window.OpenAkita.confirm) return window.OpenAkita.confirm(message);
+        if (window.Mclaw && window.Mclaw.confirm) return window.Mclaw.confirm(message);
         return Promise.resolve(window.confirm(message));
       }
       function wordLogoSvg() {
@@ -378,15 +378,15 @@
         document.getElementById("app").innerHTML = '<div class="app">' + renderHeader() + renderTabs() + renderBanner() + (state.notice ? '<div class="oa-config-banner" style="border-color:' + (state.error ? "rgba(239,68,68,.35)" : "rgba(34,197,94,.35)") + ';background:' + (state.error ? "rgba(239,68,68,.08)" : "rgba(34,197,94,.08)") + '"><span class="oa-config-banner__icon">' + svgIcon(state.error ? "status-warning" : "status-good") + '</span><div class="oa-config-banner__text">' + esc(state.notice) + '</div></div>' : "") + '<div class="content">' + renderContent() + '</div></div>';
       }
       window.__wmTab = setTab; window.__wmDraft = draft; window.__wmCreate = createProject; window.__wmInspectTemplate = inspectTemplate; window.__wmDeps = checkDeps; window.__wmFolder = openFolderPicker; window.__wmStorage = loadStorageStats; window.__wmSaveSettings = saveSettings; window.__wmRender = render; window.__wmUpload = apiUpload; window.__wmOutline = generateOutline; window.__wmRenderProject = renderProject; window.__wmDownload = downloadProject; window.__wmCancel = cancelProject; window.__wmProjectId = currentProjectId; window.oaConfirm = oaConfirm;
-      window.addEventListener("openakita:ready", function (event) {
+      window.addEventListener("mclaw:ready", function (event) {
         if (event.detail && event.detail.theme) document.documentElement.setAttribute("data-theme", event.detail.theme);
         refresh();
       });
-      if (!window.OpenAkita || window.OpenAkita.__ready) refresh();
+      if (!window.Mclaw || window.Mclaw.__ready) refresh();
       render();
-      if (window.OpenAkita && window.OpenAkita.ready) window.OpenAkita.ready();
+      if (window.Mclaw && window.Mclaw.ready) window.Mclaw.ready();
     })();
   </script>
-<script src="./_assets/openakita-llm-selector.js" data-plugin-id="word-maker"></script>
+<script src="./_assets/mclaw-llm-selector.js" data-plugin-id="word-maker"></script>
 </body>
 </html>

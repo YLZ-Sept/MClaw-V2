@@ -1,5 +1,5 @@
 /**
- * OpenAkita Plugin UI Kit — icons.js
+ * Mclaw Plugin UI Kit — icons.js
  *
  * Inline SVG icon factory. Avoids emoji (per design rule: no emoji in UI;
  * everything must be a real SVG so we keep visual control across themes,
@@ -13,7 +13,7 @@
  *     <!-- inject via innerHTML / dangerouslySetInnerHTML -->
  *   </span>
  *
- *   const html = OpenAkitaIcons.warning();   // returns SVG string (no <span>)
+ *   const html = MclawIcons.warning();   // returns SVG string (no <span>)
  *   el.innerHTML = `<span class="oa-icon">${html}</span>`;
  *
  * All icons are 24x24 viewBox, stroke-based (currentColor), so they inherit
@@ -24,7 +24,7 @@
  */
 (function () {
   if (typeof window === "undefined") return;
-  if (window.OpenAkitaIcons) return;
+  if (window.MclawIcons) return;
 
   // Common SVG attributes baked into a helper to keep individual icons short.
   function svg(inner) {
@@ -308,5 +308,5 @@
     },
   });
 
-  window.OpenAkitaIcons = I;
+  window.MclawIcons = I;
 })();

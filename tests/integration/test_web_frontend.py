@@ -58,7 +58,7 @@ async def client(app):
 @pytest.fixture
 def authed_app(web_dist):
     with (
-        patch.dict(os.environ, {"MCLAW_WEB_PASSWORD": TEST_PASSWORD}),
+        patch.dict(os.environ, {"OPENAKITA_WEB_PASSWORD": TEST_PASSWORD}),
         patch("mclaw.api.server._find_web_dist", return_value=web_dist),
     ):
         return create_app()
@@ -204,14 +204,14 @@ class TestLoginFlow:
     async def test_login_with_wrong_password(self, remote_client):
         resp = await remote_client.post(
             "/api/auth/login",
-            json={"password": "wrong-password"},
+            json={"username": "admin", "password": "wrong-password"},
         )
         assert resp.status_code == 401
 
     async def test_login_and_access_protected_api(self, remote_client):
         login_resp = await remote_client.post(
             "/api/auth/login",
-            json={"password": TEST_PASSWORD},
+            json={"username": "admin", "password": TEST_PASSWORD},
         )
         assert login_resp.status_code == 200
         data = login_resp.json()

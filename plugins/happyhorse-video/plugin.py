@@ -2081,12 +2081,12 @@ class Plugin(PluginBase):
             return {
                 "name": name,
                 "description": (f"{description} {common_workbench_note}"),
-                "x.mclaw-execution": {
+                "x-mclaw-execution": {
                     "kind": "external_task",
                     "timeout_s": 900,
                 },
-                "x.mclaw-idempotency-param": "client_request_id",
-                "x.mclaw-media-contract": {
+                "x-mclaw-idempotency-param": "client_request_id",
+                "x-mclaw-media-contract": {
                     "kind": "video",
                     "model_param": "model_id",
                     "resolution_param": "resolution",
@@ -2259,11 +2259,11 @@ class Plugin(PluginBase):
                 "name": name,
                 "description": f"{description} {image_note}",
                 "input_schema": schema,
-                "x.mclaw-execution": {
+                "x-mclaw-execution": {
                     "kind": "external_task",
                     "timeout_s": 600,
                 },
-                "x.mclaw-idempotency-param": "client_request_id",
+                "x-mclaw-idempotency-param": "client_request_id",
                 "_mode": mode,
             }
 

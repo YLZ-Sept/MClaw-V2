@@ -52,7 +52,7 @@ def _reset_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     (tmp_path / "data" / "memory").mkdir(parents=True, exist_ok=True)
 
     # No desktop token in env -> _verify_desktop_token becomes a no-op.
-    monkeypatch.delenv("MCLAW_DESKTOP_SESSION_TOKEN", raising=False)
+    monkeypatch.delenv("OPENAKITA_DESKTOP_SESSION_TOKEN", raising=False)
 
     yield
 
@@ -259,7 +259,7 @@ class TestDesktopTokenGate:
     def test_quarantine_rejects_missing_desktop_token(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("MCLAW_DESKTOP_SESSION_TOKEN", "desktop-secret")
+        monkeypatch.setenv("OPENAKITA_DESKTOP_SESSION_TOKEN", "desktop-secret")
         token = client.get("/api/memory/repair/degraded").json()["confirmation_token"]
         r = client.post(
             "/api/memory/repair/quarantine",
@@ -273,7 +273,7 @@ class TestDesktopTokenGate:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
-        monkeypatch.setenv("MCLAW_DESKTOP_SESSION_TOKEN", "desktop-secret")
+        monkeypatch.setenv("OPENAKITA_DESKTOP_SESSION_TOKEN", "desktop-secret")
         token = client.get("/api/memory/repair/degraded").json()["confirmation_token"]
         r = client.post(
             "/api/memory/repair/quarantine",

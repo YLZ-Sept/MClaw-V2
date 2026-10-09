@@ -38,9 +38,9 @@ def clean_env(monkeypatch: pytest.MonkeyPatch):
     / ``test_c18_env_overrides.py`` downstream — verified
     reproducible on commit 07139e11 before any C21 change.
     """
-    monkeypatch.delenv("MCLAW_AUTO_CONFIRM", raising=False)
+    monkeypatch.delenv("OPENAKITA_AUTO_CONFIRM", raising=False)
     yield
-    os.environ.pop("MCLAW_AUTO_CONFIRM", None)
+    os.environ.pop("OPENAKITA_AUTO_CONFIRM", None)
 
 
 class TestApplyAutoConfirmFlag:
@@ -49,15 +49,15 @@ class TestApplyAutoConfirmFlag:
 
         _apply_auto_confirm_flag(enabled=True)
         try:
-            assert os.environ.get("MCLAW_AUTO_CONFIRM") == "1"
+            assert os.environ.get("OPENAKITA_AUTO_CONFIRM") == "1"
         finally:
-            os.environ.pop("MCLAW_AUTO_CONFIRM", None)
+            os.environ.pop("OPENAKITA_AUTO_CONFIRM", None)
 
     def test_disabled_does_not_touch_env_var(self, clean_env: None) -> None:
         from mclaw.main import _apply_auto_confirm_flag
 
         _apply_auto_confirm_flag(enabled=False)
-        assert "MCLAW_AUTO_CONFIRM" not in os.environ
+        assert "OPENAKITA_AUTO_CONFIRM" not in os.environ
 
     def test_disabled_does_not_clear_pre_existing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """If the operator sets the ENV var directly and then runs
@@ -65,9 +65,9 @@ class TestApplyAutoConfirmFlag:
         additive, not authoritative)."""
         from mclaw.main import _apply_auto_confirm_flag
 
-        monkeypatch.setenv("MCLAW_AUTO_CONFIRM", "1")
+        monkeypatch.setenv("OPENAKITA_AUTO_CONFIRM", "1")
         _apply_auto_confirm_flag(enabled=False)
-        assert os.environ.get("MCLAW_AUTO_CONFIRM") == "1"
+        assert os.environ.get("OPENAKITA_AUTO_CONFIRM") == "1"
 
 
 class TestPhaseDFeedsPhaseC:
@@ -83,9 +83,9 @@ class TestPhaseDFeedsPhaseC:
             cfg = PolicyConfigV2()
             new_cfg, report = eo.apply_env_overrides(cfg)
             assert new_cfg.confirmation.mode == "trust"
-            assert any(o["env"] == "MCLAW_AUTO_CONFIRM" for o in report.applied)
+            assert any(o["env"] == "OPENAKITA_AUTO_CONFIRM" for o in report.applied)
         finally:
-            os.environ.pop("MCLAW_AUTO_CONFIRM", None)
+            os.environ.pop("OPENAKITA_AUTO_CONFIRM", None)
 
     def test_flag_unset_overrides_no_op(self, clean_env: None) -> None:
         cfg = PolicyConfigV2()
@@ -107,7 +107,7 @@ class TestCliInvocation:
     ):
         # Avoid heavy startup side-effects of subcommands (which would
         # need a real LLM endpoint). Use --version which short-circuits.
-        monkeypatch.delenv("MCLAW_AUTO_CONFIRM", raising=False)
+        monkeypatch.delenv("OPENAKITA_AUTO_CONFIRM", raising=False)
         from mclaw.main import app
 
         return runner.invoke(app, args)

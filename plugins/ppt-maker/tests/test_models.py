@@ -51,7 +51,7 @@ def test_path_helpers_keep_files_inside_data_root(tmp_path) -> None:
 
     assert data_root.name == "ppt-maker"
     assert safe_name("../bad name.pptx") == "bad_name.pptx"
-    assert slugify("Mclaw 插件生态") == .mclaw-插件生态"
+    assert slugify("Mclaw 插件生态") == "mclaw-插件生态"
     assert assert_within_root(data_root, child) == child.resolve()
     with pytest.raises(ValueError):
         assert_within_root(data_root, tmp_path.parent / "escape.txt")

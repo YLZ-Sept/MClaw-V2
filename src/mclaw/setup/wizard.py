@@ -78,7 +78,7 @@ class SetupWizard:
         self._locale = "zh"
         self._defaults: dict = {
             "MODEL_DOWNLOAD_SOURCE": "hf-mirror",
-            "EMBEDDING_MODEL": "shibing624/text2vec-base-chinese",
+            "EMBEDDING_MODEL": "BAAI/bge-small-zh-v1.5",
             "SCHEDULER_TIMEZONE": "Asia/Shanghai",
             "WHISPER_LANGUAGE": "zh",
         }
@@ -353,7 +353,7 @@ Mclaw 按「现状」(AS IS) 提供，不附带任何形式的明示或暗示
             # 国内默认值
             self._defaults = {
                 "MODEL_DOWNLOAD_SOURCE": "hf-mirror",
-                "EMBEDDING_MODEL": "shibing624/text2vec-base-chinese",
+                "EMBEDDING_MODEL": "BAAI/bge-small-zh-v1.5",
                 "SCHEDULER_TIMEZONE": "Asia/Shanghai",
             }
             console.print("\n[green]已选择：中文 / 中国大陆[/green]")
@@ -1170,15 +1170,16 @@ Mclaw 按「现状」(AS IS) 提供，不附带任何形式的明示或暗示
 
         # 根据 locale 推导默认选项
         defaults = getattr(self, "_defaults", {})
-        default_embed = defaults.get("EMBEDDING_MODEL", "shibing624/text2vec-base-chinese")
+        default_embed = defaults.get("EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")
         default_src = defaults.get("MODEL_DOWNLOAD_SOURCE", "auto")
 
         # Embedding 模型选择
         models_list = [
-            ("1", "shibing624/text2vec-base-chinese", "Chinese optimized (~100MB)"),
-            ("2", "sentence-transformers/all-MiniLM-L6-v2", "English optimized (~90MB)"),
+            ("1", "BAAI/bge-small-zh-v1.5", "Chinese optimized, best quality (~100MB)"),
+            ("2", "shibing624/text2vec-base-chinese", "Chinese, legacy (~100MB)"),
+            ("3", "sentence-transformers/all-MiniLM-L6-v2", "English optimized (~90MB)"),
             (
-                "3",
+                "4",
                 "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
                 "Multilingual (~120MB)",
             ),
@@ -1198,7 +1199,7 @@ Mclaw 按「现状」(AS IS) 提供，不附带任何形式的明示或暗示
 
         choice = Prompt.ask(
             "Select embedding model",
-            choices=["1", "2", "3"],
+            choices=["1", "2", "3", "4"],
             default=default_model_choice,
         )
         self.config["EMBEDDING_MODEL"] = {n: m for n, m, _ in models_list}[choice]
@@ -1683,12 +1684,22 @@ Mclaw 按「现状」(AS IS) 提供，不附带任何形式的明示或暗示
         lines.extend(
             [
                 "# ========== Memory System ==========",
-                f"EMBEDDING_MODEL={self.config.get('EMBEDDING_MODEL', 'shibing624/text2vec-base-chinese')}",
+                f"EMBEDDING_MODEL={self.config.get('EMBEDDING_MODEL', 'BAAI/bge-small-zh-v1.5')}",
                 f"EMBEDDING_DEVICE={self.config.get('EMBEDDING_DEVICE', 'cpu')}  # 嵌入模型运行设备: cpu / cuda / mps",
                 f"MODEL_DOWNLOAD_SOURCE={self.config.get('MODEL_DOWNLOAD_SOURCE', 'auto')}  # 模型下载源: auto / huggingface / modelscope",
                 "MEMORY_HISTORY_DAYS=30  # 记忆保留天数",
                 "MEMORY_MAX_HISTORY_FILES=1000  # 最大历史文件数",
                 "MEMORY_MAX_HISTORY_SIZE_MB=500  # 历史文件最大总大小（MB）",
+                "",
+                "# ========== 知识库精排 (可选) ==========",
+                "# 默认关闭（本地模型 bge-reranker-base 约 1.1GB，首次使用会后台下载并常驻内存）",
+                "# 留空 = 仅在下方配置了在线 Rerank API 时启用；true = 启用本地模型；false = 关闭",
+                "# KB_RERANKER_ENABLED=",
+                "# KB_RERANKER_MODEL=BAAI/bge-reranker-base",
+                "# 在线 Rerank API（兼容 SiliconFlow / Jina 的 /rerank 接口，配好即自动启用）",
+                "# KB_RERANKER_API_BASE=https://api.siliconflow.cn/v1",
+                "# KB_RERANKER_API_KEY=",
+                "# KB_RERANKER_API_MODEL=BAAI/bge-reranker-v2-m3",
                 "",
             ]
         )

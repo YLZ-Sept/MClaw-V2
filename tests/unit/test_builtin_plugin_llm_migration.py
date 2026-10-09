@@ -65,16 +65,16 @@ def test_pure_text_paths_do_not_call_brain_or_vendor_chat_surfaces() -> None:
 
 def test_all_migrated_plugin_dist_pages_ship_the_model_selector() -> None:
     canonical = (
-        ROOT / "plugins/word-maker/ui/dist/_assets.mclaw-llm-selector.js"
+        ROOT / "plugins/word-maker/ui/dist/_assets/mclaw-llm-selector.js"
     ).read_bytes()
     selector_text = canonical.decode("utf-8")
     assert "严格锁定，不会静默回退" in selector_text
     assert "已失效，请重新选择" in selector_text
     for plugin_id in AFFECTED_PLUGINS:
         dist = ROOT / "plugins" / plugin_id / "ui" / "dist"
-        assert (dist / "_assets.mclaw-llm-selector.js").read_bytes() == canonical
+        assert (dist / "_assets/mclaw-llm-selector.js").read_bytes() == canonical
         html = (dist / "index.html").read_text(encoding="utf-8")
-        assert html.count(.mclaw-llm-selector.js") == 1
+        assert html.count("mclaw-llm-selector.js") == 1
         assert f'data-plugin-id="{plugin_id}"' in html
 
     clip_html = (ROOT / "plugins/clip-sense/ui/dist/index.html").read_text(encoding="utf-8")

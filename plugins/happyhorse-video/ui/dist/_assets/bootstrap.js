@@ -1,12 +1,12 @@
 /**
- * OpenAkita Plugin UI Bootstrap (zero-dependency, ~3KB)
+ * Mclaw Plugin UI Bootstrap (zero-dependency, ~3KB)
  *
  * Plugin authors include this once in their UI's <head>:
  *   <script src="/api/plugins/_sdk/bootstrap.js"></script>
  *
  * It performs the bridge:ready / bridge:handshake handshake with the host,
  * receives theme / locale / apiBase / pluginId, and exposes a tiny
- * helper API at window.OpenAkita for plugin code to use.
+ * helper API at window.Mclaw for plugin code to use.
  *
  * Idempotent: safe to load multiple times.
  */
@@ -14,7 +14,7 @@
   if (typeof window === "undefined") return;
   // Not inside an iframe: nothing to do (and avoid posting to ourselves).
   if (window.parent === window) return;
-  if (window.OpenAkita && window.OpenAkita.__bootstrapped) return;
+  if (window.Mclaw && window.Mclaw.__bootstrapped) return;
 
   var BRIDGE_VERSION = 1;
   var meta = { theme: "light", locale: "zh-CN", apiBase: "", pluginId: "" };
@@ -55,9 +55,9 @@
         if (typeof p.apiBase === "string") meta.apiBase = p.apiBase;
         if (typeof p.pluginId === "string") meta.pluginId = p.pluginId;
         applyTheme(meta.theme);
-        if (!window.OpenAkita.__ready) {
-          window.OpenAkita.__ready = true;
-          dispatch("openakita:ready", Object.assign({}, meta));
+        if (!window.Mclaw.__ready) {
+          window.Mclaw.__ready = true;
+          dispatch("mclaw:ready", Object.assign({}, meta));
         }
         break;
       }
@@ -65,17 +65,17 @@
         var t = (d.payload && d.payload.theme) || "light";
         meta.theme = t;
         applyTheme(t);
-        dispatch("openakita:theme-change", { theme: t });
+        dispatch("mclaw:theme-change", { theme: t });
         break;
       }
       case "bridge:locale-change": {
         var l = (d.payload && d.payload.locale) || "zh-CN";
         meta.locale = l;
-        dispatch("openakita:locale-change", { locale: l });
+        dispatch("mclaw:locale-change", { locale: l });
         break;
       }
       case "bridge:event": {
-        dispatch("openakita:event", d.payload || {});
+        dispatch("mclaw:event", d.payload || {});
         break;
       }
       case "bridge:api-response":
@@ -113,7 +113,7 @@
 
   var renderReadySent = false;
 
-  window.OpenAkita = {
+  window.Mclaw = {
     __bootstrapped: true,
     __ready: false,
     bridgeVersion: BRIDGE_VERSION,
@@ -153,10 +153,10 @@
       return request("bridge:clipboard", { text: text });
     },
     onReady: function (cb) {
-      if (window.OpenAkita.__ready) {
+      if (window.Mclaw.__ready) {
         try { cb(Object.assign({}, meta)); } catch (_) {}
       } else {
-        window.addEventListener("openakita:ready", function (e) { cb(e.detail); }, { once: true });
+        window.addEventListener("mclaw:ready", function (e) { cb(e.detail); }, { once: true });
       }
     },
     /**

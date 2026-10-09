@@ -43,6 +43,8 @@ def _normalize_hash(raw: str) -> str | None:
 
 def resolve_git_hash(*, require: bool = False) -> str:
     for env_name in (
+        # 新名优先；保留上游老名以便老 CI / 老构建脚本继续生效。
+        "MCLAW_BUILD_GIT_HASH",
         "OPENAKITA_BUILD_GIT_HASH",
         "GITHUB_SHA",
         "CI_COMMIT_SHA",

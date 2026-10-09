@@ -1,5 +1,5 @@
 {
-  "name": .mclaw-whatsapp-bridge",
+  "name": "mclaw-whatsapp-bridge",
   "version": "2.0.0",
   "description": "Baileys 7-based WhatsApp Web bridge for Mclaw",
   "main": "index.js",

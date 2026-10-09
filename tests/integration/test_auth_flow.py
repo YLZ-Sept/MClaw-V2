@@ -1,17 +1,20 @@
 """认证流程端到端集成测试。
 
-覆盖 v1.25.9 修复的多个认证相关 bug：
-1. 本地直连请求免认证（127.0.0.1 无 X-Forwarded-For）
-2. 反向代理模式（TRUST_PROXY=true）+ 有 X-Forwarded-For → 需要认证
-3. 反向代理模式 + 无 X-Forwarded-For（Tauri 桌面端直连）→ 仍免认证
-4. trust_proxy 动态读取（改环境变量后无需重启即生效）
-5. WebSocket 认证与 HTTP 一致（/ws/events）
-6. /web/ 路径始终免认证
-7. /api/health 免认证
-8. /api/config 需要认证
-9. 记忆管理 API 需要认证（曾有 401 bug）
-10. token 刷新流程
-11. 插件 UI 静态资源免认证，但插件业务 API 仍需认证
+覆盖多用户化 + 安全加固（2026-08 移除 loopback 豁免）之后的认证契约：
+
+1. 受保护接口一律需要凭证——**本机直连不再免认证**
+2. 豁免仅限白名单路径，见 ``mclaw.api.auth.AUTH_EXEMPT_PATHS`` /
+   ``AUTH_EXEMPT_PREFIXES``（/、/api/health、/api/auth/*、/api/logs/frontend、
+   /web/、/ws/、/docs、/openapi.json、/redoc、/user-docs）
+3. ``TRUST_PROXY`` 只影响限速用的客户端 IP 判定，**不再影响是否需要认证**
+4. WebSocket 走独立鉴权：``/ws/`` 前缀豁免 HTTP 中间件，连接级鉴权见
+   ``routes.websocket._authenticate_ws``
+5. /web/ 路径始终免认证
+6. /api/health 免认证
+7. /api/config 需要认证
+8. 记忆管理 API 需要认证（曾有 401 bug）
+9. token 刷新流程
+10. 插件 UI 静态资源免认证，但插件业务 API 仍需认证（含 POST）
 """
 
 from __future__ import annotations
@@ -29,11 +32,15 @@ def app(monkeypatch, tmp_path):
     from mclaw.config import settings
 
     monkeypatch.setattr(settings, "project_root", tmp_path)
-    monkeypatch.delenv("MCLAW_WEB_PASSWORD", raising=False)
+    # 实现在 api/auth.py 的 PASSWORD_ENV_VAR 里读的是 OPENAKITA_WEB_PASSWORD
+    # （该常量未随品牌改名），清掉以免宿主环境干扰。
+    monkeypatch.delenv("OPENAKITA_WEB_PASSWORD", raising=False)
     monkeypatch.delenv("TRUST_PROXY", raising=False)
 
     app = create_app()
-    app.state.web_access_config.change_password(TEST_PASSWORD)
+    # 多用户化之后，空配置里不会自动建 admin（只有 v1 迁移或设了
+    # OPENAKITA_WEB_PASSWORD 时才会），所以测试要显式创建管理员。
+    app.state.web_access_config.add_user("admin", TEST_PASSWORD, role="admin")
     return app
 
 
@@ -49,13 +56,13 @@ async def client(app):
 @pytest.fixture
 def access_token(app) -> str:
     config = app.state.web_access_config
-    return config.create_access_token()
+    return config.create_access_token("admin")
 
 
 @pytest.fixture
 def refresh_token(app) -> str:
     config = app.state.web_access_config
-    return config.create_refresh_token()
+    return config.create_refresh_token("admin")
 
 
 def auth_header(token: str) -> dict[str, str]:
@@ -63,18 +70,18 @@ def auth_header(token: str) -> dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# 1. 本地直连请求免认证
+# 1. 本机直连**不再**免认证（loopback 豁免已于 2026-08 移除）
 # ---------------------------------------------------------------------------
 
 
-class TestLocalBypassAuth:
-    async def test_local_request_no_auth_needed(self, client):
+class TestLocalDirectRequiresAuth:
+    async def test_local_request_requires_auth(self, client):
         resp = await client.get("/api/config/workspace-info")
-        assert resp.status_code == 200
+        assert resp.status_code == 401
 
-    async def test_local_request_to_protected_endpoint(self, client):
+    async def test_local_request_to_protected_endpoint_requires_auth(self, client):
         resp = await client.get("/api/memories")
-        assert resp.status_code != 401
+        assert resp.status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -106,52 +113,48 @@ class TestReverseProxyRequiresAuth:
 
 
 # ---------------------------------------------------------------------------
-# 3. 反向代理模式 + 无 X-Forwarded-For（Tauri 桌面端直连）→ 仍免认证
+# 3. 反向代理模式下，本机直连（无 X-Forwarded-For）同样需要认证
 # ---------------------------------------------------------------------------
 
 
 class TestReverseProxyLocalDirect:
-    async def test_proxy_mode_local_no_forwarded_for_bypasses_auth(self, client, monkeypatch):
+    async def test_proxy_mode_local_no_forwarded_for_requires_auth(self, client, monkeypatch):
         monkeypatch.setenv("TRUST_PROXY", "true")
         resp = await client.get("/api/config/workspace-info")
-        assert resp.status_code == 200
+        assert resp.status_code == 401
 
 
 # ---------------------------------------------------------------------------
-# 4. trust_proxy 动态读取
+# 4. TRUST_PROXY 不再影响是否需要认证
+#    （移除 loopback 豁免后，它只剩"限速用的客户端 IP 判定"这一个作用，
+#      见 api/auth.py 的 get_client_ip / is_trusted_local）
 # ---------------------------------------------------------------------------
 
 
-class TestTrustProxyDynamic:
-    async def test_trust_proxy_off_then_on(self, client, access_token, monkeypatch):
-        monkeypatch.delenv("TRUST_PROXY", raising=False)
-        resp = await client.get(
-            "/api/config/workspace-info",
-            headers={"X-Forwarded-For": "203.0.113.50"},
-        )
-        assert resp.status_code == 200
+class TestTrustProxyDoesNotGateAuth:
+    async def test_protected_endpoint_requires_auth_regardless_of_trust_proxy(
+        self, client, access_token, monkeypatch
+    ):
+        for value in (None, "true"):
+            if value is None:
+                monkeypatch.delenv("TRUST_PROXY", raising=False)
+            else:
+                monkeypatch.setenv("TRUST_PROXY", value)
 
-        monkeypatch.setenv("TRUST_PROXY", "true")
-        resp = await client.get(
-            "/api/config/workspace-info",
-            headers={"X-Forwarded-For": "203.0.113.50"},
-        )
-        assert resp.status_code == 401
+            resp = await client.get(
+                "/api/config/workspace-info",
+                headers={"X-Forwarded-For": "203.0.113.50"},
+            )
+            assert resp.status_code == 401, f"TRUST_PROXY={value} 时不应放行"
 
-    async def test_trust_proxy_on_then_off(self, client, access_token, monkeypatch):
-        monkeypatch.setenv("TRUST_PROXY", "true")
-        resp = await client.get(
-            "/api/config/workspace-info",
-            headers={"X-Forwarded-For": "203.0.113.50"},
-        )
-        assert resp.status_code == 401
-
-        monkeypatch.delenv("TRUST_PROXY", raising=False)
-        resp = await client.get(
-            "/api/config/workspace-info",
-            headers={"X-Forwarded-For": "203.0.113.50"},
-        )
-        assert resp.status_code == 200
+            resp = await client.get(
+                "/api/config/workspace-info",
+                headers={
+                    "X-Forwarded-For": "203.0.113.50",
+                    **auth_header(access_token),
+                },
+            )
+            assert resp.status_code == 200, f"TRUST_PROXY={value} 时带凭证应放行"
 
 
 # ---------------------------------------------------------------------------

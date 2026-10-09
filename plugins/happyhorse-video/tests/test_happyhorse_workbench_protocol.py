@@ -39,7 +39,7 @@ def test_image_and_video_tool_schemas_expose_segment_id():
         properties = definitions[tool_name]["input_schema"]["properties"]
         assert properties["segment_id"]["type"] == "string"
         assert properties["client_request_id"]["type"] == "string"
-        assert definitions[tool_name]["x.mclaw-execution"]["kind"] == "external_task"
+        assert definitions[tool_name]["x-mclaw-execution"]["kind"] == "external_task"
 
 
 def test_org_readiness_reports_local_prerequisites(monkeypatch: pytest.MonkeyPatch):

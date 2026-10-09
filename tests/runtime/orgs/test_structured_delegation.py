@@ -63,7 +63,7 @@ def _dag_spec() -> AgentSpec:
 
 @pytest.mark.asyncio
 async def test_xml_dispatch_is_inert_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("MCLAW_ORG_LEGACY_TEXT_DISPATCH", raising=False)
+    monkeypatch.delenv("OPENAKITA_ORG_LEGACY_TEXT_DISPATCH", raising=False)
     callback = AsyncMock(return_value="must not run")
     brain = SimpleNamespace(
         messages_create_async=AsyncMock(
@@ -87,7 +87,7 @@ async def test_xml_dispatch_is_inert_by_default(monkeypatch: pytest.MonkeyPatch)
 async def test_structured_delegation_executes_once_and_suppresses_duplicate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("MCLAW_ORG_LEGACY_TEXT_DISPATCH", raising=False)
+    monkeypatch.delenv("OPENAKITA_ORG_LEGACY_TEXT_DISPATCH", raising=False)
     delegation_ledger.clear()
     callback = AsyncMock(return_value="video ready")
     request = {

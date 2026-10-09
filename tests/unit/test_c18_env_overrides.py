@@ -79,19 +79,19 @@ class TestApplyOverrides:
         cfg = PolicyConfigV2()
         assert cfg.hot_reload.enabled is False
         new_cfg, report = eo.apply_env_overrides(
-            cfg, environ={"MCLAW_POLICY_HOT_RELOAD": "true"}
+            cfg, environ={"OPENAKITA_POLICY_HOT_RELOAD": "true"}
         )
         assert new_cfg.hot_reload.enabled is True
         assert len(report.applied) == 1
         applied = report.applied[0]
-        assert applied["env"] == "MCLAW_POLICY_HOT_RELOAD"
+        assert applied["env"] == "OPENAKITA_POLICY_HOT_RELOAD"
         assert applied["path"] == "hot_reload.enabled"
         assert applied["value"] is True
         assert applied["redacted"] is False
 
     def test_auto_confirm_flips_mode_to_trust(self) -> None:
         cfg = PolicyConfigV2()
-        new_cfg, report = eo.apply_env_overrides(cfg, environ={"MCLAW_AUTO_CONFIRM": "1"})
+        new_cfg, report = eo.apply_env_overrides(cfg, environ={"OPENAKITA_AUTO_CONFIRM": "1"})
         # "trust" is the v2 enum value for auto-allow (v1: "yolo").
         assert new_cfg.confirmation.mode == "trust"
         assert len(report.applied) == 1
@@ -99,20 +99,20 @@ class TestApplyOverrides:
 
     def test_auto_confirm_false_resets_to_default(self) -> None:
         cfg = PolicyConfigV2.model_validate({"confirmation": {"mode": "trust"}})
-        new_cfg, report = eo.apply_env_overrides(cfg, environ={"MCLAW_AUTO_CONFIRM": "false"})
+        new_cfg, report = eo.apply_env_overrides(cfg, environ={"OPENAKITA_AUTO_CONFIRM": "false"})
         assert new_cfg.confirmation.mode == "default"
 
     def test_unattended_strategy(self) -> None:
         cfg = PolicyConfigV2()
         new_cfg, report = eo.apply_env_overrides(
-            cfg, environ={"MCLAW_UNATTENDED_STRATEGY": "deny"}
+            cfg, environ={"OPENAKITA_UNATTENDED_STRATEGY": "deny"}
         )
         assert new_cfg.unattended.default_strategy == "deny"
 
     def test_audit_log_path(self, tmp_path: Path) -> None:
         cfg = PolicyConfigV2()
         custom = str(tmp_path / "audit.jsonl")
-        new_cfg, report = eo.apply_env_overrides(cfg, environ={"MCLAW_AUDIT_LOG_PATH": custom})
+        new_cfg, report = eo.apply_env_overrides(cfg, environ={"OPENAKITA_AUDIT_LOG_PATH": custom})
         # Note schema._validate_safe_path normalizes; only assert it isn't
         # the default.
         assert new_cfg.audit.log_path != cfg.audit.log_path
@@ -122,35 +122,35 @@ class TestApplyOverrides:
         new_cfg, report = eo.apply_env_overrides(
             cfg,
             environ={
-                "MCLAW_POLICY_HOT_RELOAD": "1",
-                "MCLAW_AUTO_CONFIRM": "1",
+                "OPENAKITA_POLICY_HOT_RELOAD": "1",
+                "OPENAKITA_AUTO_CONFIRM": "1",
             },
         )
         assert new_cfg.hot_reload.enabled is True
         assert new_cfg.confirmation.mode == "trust"
         applied_envs = {e["env"] for e in report.applied}
-        assert "MCLAW_POLICY_HOT_RELOAD" in applied_envs
-        assert "MCLAW_AUTO_CONFIRM" in applied_envs
+        assert "OPENAKITA_POLICY_HOT_RELOAD" in applied_envs
+        assert "OPENAKITA_AUTO_CONFIRM" in applied_envs
 
 
 class TestInvalidValues:
     def test_invalid_bool_logged_not_applied(self) -> None:
         cfg = PolicyConfigV2()
         new_cfg, report = eo.apply_env_overrides(
-            cfg, environ={"MCLAW_POLICY_HOT_RELOAD": "yes-please"}
+            cfg, environ={"OPENAKITA_POLICY_HOT_RELOAD": "yes-please"}
         )
         # YAML default preserved.
         assert new_cfg.hot_reload.enabled is False
         assert len(report.applied) == 0
         assert len(report.skipped_errors) == 1
         err = report.skipped_errors[0]
-        assert err["env"] == "MCLAW_POLICY_HOT_RELOAD"
+        assert err["env"] == "OPENAKITA_POLICY_HOT_RELOAD"
         assert "boolean" in err["error"].lower()
 
     def test_invalid_unattended_logged_not_applied(self) -> None:
         cfg = PolicyConfigV2()
         new_cfg, report = eo.apply_env_overrides(
-            cfg, environ={"MCLAW_UNATTENDED_STRATEGY": "yolo_mode"}
+            cfg, environ={"OPENAKITA_UNATTENDED_STRATEGY": "yolo_mode"}
         )
         assert new_cfg.unattended.default_strategy == "ask_owner"
         assert len(report.skipped_errors) == 1
@@ -167,7 +167,7 @@ class TestInvalidValues:
         # Patch the registry temporarily with a coerce that returns
         # something the schema will reject.
         bad_spec = eo.OverrideSpec(
-            env_name="MCLAW_AUDIT_LOG_PATH",
+            env_name="OPENAKITA_AUDIT_LOG_PATH",
             cfg_path="audit.log_path",
             coerce=lambda raw: "../../etc/passwd",
         )
@@ -175,7 +175,7 @@ class TestInvalidValues:
         try:
             eo._REGISTRY = (bad_spec,)
             new_cfg, report = eo.apply_env_overrides(
-                cfg, environ={"MCLAW_AUDIT_LOG_PATH": "anything"}
+                cfg, environ={"OPENAKITA_AUDIT_LOG_PATH": "anything"}
             )
         finally:
             eo._REGISTRY = original
@@ -196,11 +196,11 @@ class TestResolveYamlPath:
     ) -> None:
         custom = tmp_path / "custom.yaml"
         custom.write_text("security: {}\n", encoding="utf-8")
-        monkeypatch.setenv("MCLAW_POLICY_FILE", str(custom))
+        monkeypatch.setenv("OPENAKITA_POLICY_FILE", str(custom))
         assert global_engine._resolve_yaml_path() == custom
 
     def test_env_var_empty_string_ignored(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("MCLAW_POLICY_FILE", "   ")
+        monkeypatch.setenv("OPENAKITA_POLICY_FILE", "   ")
         # Falls through to settings/fallback; just verify it didn't return
         # the empty path.
         got = global_engine._resolve_yaml_path()
@@ -213,21 +213,21 @@ class TestLoadIntegration:
     ) -> None:
         yaml = tmp_path / "POLICIES.yaml"
         yaml.write_text("security: {}\n", encoding="utf-8")
-        monkeypatch.setenv("MCLAW_POLICY_HOT_RELOAD", "1")
+        monkeypatch.setenv("OPENAKITA_POLICY_HOT_RELOAD", "1")
 
         cfg, report = load_policies_yaml(yaml)
 
         assert cfg.hot_reload.enabled is True
         assert report.env_overrides is not None
         assert len(report.env_overrides.applied) == 1
-        assert report.env_overrides.applied[0]["env"] == "MCLAW_POLICY_HOT_RELOAD"
+        assert report.env_overrides.applied[0]["env"] == "OPENAKITA_POLICY_HOT_RELOAD"
 
     def test_load_with_apply_env_false_skips_overrides(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         yaml = tmp_path / "POLICIES.yaml"
         yaml.write_text("security: {}\n", encoding="utf-8")
-        monkeypatch.setenv("MCLAW_POLICY_HOT_RELOAD", "1")
+        monkeypatch.setenv("OPENAKITA_POLICY_HOT_RELOAD", "1")
 
         cfg, report = load_policies_yaml(yaml, apply_env=False)
 
@@ -263,7 +263,7 @@ class TestAuditEmission:
             "    include_chain: false\n",
             encoding="utf-8",
         )
-        monkeypatch.setenv("MCLAW_POLICY_HOT_RELOAD", "1")
+        monkeypatch.setenv("OPENAKITA_POLICY_HOT_RELOAD", "1")
 
         global_engine.reset_engine_v2(clear_explicit_lookup=True)
         global_engine._clear_last_known_good()
@@ -291,7 +291,7 @@ class TestAuditEmission:
             "    include_chain: false\n",
             encoding="utf-8",
         )
-        monkeypatch.setenv("MCLAW_POLICY_HOT_RELOAD", "totally-broken-value")
+        monkeypatch.setenv("OPENAKITA_POLICY_HOT_RELOAD", "totally-broken-value")
 
         global_engine.reset_engine_v2(clear_explicit_lookup=True)
         global_engine._clear_last_known_good()
@@ -321,17 +321,17 @@ class TestHotReloadReadsEnv:
         yaml.write_text("security: {}\n", encoding="utf-8")
 
         # First load with ENV off.
-        monkeypatch.delenv("MCLAW_POLICY_HOT_RELOAD", raising=False)
+        monkeypatch.delenv("OPENAKITA_POLICY_HOT_RELOAD", raising=False)
         cfg1, _ = load_policies_yaml(yaml)
         assert cfg1.hot_reload.enabled is False
 
         # Operator flips the var; subsequent load applies it.
-        monkeypatch.setenv("MCLAW_POLICY_HOT_RELOAD", "1")
+        monkeypatch.setenv("OPENAKITA_POLICY_HOT_RELOAD", "1")
         cfg2, _ = load_policies_yaml(yaml)
         assert cfg2.hot_reload.enabled is True
 
         # Flips back.
-        monkeypatch.delenv("MCLAW_POLICY_HOT_RELOAD")
+        monkeypatch.delenv("OPENAKITA_POLICY_HOT_RELOAD")
         cfg3, _ = load_policies_yaml(yaml)
         assert cfg3.hot_reload.enabled is False
 
@@ -350,7 +350,7 @@ def test_list_override_envs_returns_all_5() -> None:
     # not the override layer — so the registry has 4 entries currently.
     # Bumping this assert IS the prompt to update docs.
     assert len(envs) == 4
-    assert "MCLAW_POLICY_HOT_RELOAD" in envs
-    assert "MCLAW_AUTO_CONFIRM" in envs
-    assert "MCLAW_UNATTENDED_STRATEGY" in envs
-    assert "MCLAW_AUDIT_LOG_PATH" in envs
+    assert "OPENAKITA_POLICY_HOT_RELOAD" in envs
+    assert "OPENAKITA_AUTO_CONFIRM" in envs
+    assert "OPENAKITA_UNATTENDED_STRATEGY" in envs
+    assert "OPENAKITA_AUDIT_LOG_PATH" in envs

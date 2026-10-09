@@ -882,7 +882,7 @@ function copyToClipboard(text) {
   }
   if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { showToast("已复制"); });
 }
-// Standard OpenAkita bridge — let the host show the path in OS file
+// Standard Mclaw bridge — let the host show the path in OS file
 // manager (Explorer / Finder). Outside an iframe we silently no-op
 // because there's no API for the page to spawn an OS shell on its own.
 function showInFolder(path) {
@@ -892,7 +892,7 @@ function showInFolder(path) {
   }
   return Promise.resolve(false);
 }
-// Standard OpenAkita bridge — open the host's native folder picker.
+// Standard Mclaw bridge — open the host's native folder picker.
 // Resolves with the selected absolute path, or null if the user
 // cancelled / the bridge isn't ready (we still want the input field
 // to remain editable as a typed-path fallback).
@@ -913,7 +913,7 @@ function pickFolder(title) {
 }
 // In-page confirm dialog. window.confirm() is silently disabled inside
 // cross-origin iframes (Chrome 92+), which is exactly how this plugin is
-// hosted by OpenAkita's setup-center. The native dialog used to work in
+// hosted by Mclaw's setup-center. The native dialog used to work in
 // dev (browsing the file directly) but produced "click does nothing"
 // in production — surfaced to the user as both 「删除按键还是没用」 and
 // 「点上传并预检没反应」. ``oaConfirm`` returns a Promise<bool> that
@@ -1161,7 +1161,7 @@ const I18N_DICT = {
     "settings.defaults.threshold": "成本确认阈值（元）",
     "settings.defaults.thresholdHint": "单次任务超过此金额时弹窗确认",
     "settings.storage.dir": "数据目录",
-    "settings.storage.dir.placeholder": "留空 = 使用默认目录（由 OpenAkita 管理）",
+    "settings.storage.dir.placeholder": "留空 = 使用默认目录（由 Mclaw 管理）",
     "settings.storage.dir.hint": "可改成更大的盘 / 别的用户目录。仅支持绝对路径。",
     "settings.storage.dir.active": "当前生效：",
     "settings.storage.dir.pending": "已保存，重新加载插件后生效",
@@ -1451,7 +1451,7 @@ const I18N_DICT = {
     "settings.defaults.threshold": "Cost confirm threshold (¥)",
     "settings.defaults.thresholdHint": "Show a confirmation modal when a single task exceeds this amount",
     "settings.storage.dir": "Data directory",
-    "settings.storage.dir.placeholder": "Leave empty to use the default (managed by OpenAkita)",
+    "settings.storage.dir.placeholder": "Leave empty to use the default (managed by Mclaw)",
     "settings.storage.dir.hint": "Useful when you want to point at a larger drive or a shared folder. Absolute paths only.",
     "settings.storage.dir.active": "In use:",
     "settings.storage.dir.pending": "Saved — reload the plugin for the new path to take effect.",
@@ -1545,10 +1545,10 @@ const I18N_DICT = {
 };
 
 const _i18n = (function () {
-  if (window.OpenAkitaI18n && typeof window.OpenAkitaI18n.register === "function") {
-    window.OpenAkitaI18n.register(I18N_DICT);
+  if (window.MclawI18n && typeof window.MclawI18n.register === "function") {
+    window.MclawI18n.register(I18N_DICT);
   }
-  let loc = (window.OpenAkitaI18n && window.OpenAkitaI18n.getLocale && window.OpenAkitaI18n.getLocale()) || "zh";
+  let loc = (window.MclawI18n && window.MclawI18n.getLocale && window.MclawI18n.getLocale()) || "zh";
   const subs = new Set();
   return {
     t: function (k, vars) {
@@ -5113,7 +5113,7 @@ function SettingsTab({ settings, onSaved, voices }) {
         </h3>
 
         {/* ── 数据目录 ── input + Browse + Open. Empty input = use the
-            built-in default (~/.openakita/.../avatar-studio). Backend's
+            built-in default (~/.mclaw/.../avatar-studio). Backend's
             「打开」 endpoint resolves the default automatically when the
             value is blank, so the button always works. */}
         <div className="form-row">
@@ -5598,8 +5598,8 @@ class PluginErrorBoundary extends React.Component {
 ReactDOM.createRoot(document.getElementById("root")).render(
   <PluginErrorBoundary><App /></PluginErrorBoundary>
 );
-if (window.OpenAkita && typeof window.OpenAkita.ready === "function") {
-  window.OpenAkita.ready();
+if (window.Mclaw && typeof window.Mclaw.ready === "function") {
+  window.Mclaw.ready();
 }
 </script>
 </body>

@@ -376,8 +376,8 @@ function uploadFile(file) {
 }
 
 function _tr(key, vars, fallback) {
-  if (window.OpenAkitaI18n && window.OpenAkitaI18n.t) {
-    const v = window.OpenAkitaI18n.t(key, vars);
+  if (window.MclawI18n && window.MclawI18n.t) {
+    const v = window.MclawI18n.t(key, vars);
     if (v && v !== key) return v;
   }
   if (fallback) return fallback;
@@ -553,10 +553,10 @@ const I18N_DICT = {
     "settings.api.key.helpPrefix": "获取地址: ",
     "settings.api.key.helpLink": "阿里云百炼控制台",
     "settings.api.key.label": "DashScope ASR Key（语音转写）",
-    "settings.api.key.help": "高光提取、段落拆条、口播精编仍需要百炼 Paraformer 做语音转写；内容分析默认使用 OpenAkita 主程序已配置的大模型。",
+    "settings.api.key.help": "高光提取、段落拆条、口播精编仍需要百炼 Paraformer 做语音转写；内容分析默认使用 Mclaw 主程序已配置的大模型。",
     "settings.api.analysis.advanced": "高级：使用单独百炼 Qwen 做内容分析",
     "settings.api.analysis.provider": "内容分析模型",
-    "settings.api.analysis.host": "默认：OpenAkita 主程序大模型",
+    "settings.api.analysis.host": "默认：Mclaw 主程序大模型",
     "settings.api.analysis.dashscope": "自定义：百炼 Qwen Key",
     "settings.api.analysis.key.label": "百炼 Qwen API Key",
     "settings.api.analysis.key.help": "只有选择自定义并填写此 Key 时，内容分析才会绕过主程序大模型，改用百炼 Qwen 接口。",
@@ -564,7 +564,7 @@ const I18N_DICT = {
     "settings.system.intro.body": "FFmpeg 是系统级组件（共享 PATH 安装），并非本插件私有——任何已经装好 ffmpeg 的机器都会自动检测到，无需重复安装；同样，安装/卸载也会影响其他用到 ffmpeg 的插件和程序。",
     "settings.system.platform.win": "Windows: 「一键安装」会调用 winget 自动安装 Gyan.FFmpeg，无需管理员权限。",
     "settings.system.platform.mac": "macOS: 「一键安装」会调用 Homebrew 自动安装 ffmpeg。",
-    "settings.system.platform.linux": "Linux: apt / dnf 需要 root 权限。如果 OpenAkita 以普通用户身份运行，请按提示在终端执行 sudo apt-get install ffmpeg。",
+    "settings.system.platform.linux": "Linux: apt / dnf 需要 root 权限。如果 Mclaw 以普通用户身份运行，请按提示在终端执行 sudo apt-get install ffmpeg。",
     "settings.system.detecting": "正在检测...",
     "settings.system.status.found": "已安装 v{ver}",
     "settings.system.status.foundNoVer": "已安装",
@@ -584,7 +584,7 @@ const I18N_DICT = {
     "settings.system.installFailed": "安装失败：{msg}",
     "settings.system.uninstalled": "FFmpeg 已卸载",
     "settings.system.uninstallFailed": "卸载失败：{msg}",
-    "settings.system.uninstallConfirm": "确定要卸载 FFmpeg 吗？\n\n注意：FFmpeg 是系统级组件（装在 Windows 用户 PATH / macOS Homebrew / Linux /usr/bin），不是 ClipSense 插件私有的——卸载会影响 OpenAkita 上所有依赖 FFmpeg 的插件（如字幕生成、视频翻译、配音等），以及你系统上其他用到 ffmpeg 的程序。\n\n本插件 4 种剪辑模式都将无法运行。",
+    "settings.system.uninstallConfirm": "确定要卸载 FFmpeg 吗？\n\n注意：FFmpeg 是系统级组件（装在 Windows 用户 PATH / macOS Homebrew / Linux /usr/bin），不是 ClipSense 插件私有的——卸载会影响 Mclaw 上所有依赖 FFmpeg 的插件（如字幕生成、视频翻译、配音等），以及你系统上其他用到 ffmpeg 的程序。\n\n本插件 4 种剪辑模式都将无法运行。",
     "settings.system.requiresSudo": "Linux 需要 root 权限。请在终端手动执行：",
     "settings.system.noMethod": "当前系统暂无自动安装方案，请前往官方文档手动下载。",
     "settings.system.logTitle": "安装日志",
@@ -780,10 +780,10 @@ const I18N_DICT = {
     "settings.api.key.helpPrefix": "Get a key at: ",
     "settings.api.key.helpLink": "Alibaba Cloud Bailian Console",
     "settings.api.key.label": "DashScope ASR Key",
-    "settings.api.key.help": "Highlight/topic/talking modes still need Bailian Paraformer for speech transcription. Content analysis uses OpenAkita's main LLM by default.",
+    "settings.api.key.help": "Highlight/topic/talking modes still need Bailian Paraformer for speech transcription. Content analysis uses Mclaw's main LLM by default.",
     "settings.api.analysis.advanced": "Advanced: use separate Bailian Qwen for content analysis",
     "settings.api.analysis.provider": "Content analysis model",
-    "settings.api.analysis.host": "Default: OpenAkita main LLM",
+    "settings.api.analysis.host": "Default: Mclaw main LLM",
     "settings.api.analysis.dashscope": "Custom: Bailian Qwen Key",
     "settings.api.analysis.key.label": "Bailian Qwen API Key",
     "settings.api.analysis.key.help": "Only when this custom branch is selected and a key is saved will analysis bypass the main LLM and call Bailian Qwen.",
@@ -791,7 +791,7 @@ const I18N_DICT = {
     "settings.system.intro.body": "FFmpeg is a system-level component (installed on the shared PATH) and is NOT private to this plugin. Any machine that already has ffmpeg will be auto-detected with no need to reinstall; conversely, install/uninstall here affects every other plugin and program on your system that uses ffmpeg.",
     "settings.system.platform.win": "Windows: \"Install\" runs winget to install Gyan.FFmpeg, no admin rights required.",
     "settings.system.platform.mac": "macOS: \"Install\" runs Homebrew to install ffmpeg.",
-    "settings.system.platform.linux": "Linux: apt / dnf needs root. If OpenAkita runs as a non-root user, copy the suggested command and run it in a terminal.",
+    "settings.system.platform.linux": "Linux: apt / dnf needs root. If Mclaw runs as a non-root user, copy the suggested command and run it in a terminal.",
     "settings.system.detecting": "Detecting...",
     "settings.system.status.found": "Installed v{ver}",
     "settings.system.status.foundNoVer": "Installed",
@@ -811,7 +811,7 @@ const I18N_DICT = {
     "settings.system.installFailed": "Install failed: {msg}",
     "settings.system.uninstalled": "FFmpeg uninstalled",
     "settings.system.uninstallFailed": "Uninstall failed: {msg}",
-    "settings.system.uninstallConfirm": "Uninstall FFmpeg?\n\nFFmpeg is a system-level component (Windows user PATH / macOS Homebrew / Linux /usr/bin), not private to ClipSense — uninstalling will break every other OpenAkita plugin that depends on FFmpeg (subtitle, dubbing, translation…) plus any other program on your system that uses it.\n\nAll 4 ClipSense editing modes will stop working.",
+    "settings.system.uninstallConfirm": "Uninstall FFmpeg?\n\nFFmpeg is a system-level component (Windows user PATH / macOS Homebrew / Linux /usr/bin), not private to ClipSense — uninstalling will break every other Mclaw plugin that depends on FFmpeg (subtitle, dubbing, translation…) plus any other program on your system that uses it.\n\nAll 4 ClipSense editing modes will stop working.",
     "settings.system.requiresSudo": "Linux needs root. Run this in a terminal:",
     "settings.system.noMethod": "No automated install method on this system. Please follow the official docs to install manually.",
     "settings.system.logTitle": "Install log",
@@ -891,9 +891,9 @@ const I18N_DICT = {
 };
 
 const _i18n = (function () {
-  if (window.OpenAkitaI18n && window.OpenAkitaI18n.register) {
-    window.OpenAkitaI18n.register(I18N_DICT);
-    return window.OpenAkitaI18n;
+  if (window.MclawI18n && window.MclawI18n.register) {
+    window.MclawI18n.register(I18N_DICT);
+    return window.MclawI18n;
   }
   let loc = (navigator && navigator.language) || "zh";
   const subs = new Set();
@@ -933,14 +933,14 @@ function modeList(t) {
 
 // ── SVG Icon (calls the function!) ──
 function OAIcon({ name, style }) {
-  const svg = (window.OpenAkitaIcons && window.OpenAkitaIcons[name]) ? window.OpenAkitaIcons[name]() : "";
+  const svg = (window.MclawIcons && window.MclawIcons[name]) ? window.MclawIcons[name]() : "";
   return <span className="oa-icon" style={style} dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 // Seedance-style alias used by the new Settings panels (FfmpegInstaller /
 // PermissionsPanel / FolderPickerModal). Wraps the SVG in a tiny <span>
 // with the .ico class so it inherits sizing from font-size and its parent.
 function Ico({ name, style: s }) {
-  const svg = (window.OpenAkitaIcons && window.OpenAkitaIcons[name]) ? window.OpenAkitaIcons[name]() : "";
+  const svg = (window.MclawIcons && window.MclawIcons[name]) ? window.MclawIcons[name]() : "";
   return <span className="ico" style={s} dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
@@ -1098,7 +1098,7 @@ function App() {
         <div className="oa-config-banner" role="alert"
              style={{margin:"12px 20px 0", flexShrink:0}}>
           <span className="oa-icon oa-config-banner__icon"
-                dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.warning() : ""}} />
+                dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.warning() : ""}} />
           <div className="oa-config-banner__text">
             <strong>{t("banner.noKey.title")}</strong>
             <div style={{fontSize:12, color:"var(--text-muted)", marginTop:2}}>
@@ -1109,7 +1109,7 @@ function App() {
                   onClick={() => goToTab("settings")}>
             {t("banner.noKey.cta")}
             <span className="oa-icon"
-                  dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.arrowRight() : ""}} />
+                  dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.arrowRight() : ""}} />
           </button>
         </div>
       )}
@@ -1275,7 +1275,7 @@ function CreateTab({ apiReady, ffmpegReady, goToTasks }) {
               ) : (
                 <div>
                   <span className="oa-icon" style={{fontSize:28, opacity:.5}}
-                        dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.upload() : ""}} />
+                        dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.upload() : ""}} />
                   <div className="text-sm" style={{marginTop:8}}>{t("create.upload")}</div>
                   <div className="text-xs text-dim">{t("create.uploadHint")}</div>
                 </div>
@@ -1410,7 +1410,7 @@ function CreateTab({ apiReady, ffmpegReady, goToTasks }) {
             ) : (
               <span style={{display:"inline-flex", alignItems:"center", gap:6}}>
                 <span className="oa-icon"
-                      dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.sparkles() : ""}} />
+                      dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.sparkles() : ""}} />
                 {t("create.submit")}
               </span>
             )}
@@ -1422,7 +1422,7 @@ function CreateTab({ apiReady, ffmpegReady, goToTasks }) {
         {!previewTask ? (
           <div className="oa-preview-empty">
             <span className="oa-preview-empty__icon"
-                  dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.film() : ""}} />
+                  dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.film() : ""}} />
             <div className="oa-preview-empty__title">{t("preview.empty.title")}</div>
             <div className="oa-preview-empty__hint">{t("preview.empty.hint")}</div>
           </div>
@@ -1767,7 +1767,7 @@ function TasksTab({ refreshSignal = 0 }) {
           ) : tasks.length === 0 ? (
             <div className="oa-preview-empty" style={{minHeight: 160, padding: "24px 16px"}}>
               <span className="oa-preview-empty__icon"
-                    dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.listTask() : ""}} />
+                    dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.listTask() : ""}} />
               <div className="oa-preview-empty__title">{t("tasks.empty.title")}</div>
               <div className="oa-preview-empty__hint">{t("tasks.empty.hint")}</div>
             </div>
@@ -1914,7 +1914,7 @@ function TasksTab({ refreshSignal = 0 }) {
         ) : (
           <div className="oa-preview-empty">
             <span className="oa-preview-empty__icon"
-                  dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.listTask() : ""}} />
+                  dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.listTask() : ""}} />
             <div className="oa-preview-empty__title">{t("tasks.empty.noSelection.title")}</div>
             <div className="oa-preview-empty__hint">{t("tasks.empty.noSelection.hint")}</div>
           </div>
@@ -1962,7 +1962,7 @@ function LibraryTab({ onUseItem }) {
       {items.length === 0 ? (
         <div className="oa-preview-empty" style={{minHeight:200}}>
           <span className="oa-preview-empty__icon"
-                dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.film() : ""}} />
+                dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.film() : ""}} />
           <div className="oa-preview-empty__title">{t("library.empty")}</div>
         </div>
       ) : (
@@ -2759,7 +2759,7 @@ function SettingsTab({ storageRefreshTick, onApiKeyChange, onFfmpegChange }) {
                    onBlur={e => save({ dashscope_relay_endpoint: e.target.value.trim() })}
                    placeholder="例如: yunwu-audio" />
             <div className="text-xs text-dim" style={{marginTop: 4}}>
-               来自 LLM 配置页 relay_endpoints；仅影响 Paraformer ASR 请求，文本分析使用 OpenAkita 模型选择器。
+               来自 LLM 配置页 relay_endpoints；仅影响 Paraformer ASR 请求，文本分析使用 Mclaw 模型选择器。
             </div>
           </div>
           <div className="form-row">
@@ -2977,7 +2977,7 @@ class PluginErrorBoundary extends React.Component {
       <div style={{padding: 24, maxWidth: 820, margin: "0 auto"}}>
         <div className="oa-config-banner" role="alert" style={{borderColor: "var(--danger)"}}>
           <span className="oa-icon oa-config-banner__icon" style={{color: "var(--danger)"}}
-                dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons ? window.OpenAkitaIcons.warning() : ""}} />
+                dangerouslySetInnerHTML={{__html: window.MclawIcons ? window.MclawIcons.warning() : ""}} />
           <div className="oa-config-banner__text">
             <strong>{tr("err.title")}</strong>
             <div style={{fontSize: 12, color: "var(--text-muted)", marginTop: 4}}>
@@ -3014,8 +3014,8 @@ try {
     '<div style="padding:24px;color:#ef4444"><b>[clip-sense mount error]</b><pre style="margin-top:8px;white-space:pre-wrap;font-size:11px">' +
     (mountErr && mountErr.stack ? mountErr.stack : String(mountErr)) + '</pre></div>';
 }
-if (window.OpenAkita && typeof window.OpenAkita.ready === "function") {
-  window.OpenAkita.ready();
+if (window.Mclaw && typeof window.Mclaw.ready === "function") {
+  window.Mclaw.ready();
 }
 </script>
 
@@ -3045,6 +3045,6 @@ if (window.OpenAkita && typeof window.OpenAkita.ready === "function") {
   }
 })();
 </script>
-<script src="./_assets/openakita-llm-selector.js" data-plugin-id="clip-sense"></script>
+<script src="./_assets/mclaw-llm-selector.js" data-plugin-id="clip-sense"></script>
 </body>
 </html>

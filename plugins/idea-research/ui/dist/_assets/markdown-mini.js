@@ -74,6 +74,6 @@
     return out.join("");
   }
 
-  window.OpenAkita = window.OpenAkita || {};
-  window.OpenAkita.markdownMini = { render: render };
+  window.Mclaw = window.Mclaw || {};
+  window.Mclaw.markdownMini = { render: render };
 })();

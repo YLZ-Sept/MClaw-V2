@@ -774,7 +774,7 @@ jobs:
             exit 1
           fi
 
-          PROFILE_NAME=.mclaw-notary"
+          PROFILE_NAME="mclaw-notary"
           xcrun notarytool store-credentials "${PROFILE_NAME}" \
             --apple-id "${APPLE_ID}" \
             --password "${APPLE_PASSWORD}" \
@@ -1261,7 +1261,7 @@ jobs:
           # Cargo writes the binary's PDB right next to the .exe in
           # target/release/, regardless of where Tauri later renames the
           # .exe for bundling. The file name uses underscores instead of
-          # the dashes from Cargo.toml's [package].name = .mclaw-setup-
+          # the dashes from Cargo.toml's [package].name = "mclaw-setup-
           # center" — rustc converts crate-name dashes to underscores when
           # synthesizing identifier-safe symbol file names. This was caught
           # by the first release-dryrun whose log showed the PDB present

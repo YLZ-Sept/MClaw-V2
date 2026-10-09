@@ -34,14 +34,14 @@ def test_channel_deps_packaged_mode_rejects_frozen_sys_executable(monkeypatch):
     )
     monkeypatch.setattr(
         "mclaw.runtime_channel_deps.CHANNEL_DEPS",
-        {"feishu": [("definitely_missing_mclaw_dep", "definitely-missing.mclaw-dep")]},
+        {"feishu": [("definitely_missing_mclaw_dep", "definitely-missing-mclaw-dep")]},
     )
 
     result = ensure_channel_dependencies(workspace_env={"FEISHU_ENABLED": "true"})
 
     assert result["status"] == "error"
     assert "托管 Python" in result["message"]
-    assert result["missing"] == ["definitely-missing.mclaw-dep"]
+    assert result["missing"] == ["definitely-missing-mclaw-dep"]
 
 
 def test_purge_incompatible_websockets_removes_16_keeps_15(tmp_path):
@@ -183,7 +183,7 @@ def test_ensure_channel_deps_returns_install_errors(monkeypatch, tmp_path):
             "feishu": [
                 (
                     "definitely_missing_mclaw_dep_for_test",
-                    "definitely-missing.mclaw-dep-for-test",
+                    "definitely-missing-mclaw-dep-for-test",
                 )
             ]
         },
@@ -208,9 +208,9 @@ def test_ensure_channel_deps_returns_install_errors(monkeypatch, tmp_path):
     result = ensure_channel_dependencies(workspace_env={"FEISHU_ENABLED": "true"})
 
     assert result["status"] == "error"
-    assert result["missing"] == ["definitely-missing.mclaw-dep-for-test"]
+    assert result["missing"] == ["definitely-missing-mclaw-dep-for-test"]
     assert "errors" in result
-    assert "definitely-missing.mclaw-dep-for-test" in result["errors"]
+    assert "definitely-missing-mclaw-dep-for-test" in result["errors"]
     assert (
-        "Could not find a version" in result["errors"]["definitely-missing.mclaw-dep-for-test"]
+        "Could not find a version" in result["errors"]["definitely-missing-mclaw-dep-for-test"]
     )

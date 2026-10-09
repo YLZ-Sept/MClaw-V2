@@ -443,7 +443,7 @@ const I18N_DICT = {
     "mediaPost.tabs.settings.sub": "API Key / VLM 参数 / 章节卡 / 成本控制 / 协同",
     // Global API-key banner (shown above the tab content when key missing)
     "mediaPost.banner.noKey.title": "尚未配置 DashScope API Key",
-    "mediaPost.banner.noKey.desc": "封面挑选与智能构图会失败；SEO 文本仍使用所选 OpenAkita 模型。请为视觉任务配置 DashScope API Key。",
+    "mediaPost.banner.noKey.desc": "封面挑选与智能构图会失败；SEO 文本仍使用所选 Mclaw 模型。请为视觉任务配置 DashScope API Key。",
     "mediaPost.banner.noKey.cta": "前往配置",
     // Empty-state titles/hints for the right preview pane and list panes.
     "mediaPost.preview.empty.title": "等待运行任务",
@@ -699,7 +699,7 @@ const I18N_DICT = {
     "mediaPost.tabs.library.sub": "Covers / aspects / SEO copy / chapter cards",
     "mediaPost.tabs.settings.sub": "API Key / VLM / Chapters / Cost / Cross-plugin",
     "mediaPost.banner.noKey.title": "DashScope API Key not configured",
-    "mediaPost.banner.noKey.desc": "Cover and vision tasks will fail; SEO text still uses the selected OpenAkita model. Configure this key for vision tasks.",
+    "mediaPost.banner.noKey.desc": "Cover and vision tasks will fail; SEO text still uses the selected Mclaw model. Configure this key for vision tasks.",
     "mediaPost.banner.noKey.cta": "Open Settings",
     "mediaPost.preview.empty.title": "Waiting for a task",
     "mediaPost.preview.empty.hint": "Pick a mode → upload video → tune params → run",
@@ -937,24 +937,24 @@ const I18N_DICT = {
 };
 
 // i18n bootstrap
-if (window.OpenAkitaI18n && window.OpenAkitaI18n.register) {
-  window.OpenAkitaI18n.register(I18N_DICT);
+if (window.MclawI18n && window.MclawI18n.register) {
+  window.MclawI18n.register(I18N_DICT);
 }
 function _detectLocale() {
-  if (window.OpenAkitaI18n && window.OpenAkitaI18n.locale) return window.OpenAkitaI18n.locale();
+  if (window.MclawI18n && window.MclawI18n.locale) return window.MclawI18n.locale();
   return (navigator.language || "zh").startsWith("zh") ? "zh" : "en";
 }
 function useI18n() {
   const [locale, setLocale] = useState(_detectLocale());
   useEffect(() => {
-    if (window.OpenAkitaI18n && window.OpenAkitaI18n.onChange) {
-      return window.OpenAkitaI18n.onChange(setLocale);
+    if (window.MclawI18n && window.MclawI18n.onChange) {
+      return window.MclawI18n.onChange(setLocale);
     }
     return undefined;
   }, []);
   const t = useCallback((key, vars) => {
-    if (window.OpenAkitaI18n && window.OpenAkitaI18n.t) {
-      const v = window.OpenAkitaI18n.t(key, vars);
+    if (window.MclawI18n && window.MclawI18n.t) {
+      const v = window.MclawI18n.t(key, vars);
       if (v && v !== key) return v;
     }
     const dict = I18N_DICT[locale] || I18N_DICT.zh;
@@ -1005,7 +1005,7 @@ function ApiKeyBanner({ missing, t, onGo }) {
   return (
     <div className="oa-config-banner">
       <span className="oa-config-banner__icon"
-            dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons?.warning?.() || ""}} />
+            dangerouslySetInnerHTML={{__html: window.MclawIcons?.warning?.() || ""}} />
       <div className="oa-config-banner__text">
         <strong>{t("mediaPost.common.api.missing.title")}</strong>
         <div className="text-xs text-muted">{t("mediaPost.common.api.missing.desc")}</div>
@@ -1332,14 +1332,14 @@ function CreateTab({ t, settings, onTaskCreated, gotoSettings }) {
           {preview && preview.cost_kind === "warn" && (
             <div className="oa-config-banner">
               <span className="oa-config-banner__icon"
-                    dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons?.warning?.() || ""}} />
+                    dangerouslySetInnerHTML={{__html: window.MclawIcons?.warning?.() || ""}} />
               <div className="oa-config-banner__text">{t("mediaPost.cost.warn_10")}</div>
             </div>
           )}
           {preview && preview.cost_kind === "danger" && (
             <div className="oa-config-banner danger">
               <span className="oa-config-banner__icon"
-                    dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons?.warning?.() || ""}} />
+                    dangerouslySetInnerHTML={{__html: window.MclawIcons?.warning?.() || ""}} />
               <div className="oa-config-banner__text">{t("mediaPost.cost.warn_30")}</div>
             </div>
           )}
@@ -1361,7 +1361,7 @@ function CreateTab({ t, settings, onTaskCreated, gotoSettings }) {
           {!startedTask && (
             <div className="oa-preview-empty">
               <span className="oa-preview-empty__icon"
-                    dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons && window.OpenAkitaIcons.film ? window.OpenAkitaIcons.film() : ""}} />
+                    dangerouslySetInnerHTML={{__html: window.MclawIcons && window.MclawIcons.film ? window.MclawIcons.film() : ""}} />
               <div className="oa-preview-empty__title">{t("mediaPost.preview.empty.title")}</div>
               <div className="oa-preview-empty__hint">{t("mediaPost.preview.empty.hint")}</div>
             </div>
@@ -1370,7 +1370,7 @@ function CreateTab({ t, settings, onTaskCreated, gotoSettings }) {
             <div className="modal-mask" onClick={() => setStartedTask(null)}>
               <div className="modal-card" onClick={e => e.stopPropagation()}>
                 <div className="modal-icon"
-                     dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons?.check?.() || ""}} />
+                     dangerouslySetInnerHTML={{__html: window.MclawIcons?.check?.() || ""}} />
                 <div className="modal-title">{t("mediaPost.common.taskStarted")}</div>
                 <div className="modal-desc">
                   ID: <code>{startedTask.id}</code><br/>
@@ -1401,7 +1401,7 @@ function TaskCard({ task, selected, onClick, t }) {
     seo_pack:      "listTask",
     chapter_cards: "book",
   })[task.mode] || "film";
-  const iconHtml = window.OpenAkitaIcons?.[iconName]?.() || "";
+  const iconHtml = window.MclawIcons?.[iconName]?.() || "";
   return (
     <div className={`task-card ${selected ? "selected" : ""}`} onClick={onClick}>
       <div className="task-thumb"
@@ -1499,7 +1499,7 @@ function SeoTabbedPanel({ taskId, t }) {
                onClick={() => setActive(it.platform)}>
             {t(`mediaPost.forms.platforms.${it.platform}`) || it.platform}
             {payload._error ? <span style={{marginLeft:4, color:"var(--danger)"}}
-              dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons?.warning?.() || ""}} /> : null}
+              dangerouslySetInnerHTML={{__html: window.MclawIcons?.warning?.() || ""}} /> : null}
           </div>
         ))}
       </div>
@@ -1672,7 +1672,7 @@ function TasksTab({ t, refreshTrigger }) {
             {filtered.length === 0 ? (
               <div className="oa-preview-empty" style={{minHeight:160, padding:"24px 16px"}}>
                 <span className="oa-preview-empty__icon"
-                      dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons && window.OpenAkitaIcons.listTask ? window.OpenAkitaIcons.listTask() : ""}} />
+                      dangerouslySetInnerHTML={{__html: window.MclawIcons && window.MclawIcons.listTask ? window.MclawIcons.listTask() : ""}} />
                 <div className="oa-preview-empty__title">{t("mediaPost.tasks.empty.title")}</div>
                 <div className="oa-preview-empty__hint">{t("mediaPost.tasks.empty.hint")}</div>
               </div>
@@ -1689,7 +1689,7 @@ function TasksTab({ t, refreshTrigger }) {
           {selectedId ? detail : (
             <div className="oa-preview-empty">
               <span className="oa-preview-empty__icon"
-                    dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons && window.OpenAkitaIcons.pin ? window.OpenAkitaIcons.pin() : ""}} />
+                    dangerouslySetInnerHTML={{__html: window.MclawIcons && window.MclawIcons.pin ? window.MclawIcons.pin() : ""}} />
               <div className="oa-preview-empty__title">{t("mediaPost.tasks.detail.empty.title")}</div>
               <div className="oa-preview-empty__hint">{t("mediaPost.tasks.detail.empty.hint")}</div>
             </div>
@@ -1720,7 +1720,7 @@ function LibraryTab({ t }) {
       </div>
       <div className="oa-preview-empty" style={{minHeight: 320}}>
         <span className="oa-preview-empty__icon"
-              dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons && window.OpenAkitaIcons.folder ? window.OpenAkitaIcons.folder() : ""}} />
+              dangerouslySetInnerHTML={{__html: window.MclawIcons && window.MclawIcons.folder ? window.MclawIcons.folder() : ""}} />
         <div className="oa-preview-empty__title">{t("mediaPost.library.empty.title")}</div>
         <div className="oa-preview-empty__hint">{t("mediaPost.library.empty.hint")}</div>
       </div>
@@ -1733,12 +1733,12 @@ function LibraryTab({ t }) {
 // Mismatch = "validation failed: template_id 'dark' not in [...]" at task creation.
 const MP_TEMPLATE_IDS = ["modern", "minimal", "retro", "youtube_style", "custom"];
 
-// Tiny SVG section-icon wrapper. Pulls names from window.OpenAkitaIcons
+// Tiny SVG section-icon wrapper. Pulls names from window.MclawIcons
 // (kit) so we never sprinkle emoji into UI titles. Falls back to an
 // empty span if the named icon isn't in the kit yet.
 function MpIco({ name, lg }) {
-  const html = (window.OpenAkitaIcons && window.OpenAkitaIcons[name])
-    ? window.OpenAkitaIcons[name]() : "";
+  const html = (window.MclawIcons && window.MclawIcons[name])
+    ? window.MclawIcons[name]() : "";
   return <span className={"mp-ico" + (lg ? " mp-ico--lg" : "")}
                dangerouslySetInnerHTML={{__html: html}} />;
 }
@@ -1897,7 +1897,7 @@ function FfmpegInstaller({ t, onInstalled }) {
 
   const copyCmd = (cmd) => {
     if (!cmd) return;
-    if (window.OpenAkita?.clipboard) window.OpenAkita.clipboard(cmd);
+    if (window.Mclaw?.clipboard) window.Mclaw.clipboard(cmd);
     else if (navigator.clipboard) navigator.clipboard.writeText(cmd);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
@@ -2153,8 +2153,8 @@ function SettingsTab({ t, settings, onSaved }) {
 
   function copyText(s) {
     if (!s) return;
-    if (window.OpenAkita && typeof window.OpenAkita.clipboard === "function") {
-      window.OpenAkita.clipboard(s);
+    if (window.Mclaw && typeof window.Mclaw.clipboard === "function") {
+      window.Mclaw.clipboard(s);
     } else if (navigator.clipboard) {
       navigator.clipboard.writeText(s);
     }
@@ -2162,8 +2162,8 @@ function SettingsTab({ t, settings, onSaved }) {
   }
   function openFolder(p) {
     if (!p) return;
-    if (window.OpenAkita && typeof window.OpenAkita.showInFolder === "function") {
-      window.OpenAkita.showInFolder(p);
+    if (window.Mclaw && typeof window.Mclaw.showInFolder === "function") {
+      window.Mclaw.showInFolder(p);
     } else if (window.parent && window.parent !== window) {
       try { window.parent.postMessage({ type: "bridge:show-in-folder", payload: { path: p } }, "*"); } catch (_) {}
     }
@@ -2442,9 +2442,9 @@ function App() {
     if (gotoTasks) setTab("tasks");
   }
 
-  // Theme + locale are owned by the host shell (OpenAkita main window).
+  // Theme + locale are owned by the host shell (Mclaw main window).
   // The bridge listens for `bridge:theme-change` (see <script> at top of file)
-  // and OpenAkitaI18n re-emits onChange when host locale flips. We deliberately
+  // and MclawI18n re-emits onChange when host locale flips. We deliberately
   // do NOT render plugin-local toggles for either — that would create a second
   // source of truth that drifts from every other plugin. Mirrors tongyi-image
   // (see plugins/tongyi-image/ui/dist/index.html L848-L863, where the
@@ -2457,7 +2457,7 @@ function App() {
       <div className="header">
         <h1 className="oa-hero-title">
           <span className="oa-hero-title__icon"
-                dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons && window.OpenAkitaIcons.film ? window.OpenAkitaIcons.film() : ""}} />
+                dangerouslySetInnerHTML={{__html: window.MclawIcons && window.MclawIcons.film ? window.MclawIcons.film() : ""}} />
           <span className="oa-hero-title__text">
             {t("app.title")}
             <span className="oa-hero-title__sub">{t("app.subtitle")}</span>
@@ -2477,7 +2477,7 @@ function App() {
         <div className="oa-config-banner" role="alert"
              style={{margin:"12px 20px 0", flexShrink:0}}>
           <span className="oa-icon oa-config-banner__icon"
-                dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons && window.OpenAkitaIcons.warning ? window.OpenAkitaIcons.warning() : ""}} />
+                dangerouslySetInnerHTML={{__html: window.MclawIcons && window.MclawIcons.warning ? window.MclawIcons.warning() : ""}} />
           <div className="oa-config-banner__text">
             <strong>{t("mediaPost.banner.noKey.title")}</strong>
             <div style={{fontSize:12, color:"var(--text-muted)", marginTop:2}}>
@@ -2488,7 +2488,7 @@ function App() {
                   onClick={() => setTab("settings")}>
             {t("mediaPost.banner.noKey.cta")}
             <span className="oa-icon"
-                  dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons && window.OpenAkitaIcons.arrowRight ? window.OpenAkitaIcons.arrowRight() : ""}} />
+                  dangerouslySetInnerHTML={{__html: window.MclawIcons && window.MclawIcons.arrowRight ? window.MclawIcons.arrowRight() : ""}} />
           </button>
         </div>
       )}
@@ -2512,7 +2512,7 @@ class PluginErrorBoundary extends React.Component {
       <div style={{padding: 24}}>
         <div className="oa-config-banner danger">
           <span className="oa-config-banner__icon"
-                dangerouslySetInnerHTML={{__html: window.OpenAkitaIcons?.warning?.() || ""}} />
+                dangerouslySetInnerHTML={{__html: window.MclawIcons?.warning?.() || ""}} />
           <div className="oa-config-banner__text">
             <strong>UI render error</strong>
             <div className="text-xs">{String(this.state.error.message || this.state.error)}</div>
@@ -2536,8 +2536,8 @@ try {
     '<div style="padding:24px;color:#ef4444"><b>[media-post mount error]</b><pre style="margin-top:8px;white-space:pre-wrap;font-size:11px">' +
     (mountErr && mountErr.stack ? mountErr.stack : String(mountErr)) + '</pre></div>';
 }
-if (window.OpenAkita && typeof window.OpenAkita.ready === "function") {
-  window.OpenAkita.ready();
+if (window.Mclaw && typeof window.Mclaw.ready === "function") {
+  window.Mclaw.ready();
 }
 </script>
 
@@ -2577,6 +2577,6 @@ if (window.OpenAkita && typeof window.OpenAkita.ready === "function") {
   }
 })();
 </script>
-<script src="./_assets/openakita-llm-selector.js" data-plugin-id="media-post"></script>
+<script src="./_assets/mclaw-llm-selector.js" data-plugin-id="media-post"></script>
 </body>
 </html>

@@ -27,7 +27,9 @@ from urllib.parse import urljoin, urlparse
 from mclaw.optional_assets import load_optional_asset_feature
 from mclaw.utils.atomic_io import atomic_json_write, read_json_safe
 
-OPTIONAL_FEATURE_MARKER = "__OPENAKITA_OPTIONAL_FEATURE_INSTALL__"
+OPTIONAL_FEATURE_MARKER = "__MCLAW_OPTIONAL_FEATURE_INSTALL__"
+# 兼容上游老标记，保证仍在发旧标记的插件/技能可被解析。
+_LEGACY_OPTIONAL_FEATURE_MARKERS = ("__OPENAKITA_OPTIONAL_FEATURE_INSTALL__",)
 PLAYWRIGHT_RUNTIME_FEATURE = "browser.playwright-runtime"
 BROWSER_AUTOMATION_FEATURE = "browser.automation"
 _REQUEST_LOCK = threading.RLock()
@@ -148,9 +150,15 @@ def optional_feature_marker(*, visible: bool = True) -> str:
 
 
 def parse_optional_feature_marker(value: object) -> dict | None:
-    if not isinstance(value, str) or OPTIONAL_FEATURE_MARKER not in value:
+    if not isinstance(value, str):
         return None
-    raw = value.split(OPTIONAL_FEATURE_MARKER, 1)[1].strip()
+    marker = next(
+        (m for m in (OPTIONAL_FEATURE_MARKER, *_LEGACY_OPTIONAL_FEATURE_MARKERS) if m in value),
+        "",
+    )
+    if not marker:
+        return None
+    raw = value.split(marker, 1)[1].strip()
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:

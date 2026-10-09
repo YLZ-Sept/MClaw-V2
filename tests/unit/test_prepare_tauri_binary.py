@@ -11,7 +11,7 @@ def test_prepare_binary_copies_cargo_name_to_tauri_main_binary(tmp_path: Path, m
         '{"mainBinaryName":"mclaw-desktop"}', encoding="utf-8"
     )
     suffix = ".exe" if module.sys.platform == "win32" else ""
-    source = release_dir / f.mclaw-setup-center{suffix}"
+    source = release_dir / f"mclaw-setup-center{suffix}"
     source.write_bytes(b"cargo-binary")
     monkeypatch.setattr(module, "TAURI_DIR", tauri_dir)
 

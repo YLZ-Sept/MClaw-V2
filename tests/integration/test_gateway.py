@@ -505,6 +505,16 @@ class TestMessageGatewayAgentBinding:
 
 
 class TestMessageGatewayDesktopMirror:
+    @pytest.fixture(autouse=True)
+    def _enable_mirror(self, monkeypatch):
+        """本机 .env 里 IM_MIRROR_TO_DESKTOP_ENABLED=false，会让镜像整体跳过。
+
+        这里显式打开，避免测试结果取决于开发机的 .env（此前就因此在本机失败）。
+        """
+        from mclaw.config import settings
+
+        monkeypatch.setattr(settings, "im_mirror_to_desktop_enabled", True)
+
     def test_mirrors_im_turns_into_desktop_conversation(self, tmp_path):
         session_manager = SessionManager(storage_path=tmp_path / "sessions")
         gateway = MessageGateway(session_manager=session_manager)

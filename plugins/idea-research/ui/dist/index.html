@@ -48,7 +48,7 @@
       if (!window.React) missing.push("React");
       if (!window.ReactDOM) missing.push("ReactDOM");
       if (!window.Babel) missing.push("Babel");
-      if (!window.OpenAkita || !window.OpenAkita.idea_research) missing.push("OpenAkita.idea_research");
+      if (!window.Mclaw || !window.Mclaw.idea_research) missing.push("Mclaw.idea_research");
       if (missing.length) {
         renderBootMessage("BOOT BLOCKED", 'missing ' + missing.join(', '));
       }
@@ -60,10 +60,10 @@
 /* eslint-disable */
 const { useState, useEffect, useReducer, useMemo, useCallback, useRef, useDeferredValue } = React;
 
-const PLUGIN_API = window.OpenAkita.idea_research;
-const I18N = window.OpenAkita.i18n;
-const ICONS = window.OpenAkita.icons;
-const MARKDOWN = window.OpenAkita.markdownMini;
+const PLUGIN_API = window.Mclaw.idea_research;
+const I18N = window.Mclaw.i18n;
+const ICONS = window.Mclaw.icons;
+const MARKDOWN = window.Mclaw.markdownMini;
 
 // ---------------------------------------------------------------------------
 // Constants — 4 modes / 12 personas / 6 platforms / 5 cookies platforms
@@ -2255,6 +2255,6 @@ function App() {
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<ToastProvider><App /></ToastProvider>);
   </script>
-<script src="./_assets/openakita-llm-selector.js" data-plugin-id="idea-research"></script>
+<script src="./_assets/mclaw-llm-selector.js" data-plugin-id="idea-research"></script>
 </body>
 </html>

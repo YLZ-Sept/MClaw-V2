@@ -48,7 +48,7 @@
       ];
 
       function request(path, options = {}) {
-        const api = window.OpenAkita;
+        const api = window.Mclaw;
         const url = path.startsWith("/api/") ? path : `${PLUGIN_BASE}${path}`;
         if (api && typeof api.request === "function") {
           return api.request(url, options);
@@ -692,7 +692,7 @@
               <div className="card">
                 <div className="section-title">基础信息</div>
                 <div className="grid-2">
-                  <div className="form-row"><div className="form-label-title">标题 <span>生成内容的主题</span></div><input className="input" value={draft.title} onChange={(e) => update("title", e.target.value)} placeholder="例如：OpenAkita 插件生态路线图" /></div>
+                  <div className="form-row"><div className="form-label-title">标题 <span>生成内容的主题</span></div><input className="input" value={draft.title} onChange={(e) => update("title", e.target.value)} placeholder="例如：Mclaw 插件生态路线图" /></div>
                   <div className="form-row"><div className="form-label-title">受众 <span>决定表达深浅和语气</span></div><input className="input" value={draft.audience} onChange={(e) => update("audience", e.target.value)} placeholder="例如：企业管理层、销售负责人、客户决策人" /></div>
                 </div>
                 <div className="grid-2">
@@ -1797,7 +1797,7 @@
                     <div className="pending-upload__empty">还没有选择模板文件。<br />从上方上传区选择 PPTX 后，会显示在这里。</div>
                   )}
                 </div>
-                <div className="form-row"><div className="form-label-title">PPTX 模板路径 <span>也可粘贴本地绝对路径</span></div><input className="input" value={path} onChange={(e) => setPath(e.target.value)} placeholder="D:\\OpenAkita\\test-assets\\ppt-maker\\company_template.pptx" /></div>
+                <div className="form-row"><div className="form-label-title">PPTX 模板路径 <span>也可粘贴本地绝对路径</span></div><input className="input" value={path} onChange={(e) => setPath(e.target.value)} placeholder="D:\\Mclaw\\test-assets\\ppt-maker\\company_template.pptx" /></div>
                 <button className="btn btn-primary btn-block" onClick={() => upload().catch(setError)} disabled={!templateName.trim() || (!pendingTemplateFile && !path.trim()) || uploadingTemplate}>{uploadingTemplate ? (templateUploadPhase || "上传中...") : "确认上传"}</button>
                 <div className="template-tip"><strong>诊断会做什么？</strong><span>读取品牌色、字体、页面尺寸和 layout map（页面类型到模板版式的映射）。动画、SmartArt 和复杂母版会尽量保留外观方向，但不承诺 1:1 复刻。</span></div>
               </div>
@@ -1970,7 +1970,7 @@
             </div>
             <div className="pydep-row__detail">
               <div className="deps-help" style={{marginTop: 8, marginBottom: 8}}>
-                <div>检测环境：当前 OpenAkita 运行进程可见的 Python 路径，不等同于源码开发 venv。</div>
+                <div>检测环境：当前 Mclaw 运行进程可见的 Python 路径，不等同于源码开发 venv。</div>
                 {dep.python_executable && <div>Python：<code>{dep.python_executable}</code></div>}
                 {dep.target_dir && <div>安装目标：<code>{dep.target_dir}</code></div>}
                 {firstPath && <div>当前导入位置：<code>{firstPath}</code></div>}
@@ -2162,7 +2162,7 @@
                 <h3 className="setting-title">系统组件与依赖下载</h3>
                 <div className="deps-help deps-help--system">
                   <strong>可选依赖只服务于对应能力，不会影响基础主题生成。</strong>
-                  <div>文档解析、表格处理、图表渲染、高级导出和 Marp 桥接都按需安装。这里检测的是当前 OpenAkita 运行环境，不是源码运行时的 venv。安装会调用打包环境可用的真实 Python，并写入本插件私有依赖目录，完成后自动刷新状态。</div>
+                  <div>文档解析、表格处理、图表渲染、高级导出和 Marp 桥接都按需安装。这里检测的是当前 Mclaw 运行环境，不是源码运行时的 venv。安装会调用打包环境可用的真实 Python，并写入本插件私有依赖目录，完成后自动刷新状态。</div>
                 </div>
                 <div className="flex gap-2 flex-wrap" style={{marginBottom: 12}}>
                   <button className="btn btn-primary" onClick={checkHealth} disabled={checkingHealth}>
@@ -2464,7 +2464,7 @@
                 <span className="ak-logo"><Icon name="ppt" /></span>
                 <span className="brand-copy"><span className="brand-title">PPT 制作助手</span><span className="ak-sub">需求梳理 · 表格洞察 · 模板适配 · PPTX 导出</span></span>
               </h1>
-              <div className="header-right"><span>OpenAkita Plugin</span></div>
+              <div className="header-right"><span>Mclaw Plugin</span></div>
             </header>
             <nav className="tabs">{tabs.map(([id, label]) => <button key={id} className={"tab " + (active === id ? "active" : "")} onClick={() => setActive(id)}>{label}</button>)}</nav>
             <section className="content">
@@ -2480,6 +2480,6 @@
 
       ReactDOM.createRoot(document.getElementById("root")).render(<App />);
     </script>
-  <script src="./_assets/openakita-llm-selector.js" data-plugin-id="ppt-maker"></script>
+  <script src="./_assets/mclaw-llm-selector.js" data-plugin-id="ppt-maker"></script>
 </body>
 </html>

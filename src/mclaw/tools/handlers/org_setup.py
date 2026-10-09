@@ -38,7 +38,7 @@ _VALID_ACTIONS = (
     "delete_org",
 )
 
-_ORG_EVENT_MARKER = "[OPENAKITA_ORG]"
+_ORG_EVENT_MARKER = "[MCLAW_ORG]"
 
 
 def _with_org_event_marker(result: str, payload: dict[str, Any]) -> str:

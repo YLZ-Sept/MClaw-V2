@@ -158,8 +158,8 @@ async def test_node_tool_host_injects_stable_schema_declared_idempotency_key(
                         "client_request_id": {"type": "string"},
                     },
                 },
-                "x.mclaw-execution": {"kind": "external_task", "timeout_s": 900},
-                "x.mclaw-idempotency-param": "client_request_id",
+                "x-mclaw-execution": {"kind": "external_task", "timeout_s": 900},
+                "x-mclaw-idempotency-param": "client_request_id",
             }
         ],
     )
@@ -211,7 +211,7 @@ async def test_node_tool_host_unifies_video_resolution_and_normalizes_duration(
                 "duration": {"type": "integer"},
             },
         },
-        "x.mclaw-media-contract": {
+        "x-mclaw-media-contract": {
             "kind": "video",
             "model_param": "model_id",
             "resolution_param": "resolution",

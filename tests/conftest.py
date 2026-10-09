@@ -229,15 +229,15 @@ def _default_org_review_off(monkeypatch):
     sequences (and call-count assertions) that the legacy orgs_v2 dispatch
     tests rely on. Production defaults the review ON (env unset). Tests that
     specifically exercise the review/rework behaviour opt in explicitly via
-    ``monkeypatch.setenv("MCLAW_ORG_REVIEW_ENABLED", "1")``.
+    ``monkeypatch.setenv("OPENAKITA_ORG_REVIEW_ENABLED", "1")``.
 
     The knobs are read dynamically (see ``_runtime_agent_pipeline_executor``)
     so a plain ``setenv`` here is honoured without import-time freezing.
     """
-    monkeypatch.setenv("MCLAW_ORG_REVIEW_ENABLED", "0")
+    monkeypatch.setenv("OPENAKITA_ORG_REVIEW_ENABLED", "0")
     # Legacy XML-dispatch fixtures remain useful migration coverage. Production
     # defaults this off; new structured-delegation tests explicitly remove it.
-    monkeypatch.setenv("MCLAW_ORG_LEGACY_TEXT_DISPATCH", "1")
+    monkeypatch.setenv("OPENAKITA_ORG_LEGACY_TEXT_DISPATCH", "1")
 
 
 @pytest.fixture(autouse=True)

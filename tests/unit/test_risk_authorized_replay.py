@@ -152,7 +152,12 @@ async def test_pending_risk_confirm_with_no_action_returns_authorized_replay():
     fake_sm.get_session.return_value = fake_session
 
     fake_app_state = SimpleNamespace(session_manager=fake_sm)
-    fake_request = SimpleNamespace(app=SimpleNamespace(state=fake_app_state))
+    # 真实的 FastAPI Request 同时有 request.state 与 request.app.state；
+    # 多用户化后 chat 路由会读 request.state.user_id，桩要一起补齐。
+    fake_request = SimpleNamespace(
+        state=SimpleNamespace(user_id=None),
+        app=SimpleNamespace(state=fake_app_state),
+    )
 
     result = await chat_mod._handle_pending_risk_answer(
         request=fake_request,
@@ -203,7 +208,12 @@ async def test_pending_risk_confirm_with_action_still_executes_controlled():
     fake_sm = MagicMock()
     fake_sm.get_session.return_value = fake_session
     fake_app_state = SimpleNamespace(session_manager=fake_sm)
-    fake_request = SimpleNamespace(app=SimpleNamespace(state=fake_app_state))
+    # 真实的 FastAPI Request 同时有 request.state 与 request.app.state；
+    # 多用户化后 chat 路由会读 request.state.user_id，桩要一起补齐。
+    fake_request = SimpleNamespace(
+        state=SimpleNamespace(user_id=None),
+        app=SimpleNamespace(state=fake_app_state),
+    )
 
     # 应返回 StreamingResponse / dict — 不是 _RiskAuthorizedReplay
     result = await chat_mod._handle_pending_risk_answer(

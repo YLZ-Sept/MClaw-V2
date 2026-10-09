@@ -369,9 +369,9 @@ jobs:
         run: |
           MD="$GITHUB_WORKSPACE/manifest-out"
 
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/mclaw.mclaw-web.git" /tmp.mclaw-web
-          mkdir -p /tmp.mclaw-web/api/releases
-          cd /tmp.mclaw-web
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/mclaw/mclaw-web.git" /tmp/mclaw-web
+          mkdir -p /tmp/mclaw-web/api/releases
+          cd /tmp/mclaw-web
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
@@ -382,7 +382,7 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m "chore: update manifest for ${{ inputs.tag }} (${CHANNEL})"
             git push
-            echo "✅ Pushed to.mclaw-web"
+            echo "✅ Pushed to mclaw-web"
           else
             echo "No changes to push"
           fi

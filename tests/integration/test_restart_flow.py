@@ -46,18 +46,28 @@ def app_no_shutdown():
 
 @pytest.fixture
 async def client(app):
+    cfg = app.state.web_access_config
+    if not cfg.has_password_set:
+        cfg.add_user("admin", "test-pw", role="admin")
+    auth = {"Authorization": f"Bearer {cfg.create_access_token('admin')}"}
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
+        headers=auth,
     ) as c:
         yield c
 
 
 @pytest.fixture
 async def client_no_shutdown(app_no_shutdown):
+    cfg = app_no_shutdown.state.web_access_config
+    if not cfg.has_password_set:
+        cfg.add_user("admin", "test-pw", role="admin")
+    auth = {"Authorization": f"Bearer {cfg.create_access_token('admin')}"}
     async with AsyncClient(
         transport=ASGITransport(app=app_no_shutdown),
         base_url="http://testserver",
+        headers=auth,
     ) as c:
         yield c
 
@@ -137,10 +147,16 @@ class TestRestartOrchestratorRecovery:
             shutdown_event=shutdown_event,
             orchestrator=mock_orchestrator,
         )
+        # 这里自建 app（不走 client fixture），同样需要先满足认证 + setup 门禁
+        cfg = app.state.web_access_config
+        if not cfg.has_password_set:
+            cfg.add_user("admin", "test-pw", role="admin")
+        auth = {"Authorization": f"Bearer {cfg.create_access_token('admin')}"}
 
         async with AsyncClient(
             transport=ASGITransport(app=app),
             base_url="http://testserver",
+            headers=auth,
         ) as c:
             with (
                 patch("mclaw.config.settings") as mock_settings,

@@ -1,9 +1,9 @@
 /**
- * OpenAkita Plugin UI Bootstrap (self-contained copy).
+ * Mclaw Plugin UI Bootstrap (self-contained copy).
  */
 (function () {
   if (typeof window === "undefined") return;
-  if (window.OpenAkita && window.OpenAkita.__bootstrapped) return;
+  if (window.Mclaw && window.Mclaw.__bootstrapped) return;
 
   var meta = { theme: "light", locale: "zh-CN", apiBase: "", pluginId: "ppt-maker" };
   var pending = Object.create(null);
@@ -39,7 +39,7 @@
     });
   }
 
-  window.OpenAkita = {
+  window.Mclaw = {
     __bootstrapped: true,
     meta: meta,
     request: request,
@@ -52,7 +52,7 @@
     if (msg.type === "bridge:config" || msg.type === "bridge:ready") {
       Object.assign(meta, msg.payload || {});
       applyTheme(meta.theme);
-      window.dispatchEvent(new CustomEvent("openakita:ready", { detail: meta }));
+      window.dispatchEvent(new CustomEvent("mclaw:ready", { detail: meta }));
     }
     if (msg.requestId && pending[msg.requestId]) {
       pending[msg.requestId](msg.payload);
