@@ -128,25 +128,22 @@ def _is_local_ws(ws: WebSocket) -> bool:
 def _authenticate_ws(ws: WebSocket, config: WebAccessConfig) -> str | None:
     """Authenticate WebSocket connection and return the bound user_id.
 
-    Returns the authenticated user_id (``"desktop_user"`` for local exempt
-    connections, matching the HTTP middleware fallback), or ``None`` when the
-    connection must be rejected.
+    Returns the authenticated user_id, or ``None`` when the connection must be
+    rejected.
+
+    与 HTTP 中间件对齐：**不再给 loopback 免认证**。HTTP 侧的 loopback 豁免
+    已于 2026-08 移除（见 ``tests/integration/test_auth_flow.py`` 开头），WS 这里
+    漏改了 —— 结果是任何能连到本机端口的进程都能凭 ``desktop_user`` 身份订阅
+    全部事件流，绕过认证。桌面端本来就走正常登录拿 token
+    （``apps/setup-center/src/platform/auth.ts`` 的 ``needsAuth()`` 恒为 true），
+    WS 由 ``platform/websocket.ts`` 拼 ``?token=``。
+
+    注意 ``_is_local_ws`` 仍被 ``ws_events`` 用于 ``is_local`` 分类（改密码后
+    ``disconnect_remote_clients`` 只踢远程连接），与本函数的认证职责无关。
     """
-    # Local connections are exempt — same logic as HTTP middleware:
-    # direct local connections (no X-Forwarded-For) bypass auth even with
-    # trust_proxy; proxy-forwarded ones must provide a valid token.
-    if _is_local_ws(ws):
-        import os
-
-        trust_proxy = os.environ.get("TRUST_PROXY", "").lower() in ("1", "true", "yes")
-        if not trust_proxy or not ws.headers.get("x-forwarded-for"):
-            return "desktop_user"
-
-    # Check token from query params
     token = ws.query_params.get("token", "")
     if token and config.validate_access_token(token):
         return config.get_token_subject(token) or "desktop_user"
-
     return None
 
 

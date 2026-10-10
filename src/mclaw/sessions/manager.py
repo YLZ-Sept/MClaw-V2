@@ -274,7 +274,7 @@ class SessionManager:
         Returns:
             回填的总 turn 数
         """
-        import re
+        from mclaw.memory.session_identity import sanitize_session_id
 
         if not self._turn_loader:
             return 0
@@ -308,8 +308,7 @@ class SessionManager:
         total_backfilled = 0
         for session in self._sessions.values():
             try:
-                safe_id = session.session_key.replace(":", "__")
-                safe_id = re.sub(r'[/\\+=%?*<>|"\x00-\x1f]', "_", safe_id)
+                safe_id = sanitize_session_id(session.session_key)
                 db_turns = self._turn_loader(safe_id)
                 if not db_turns:
                     continue
@@ -518,6 +517,8 @@ class SessionManager:
         - 通过 (role, content, timestamp) 去重，不影响已有内存数据
         - 任何异常仅 WARN，绝不抛出（恢复路径必须健壮）
         """
+        from mclaw.memory.session_identity import sanitize_session_id
+
         if not self._turn_loader:
             return
         try:
@@ -529,10 +530,7 @@ class SessionManager:
             return
 
         try:
-            import re
-
-            safe_id = session.session_key.replace(":", "__")
-            safe_id = re.sub(r'[/\\+=%?*<>|"\x00-\x1f]', "_", safe_id)
+            safe_id = sanitize_session_id(session.session_key)
             db_turns = self._turn_loader(safe_id) or []
         except Exception as exc:
             logger.debug(f"[SessionManager] hydrate from store failed: {exc}")

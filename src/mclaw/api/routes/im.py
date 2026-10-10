@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +12,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from mclaw.memory.json_utils import coerce_text
+from mclaw.memory.session_identity import sanitize_session_id
 from mclaw.utils.errors import format_user_friendly_error
 
 logger = logging.getLogger(__name__)
@@ -289,11 +289,8 @@ def _get_storage():
 def _to_safe_session_id(session_key: str) -> str:
     """Convert session_key (e.g. 'telegram:123:user') to the safe format
     used as SQLite session_id (e.g. 'telegram__123__user').
-
-    Must match the logic in agent.py _prepare_session_context.
     """
-    safe = session_key.replace(":", "__")
-    return re.sub(r'[/\\+=%?*<>|"\x00-\x1f]', "_", safe)
+    return sanitize_session_id(session_key)
 
 
 @router.get("/api/im/sessions/{session_id:path}/messages")

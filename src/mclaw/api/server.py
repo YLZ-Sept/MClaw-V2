@@ -26,6 +26,9 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.responses import Response
+from starlette.staticfiles import StaticFiles
+from starlette.types import Scope
 
 import mclaw._ensure_utf8  # noqa: F401  # Windows UTF-8 编码保护
 
@@ -520,14 +523,47 @@ def _deploy_docs(data_dir: Path, app_version: str) -> Path | None:
     return docs_root
 
 
+class WebStaticFiles(StaticFiles):
+    """Serve the app shell fresh while hashed assets keep normal caching.
+
+    The shell (``index.html`` / ``sw.js``) must never be served from cache: a
+    cached ``index.html`` keeps referencing the previous bundle, and a cached
+    service worker keeps serving the previous app entirely -- the classic
+    "redeployed but the browser still runs the old build" trap.  Hashed assets
+    keep their normal caching because their name changes with their content.
+    """
+
+    _SHELL_PATHS = frozenset({"", ".", "index.html", "sw.js"})
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        shell = path in self._SHELL_PATHS
+        if shell:
+            # Drop conditional-request headers so the shell is revalidated
+            # instead of answered with a stale 304 Not Modified.
+            scope = {
+                **scope,
+                "headers": [
+                    (key, value)
+                    for key, value in scope["headers"]
+                    if key.lower() not in {b"if-none-match", b"if-modified-since"}
+                ],
+            }
+        response = await super().get_response(path, scope)
+        content_type = response.headers.get("content-type", "")
+        if shell or content_type.startswith("text/html"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
+
 def _mount_web_frontend(app: FastAPI) -> None:
     """Mount the web frontend static files if available.
 
-    Uses StaticFiles for /web/* with html=True for SPA fallback (index.html).
+    Uses :class:`WebStaticFiles` for /web/* with ``html=True``, which serves
+    ``index.html`` for the ``/web/`` directory request.  The SPA itself is
+    hash-routed (``#/view``), so every document is fetched from ``/web/`` or
+    ``/web/index.html`` and no path-based fallback is needed.
     """
     import mimetypes
-
-    from fastapi.staticfiles import StaticFiles
 
     # On some Windows systems the registry maps .js to text/plain, causing
     # browsers to reject ES module scripts.  Ensure correct MIME types are
@@ -549,7 +585,7 @@ def _mount_web_frontend(app: FastAPI) -> None:
         return
 
     logger.info(f"Mounting web frontend from {web_dist}")
-    app.mount("/web", StaticFiles(directory=str(web_dist), html=True), name="web-frontend")
+    app.mount("/web", WebStaticFiles(directory=str(web_dist), html=True), name="web-frontend")
 
 
 def _build_on_stop_org_cancel_inflight_handler(

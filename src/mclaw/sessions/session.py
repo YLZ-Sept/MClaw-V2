@@ -887,6 +887,8 @@ class Session:
 
     def _write_turn_to_store(self, role: str, content: str, metadata: dict) -> None:
         """Persist a single turn to SQLite via session_manager._turn_writer."""
+        from ..memory.session_identity import sanitize_session_id
+
         try:
             from ..core.feature_flags import is_enabled as _ff_enabled
 
@@ -901,10 +903,7 @@ class Session:
             return
 
         try:
-            import re as _re
-
-            safe_id = (self.session_key or "").replace(":", "__")
-            safe_id = _re.sub(r'[/\\+=%?*<>|"\x00-\x1f]', "_", safe_id)
+            safe_id = sanitize_session_id(self.session_key)
             turn_index = max(0, len(self.context.messages) - 1)
             writer(
                 safe_id,

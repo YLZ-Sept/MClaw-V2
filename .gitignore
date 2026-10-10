@@ -171,45 +171,52 @@ docs/bug_doc/
 Thumbs.db
 
 # Temporary scripts and files
-temp_*.py
-temp_*.json
-nul
-hello.txt
-time.txt
-todo.txt
-test_file.txt
-indentity_compiler.txt
-.tmp_validation/
+#
+# 注意：这些通配**必须用 `/` 锚定到仓库根**。不锚定会全局生效，把
+# `src/`、`skills/`、`plugins/` 下的同名正经源码一并静默忽略——实测已经造成
+# skills/pdf/scripts/check_*.py、skills/datetime-tool/scripts/get_time.py、
+# skills/chan-skills/**/list_*.py、plugins/finance-auto/scripts/check_territory.py
+# 等文件从未入库（别人 clone 下来这些 skill/plugin 是残缺的）。
+# 下面 `!` 开头的反忽略是历史遗留，锚定后已无实际作用，保留以记录当初的意图。
+/temp_*.py
+/temp_*.json
+/nul
+/hello.txt
+/time.txt
+/todo.txt
+/test_file.txt
+/indentity_compiler.txt
+/.tmp_validation/
 
 # Report generation scripts (temporary)
-*_report*.py
-create_report*.py
-fix_report.py
+/*_report*.py
+/create_report*.py
+/fix_report.py
 !src/mclaw/api/routes/bug_report.py
 !plugins/**/test_report_*.py
 !plugins/**/report_generator.py
 !plugins/**/report_routes.py
 
 # Image classification scripts (temporary)
-classify_*.py
-vision_*.py
-smart_classify.py
-analyze_*.py
-check_*.py
-verify_*.py
+/classify_*.py
+/vision_*.py
+/smart_classify.py
+/analyze_*.py
+/check_*.py
+/verify_*.py
 
 # Chrome history scripts (temporary)
-read_chrome_history.py
-find_*_sites.py
-list_*.py
+/read_chrome_history.py
+/find_*_sites.py
+/list_*.py
 
 # Reorganization scripts (temporary)
-reorganize_*.py
-execute_reorganization.py
-final_cleanup.py
-show_directory_tree.py
-get_time.py
-generate_vision_tasks.py
+/reorganize_*.py
+/execute_reorganization.py
+/final_cleanup.py
+/show_directory_tree.py
+/get_time.py
+/generate_vision_tasks.py
 
 # Temporary documents
 Microsoft_BitNet_*.docx

@@ -4,13 +4,14 @@
 
 1. 受保护接口一律需要凭证——**本机直连不再免认证**
 2. 豁免仅限白名单路径，见 ``mclaw.api.auth.AUTH_EXEMPT_PATHS`` /
-   ``AUTH_EXEMPT_PREFIXES``（/、/api/health、/api/auth/*、/api/logs/frontend、
-   /web/、/ws/、/docs、/openapi.json、/redoc、/user-docs）
+   ``AUTH_EXEMPT_PREFIXES``（/、/api/health、/api/build-info、/api/auth/*、
+   /api/logs/frontend、/web/、/ws/、/docs、/openapi.json、/redoc、/user-docs）
 3. ``TRUST_PROXY`` 只影响限速用的客户端 IP 判定，**不再影响是否需要认证**
 4. WebSocket 走独立鉴权：``/ws/`` 前缀豁免 HTTP 中间件，连接级鉴权见
    ``routes.websocket._authenticate_ws``
 5. /web/ 路径始终免认证
 6. /api/health 免认证
+6b. /api/build-info 免认证（陈旧包横幅须在登录前也能探测）
 7. /api/config 需要认证
 8. 记忆管理 API 需要认证（曾有 401 bug）
 9. token 刷新流程
@@ -163,21 +164,46 @@ class TestTrustProxyDoesNotGateAuth:
 
 
 class TestWebSocketAuth:
-    async def test_ws_local_direct_connects(self, app, monkeypatch):
-        from mclaw.api.routes import websocket as ws_mod
+    """WS 认证与 HTTP 完全一致：本机直连**也必须**带 token。
 
-        monkeypatch.setattr(ws_mod, "_is_local_ws", lambda ws: True)
+    loopback 豁免在 HTTP 侧已于 2026-08 移除，WS 侧 2026-10 才对齐——此前任何
+    能连到本机端口的进程都能凭 ``desktop_user`` 订阅全部事件流，绕过认证。
+    """
+
+    async def test_ws_local_direct_without_token_rejected(self, app):
+        from starlette.testclient import TestClient
+        from starlette.websockets import WebSocketDisconnect
+
+        with (
+            TestClient(app) as tc,
+            pytest.raises(WebSocketDisconnect),
+            tc.websocket_connect("/ws/events"),
+        ):
+            pass
+
+    async def test_ws_local_direct_with_valid_token_connects(self, app, access_token):
         from starlette.testclient import TestClient
 
-        with TestClient(app) as tc, tc.websocket_connect("/ws/events") as ws:
+        with (
+            TestClient(app) as tc,
+            tc.websocket_connect(f"/ws/events?token={access_token}") as ws,
+        ):
             data = ws.receive_json()
             assert data["event"] == "connected"
 
+    async def test_ws_invalid_token_rejected(self, app):
+        from starlette.testclient import TestClient
+        from starlette.websockets import WebSocketDisconnect
+
+        with (
+            TestClient(app) as tc,
+            pytest.raises(WebSocketDisconnect),
+            tc.websocket_connect("/ws/events?token=not-a-real-token"),
+        ):
+            pass
+
     async def test_ws_proxy_without_token_rejected(self, app, monkeypatch):
         monkeypatch.setenv("TRUST_PROXY", "true")
-        from mclaw.api.routes import websocket as ws_mod
-
-        monkeypatch.setattr(ws_mod, "_is_local_ws", lambda ws: True)
         from starlette.testclient import TestClient
         from starlette.websockets import WebSocketDisconnect
 
@@ -234,6 +260,25 @@ class TestHealthExempt:
             headers={"X-Forwarded-For": "203.0.113.50"},
         )
         assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# 6b. /api/build-info 免认证
+# ---------------------------------------------------------------------------
+
+
+class TestBuildInfoExempt:
+    async def test_build_info_no_auth(self, client, monkeypatch):
+        # The stale-bundle banner probes this before the operator logs in, so
+        # it must answer without a credential (route docstring: "intentionally
+        # unauthenticated ... without worrying about login state").
+        monkeypatch.setenv("TRUST_PROXY", "true")
+        resp = await client.get(
+            "/api/build-info",
+            headers={"X-Forwarded-For": "203.0.113.50"},
+        )
+        assert resp.status_code == 200
+        assert resp.json().get("build_id")
 
 
 # ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from mclaw.api.schemas import ChatAttachmentRecord
+from mclaw.memory.session_identity import sanitize_session_id
 
 logger = logging.getLogger(__name__)
 
@@ -365,10 +366,7 @@ def _maybe_backfill_messages(session) -> None:
         return
 
     try:
-        import re as _re
-
-        safe_id = (session.session_key or "").replace(":", "__")
-        safe_id = _re.sub(r'[/\\+=%?*<>|"\x00-\x1f]', "_", safe_id)
+        safe_id = sanitize_session_id(session.session_key)
         db_turns = loader(safe_id) or []
     except Exception as exc:
         logger.debug(f"[Sessions] backfill loader failed: {exc}")

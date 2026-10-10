@@ -60,6 +60,7 @@ from ..config import settings
 # 记忆系统
 from ..memory import MemoryManager
 from ..memory.json_utils import coerce_text
+from ..memory.session_identity import memory_session_id
 
 # Prompt 编译管线 (v2)
 # 技能系统 (SKILL.md 规范)
@@ -4567,13 +4568,7 @@ class Agent:
         # memory safe_id 统一用 session.session_key 派生，与 im_channel fallback
         # 和 sessions/manager backfill 的查询逻辑保持一致。
         try:
-            _memory_key = (
-                session.session_key
-                if session and hasattr(session, "session_key")
-                else conversation_id
-            )
-            conversation_safe_id = _memory_key.replace(":", "__")
-            conversation_safe_id = re.sub(r'[/\\+=%?*<>|"\x00-\x1f]', "_", conversation_safe_id)
+            conversation_safe_id = memory_session_id(session, conversation_id)
             memory_workspace_id = self._resolve_memory_workspace_id(session)
             if (
                 getattr(self.memory_manager, "_current_session_id", None) != conversation_safe_id

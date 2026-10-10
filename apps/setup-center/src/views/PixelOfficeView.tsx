@@ -9,6 +9,7 @@ import { AgentIcon } from '../components/AgentIcon';
 import type { OrgData } from '../components/pixel-office/OfficeScene';
 import type { AgentSpriteConfig } from '../components/pixel-office/AgentSprite';
 import { safeFetch } from '../providers';
+import { getAccessToken } from '../platform/auth';
 import { IconClipboard, IconSearch, IconFile, IconBot } from '../icons';
 import '../components/pixel-office/pixel-office.css';
 
@@ -161,7 +162,11 @@ export function PixelOfficeView({
   useEffect(() => {
     if (!visible || !selectedOrgId || isSoloMode) return;
     const wsBase = apiBaseUrl.replace(/^http/, 'ws');
-    const wsUrl = `${wsBase}/ws/events`;
+    // WS 与 HTTP 一样必须带 token：后端的 loopback 免认证已经去掉
+    // （见 src/mclaw/api/routes/websocket.py::_authenticate_ws）。裸连会被以
+    // 4001 关闭。拼法与 platform/websocket.ts 保持一致。
+    const token = getAccessToken();
+    const wsUrl = `${wsBase}/ws/events${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 
     let ws: WebSocket;
     try {

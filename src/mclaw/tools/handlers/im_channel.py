@@ -1056,7 +1056,8 @@ class IMChannelHandler:
     def _fallback_history_from_sqlite(self, session, limit: int) -> str | None:
         """从 SQLite conversation_turns 兜底加载历史（进程崩溃恢复场景）"""
         import logging
-        import re
+
+        from ...memory.session_identity import sanitize_session_id
 
         _logger = logging.getLogger(__name__)
 
@@ -1065,13 +1066,13 @@ class IMChannelHandler:
             return None
         safe_id = ""
         if hasattr(session, "session_key"):
-            safe_id = session.session_key.replace(":", "__")
+            safe_id = session.session_key
         elif getattr(self.agent, "_current_conversation_id", None):
-            safe_id = self.agent._current_conversation_id.replace(":", "__")
+            safe_id = self.agent._current_conversation_id
         if not safe_id:
             _logger.debug("[getChatHistory] fallback skipped: no safe_id resolved")
             return None
-        safe_id = re.sub(r'[/\\+=%?*<>|"\x00-\x1f]', "_", safe_id)
+        safe_id = sanitize_session_id(safe_id)
         _logger.info(
             f"[getChatHistory] Session context empty, falling back to SQLite (safe_id={safe_id})"
         )

@@ -19,6 +19,7 @@ from collections.abc import Awaitable, Callable
 import pytest
 
 from mclaw.agent.errors import UserCancelledError
+from mclaw.llm.types import AllEndpointsFailedError, AuthenticationError, LLMError
 from mclaw.runtime.cancel_token import CancellationToken
 from mclaw.runtime.checkpoint import CheckpointStatus, MemoryCheckpointer
 from mclaw.runtime.ledger import ProgressLedger
@@ -330,6 +331,94 @@ async def test_supervisor_retries_bad_progress_json() -> None:
     assert out.outcome is FinalOutcome.DONE
     # Brain emitted progress 3 times (2 bad + 1 good).
     assert brain.progress_calls == 3
+
+
+async def test_supervisor_fails_after_two_bad_progress_json_retries() -> None:
+    bus = StreamBus(strict=True)
+    store = MemoryCheckpointer()
+    brain = FakeBrain(
+        progress_responses=[
+            "bad initial response",
+            "bad retry one",
+            "bad retry two",
+            _ledger_json(satisfied=True),
+        ]
+    )
+    deliver, _ = _make_deliver()
+
+    sup = Supervisor(
+        command_id="cmd_bad_json",
+        org_id="org_1",
+        root_node_id="node_root",
+        task="t",
+        brain=brain,
+        deliver=deliver,
+        stream=bus,
+        checkpointer=store,
+    )
+
+    out = await sup.run()
+
+    assert out.outcome is FinalOutcome.FAILED
+    assert brain.progress_calls == 3
+    assert "Supervisor 输出格式错误" in out.final_message
+    assert "重试 2 次" in out.final_message
+    checkpoint = await store.aget(out.final_checkpoint_id)  # type: ignore[arg-type]
+    assert checkpoint is not None
+    assert checkpoint.metadata.status is CheckpointStatus.FAILED
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_message"),
+    [
+        (
+            AuthenticationError("invalid API key", status_code=401),
+            "Supervisor 编排端点认证失败",
+        ),
+        (
+            LLMError("target model not found", status_code=404),
+            "Supervisor 指定的编排端点或模型不可用",
+        ),
+        (
+            AllEndpointsFailedError(
+                "required endpoint does not support this request protocol",
+                is_structural=True,
+                error_categories={"structural"},
+            ),
+            "Supervisor 编排端点与请求协议不兼容",
+        ),
+    ],
+)
+async def test_supervisor_short_circuits_structural_llm_failures(
+    failure: Exception,
+    expected_message: str,
+) -> None:
+    class StructuralFailureBrain(FakeBrain):
+        async def emit_progress_ledger(self, **_kwargs) -> str:
+            self.progress_calls += 1
+            raise failure
+
+    bus = StreamBus(strict=True)
+    store = MemoryCheckpointer()
+    brain = StructuralFailureBrain()
+    deliver, _ = _make_deliver()
+    sup = Supervisor(
+        command_id="cmd_structural_failure",
+        org_id="org_1",
+        root_node_id="node_root",
+        task="t",
+        brain=brain,
+        deliver=deliver,
+        stream=bus,
+        checkpointer=store,
+    )
+
+    out = await sup.run()
+
+    assert out.outcome is FinalOutcome.FAILED
+    assert brain.progress_calls == 1
+    assert expected_message in out.final_message
+    assert str(failure) in out.final_message
 
 
 # ---------------------------------------------------------------------------

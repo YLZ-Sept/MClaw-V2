@@ -1,8 +1,9 @@
 """
 Web access authentication for Mclaw.
 
-Single-password mode with JWT tokens. Local requests (127.0.0.1) are exempt
-from authentication to preserve the desktop experience.
+Single-password mode with JWT tokens. Every request needs a credential --
+there is **no** loopback (127.0.0.1) exemption; only the fixed paths in
+``AUTH_EXEMPT_PATHS`` and the prefixes in ``AUTH_EXEMPT_PREFIXES`` bypass auth.
 
 Storage: data/web_access.json
 """
@@ -40,6 +41,7 @@ AUTH_EXEMPT_PATHS = frozenset(
     {
         "/",
         "/api/health",
+        "/api/build-info",
         "/api/auth/login",
         "/api/auth/logout",
         "/api/auth/refresh",

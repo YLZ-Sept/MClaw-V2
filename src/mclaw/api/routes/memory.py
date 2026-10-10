@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from mclaw.memory.retention import apply_retention
+from mclaw.memory.session_identity import DESKTOP_USER_ID
 from mclaw.memory.types import MemoryPriority, MemoryType, SemanticMemory
 
 logger = logging.getLogger(__name__)
@@ -234,10 +235,10 @@ def _current_owner(request: Request) -> tuple[str, str]:
 
     # 4) Fallback chain: auth user → memory context → canonical identity
     if user_id in ("default", "", "anonymous"):
-        if auth_user and auth_user != "desktop_user":
+        if auth_user and auth_user != DESKTOP_USER_ID:
             user_id = auth_user
         else:
-            user_id = "desktop_user"
+            user_id = DESKTOP_USER_ID
 
     return user_id, workspace_id
 
