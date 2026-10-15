@@ -176,6 +176,35 @@ DEFAULT_DISABLED_SKILLS: frozenset[str] = frozenset(
         "taobaoke-tool",
         # 网易云音乐
         "netease-music",
+        # AI 视频 / 数字人（chanjing 系列，随包发布但默认关闭：
+        # 需要厂商侧凭证，用户按需开启）
+        "chanjing-ai-creation",
+        "chanjing-avatar",
+        "chanjing-credentials-guard",
+        "chanjing-customised-person",
+        "chanjing-one-click-video-creation",
+        "chanjing-text-to-digital-person",
+        "chanjing-tts",
+        "chanjing-tts-voice-clone",
+        "chanjing-video-compose",
+        # 2026-10-15 补：这 14 个随包发布时漏登记在这张表里。约定是
+        # 「external 技能一律默认关闭」（tests/unit/test_external_skill_catalog.py::
+        # test_packaged_external_skills_are_curated_and_categorized 守着这条），
+        # 靠目录级 force-include 让它们「存在」，由用户按需开启。
+        "canvas-design",
+        "datetime-tool",
+        "doc-coauthoring",
+        "docx",
+        "douyin-comments",
+        "file-manager",
+        "mcp-builder",
+        "mcp-installer",
+        "pdf",
+        "pptx",
+        "skill-creator",
+        "smtp-email-sender",
+        "web-artifacts-builder",
+        "xlsx",
     }
 )
 

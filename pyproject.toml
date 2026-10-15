@@ -305,6 +305,98 @@ path = "hatch_build.py"
 "skills/superpowers-receiving-review" = "mclaw/builtin_skills/external/superpowers-receiving-review"
 "skills/superpowers-writing-plans" = "mclaw/builtin_skills/external/superpowers-writing-plans"
 
+# ── 2026-10-15 补齐 ───────────────────────────────────────────────
+# 以下 64 个技能早已登记在 skills/catalog.json（技能市场分类）与
+# src/mclaw/skills/loader.py 的 DEFAULT_DISABLED_SKILLS（随包发布、默认
+# 关闭）里，却一直没进上面这份 force-include 白名单 —— 结果是安装包装完
+# 只有 24 个外部技能，"技能"页比开发机少一大截。
+# 分组与 catalog.json 的分类一一对应，便于比对。
+# 防再漏：打包前跑 build/skills_package_check.py（校验白名单与 wheel）。
+#
+# 内容创作与发布
+"skills/algorithmic-art" = "mclaw/builtin_skills/external/algorithmic-art"
+"skills/internal-comms" = "mclaw/builtin_skills/external/internal-comms"
+"skills/slack-gif-creator" = "mclaw/builtin_skills/external/slack-gif-creator"
+"skills/theme-factory" = "mclaw/builtin_skills/external/theme-factory"
+
+# 图像与视频
+"skills/baidu-picture-book" = "mclaw/builtin_skills/external/baidu-picture-book"
+"skills/baidu-video-notes" = "mclaw/builtin_skills/external/baidu-video-notes"
+"skills/canvas-design" = "mclaw/builtin_skills/external/canvas-design"
+"skills/douyin-comments" = "mclaw/builtin_skills/external/douyin-comments"
+"skills/seedance-video" = "mclaw/builtin_skills/external/seedance-video"
+"skills/chanjing-ai-creation" = "mclaw/builtin_skills/external/chanjing-ai-creation"
+"skills/chanjing-avatar" = "mclaw/builtin_skills/external/chanjing-avatar"
+"skills/chanjing-credentials-guard" = "mclaw/builtin_skills/external/chanjing-credentials-guard"
+"skills/chanjing-customised-person" = "mclaw/builtin_skills/external/chanjing-customised-person"
+"skills/chanjing-one-click-video-creation" = "mclaw/builtin_skills/external/chanjing-one-click-video-creation"
+"skills/chanjing-text-to-digital-person" = "mclaw/builtin_skills/external/chanjing-text-to-digital-person"
+"skills/chanjing-tts" = "mclaw/builtin_skills/external/chanjing-tts"
+"skills/chanjing-tts-voice-clone" = "mclaw/builtin_skills/external/chanjing-tts-voice-clone"
+"skills/chanjing-video-compose" = "mclaw/builtin_skills/external/chanjing-video-compose"
+
+# 文档与写作
+"skills/baidu-paddleocr-doc" = "mclaw/builtin_skills/external/baidu-paddleocr-doc"
+"skills/baidu-paddleocr-text" = "mclaw/builtin_skills/external/baidu-paddleocr-text"
+"skills/baidu-ppt-gen" = "mclaw/builtin_skills/external/baidu-ppt-gen"
+"skills/doc-coauthoring" = "mclaw/builtin_skills/external/doc-coauthoring"
+"skills/docx" = "mclaw/builtin_skills/external/docx"
+"skills/pdf" = "mclaw/builtin_skills/external/pdf"
+"skills/pptx" = "mclaw/builtin_skills/external/pptx"
+"skills/xlsx" = "mclaw/builtin_skills/external/xlsx"
+
+# 开发与工程
+"skills/changelog-generator" = "mclaw/builtin_skills/external/changelog-generator"
+"skills/frontend-design" = "mclaw/builtin_skills/external/frontend-design"
+"skills/web-artifacts-builder" = "mclaw/builtin_skills/external/web-artifacts-builder"
+
+# 数据与研究
+"skills/baidu-baike" = "mclaw/builtin_skills/external/baidu-baike"
+"skills/baidu-deep-research" = "mclaw/builtin_skills/external/baidu-deep-research"
+"skills/baidu-scholar" = "mclaw/builtin_skills/external/baidu-scholar"
+"skills/baidu-search" = "mclaw/builtin_skills/external/baidu-search"
+"skills/tencent-news" = "mclaw/builtin_skills/external/tencent-news"
+
+# 知识与效率
+"skills/datetime-tool" = "mclaw/builtin_skills/external/datetime-tool"
+"skills/tencent-ima" = "mclaw/builtin_skills/external/tencent-ima"
+
+# 通讯与协作
+"skills/dingtalk-cli" = "mclaw/builtin_skills/external/dingtalk-cli"
+"skills/feishu-cli" = "mclaw/builtin_skills/external/feishu-cli"
+"skills/github-automation" = "mclaw/builtin_skills/external/github-automation"
+"skills/gmail-automation" = "mclaw/builtin_skills/external/gmail-automation"
+"skills/google-calendar-automation" = "mclaw/builtin_skills/external/google-calendar-automation"
+"skills/qq-channel" = "mclaw/builtin_skills/external/qq-channel"
+"skills/smtp-email-sender" = "mclaw/builtin_skills/external/smtp-email-sender"
+"skills/tencent-meeting" = "mclaw/builtin_skills/external/tencent-meeting"
+"skills/tencent-survey" = "mclaw/builtin_skills/external/tencent-survey"
+"skills/wecom-cli" = "mclaw/builtin_skills/external/wecom-cli"
+
+# 出行与地图
+"skills/amap-maps" = "mclaw/builtin_skills/external/amap-maps"
+"skills/baidu-maps" = "mclaw/builtin_skills/external/baidu-maps"
+"skills/didi-ride" = "mclaw/builtin_skills/external/didi-ride"
+"skills/fliggy-travel" = "mclaw/builtin_skills/external/fliggy-travel"
+
+# 电商与营销
+"skills/baidu-ecommerce" = "mclaw/builtin_skills/external/baidu-ecommerce"
+"skills/baidu-marketing" = "mclaw/builtin_skills/external/baidu-marketing"
+"skills/taobaoke-tool" = "mclaw/builtin_skills/external/taobaoke-tool"
+
+# 平台与扩展
+"skills/baidu-famou" = "mclaw/builtin_skills/external/baidu-famou"
+"skills/baidu-netdisk" = "mclaw/builtin_skills/external/baidu-netdisk"
+"skills/baidu-yijian" = "mclaw/builtin_skills/external/baidu-yijian"
+"skills/file-manager" = "mclaw/builtin_skills/external/file-manager"
+"skills/mcp-builder" = "mclaw/builtin_skills/external/mcp-builder"
+"skills/mcp-installer" = "mclaw/builtin_skills/external/mcp-installer"
+"skills/miaoda-app-builder" = "mclaw/builtin_skills/external/miaoda-app-builder"
+"skills/moltbook" = "mclaw/builtin_skills/external/moltbook"
+"skills/netease-music" = "mclaw/builtin_skills/external/netease-music"
+"skills/skill-creator" = "mclaw/builtin_skills/external/skill-creator"
+"skills/xiaodu-control" = "mclaw/builtin_skills/external/xiaodu-control"
+
 # Identity templates: shipped as bundled examples so the setup wizard can
 # seed the user-customizable identity/*.md files on first install. The
 # wizard's `_resolve_identity_template` looks up these paths under the
