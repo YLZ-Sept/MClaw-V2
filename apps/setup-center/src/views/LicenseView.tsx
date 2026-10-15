@@ -176,7 +176,7 @@ export function LicenseView({
             <div style={fpBoxStyle}>
               <div style={fpLabelStyle}>{t("license.fingerprintLabel")}</div>
               {fpLoading ? (
-                <div style={{ fontSize: 13, color: "var(--text3, #94a3b8)" }}>
+                <div style={{ fontSize: 13, color: "var(--muted, #94a3b8)" }}>
                   {t("license.fingerprintLoading")}
                 </div>
               ) : fingerprint ? (
@@ -281,7 +281,7 @@ const titleStyle: React.CSSProperties = {
 const introStyle: React.CSSProperties = {
   margin: "0 0 12px",
   fontSize: 13,
-  color: "var(--text3, #64748b)",
+  color: "var(--muted, #64748b)",
   lineHeight: 1.6,
   textAlign: "left",
 };
@@ -309,7 +309,7 @@ const fpBoxStyle: React.CSSProperties = {
 const fpLabelStyle: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 600,
-  color: "var(--text2, #475569)",
+  color: "var(--text-secondary, #475569)",
   marginBottom: 8,
 };
 
@@ -335,7 +335,7 @@ const copyBtnStyle: React.CSSProperties = {
   borderRadius: 6,
   padding: "4px 10px",
   fontSize: 12,
-  color: "var(--text2, #475569)",
+  color: "var(--text-secondary, #475569)",
   cursor: "pointer",
   whiteSpace: "nowrap",
 };
@@ -350,13 +350,13 @@ const fpWarnStyle: React.CSSProperties = {
 const hintStyle: React.CSSProperties = {
   margin: "0 0 16px",
   fontSize: 12,
-  color: "var(--text3, #94a3b8)",
+  color: "var(--muted, #94a3b8)",
   lineHeight: 1.6,
   textAlign: "left",
 };
 
 const errorStyle: React.CSSProperties = {
-  background: "var(--error-bg, #fef2f2)",
+  background: "var(--err-bg, #fef2f2)",
   color: "var(--error, #dc2626)",
   borderRadius: 8,
   padding: "8px 12px",
@@ -368,7 +368,7 @@ const errorStyle: React.CSSProperties = {
 };
 
 const successStyle: React.CSSProperties = {
-  background: "var(--success-bg, #f0fdf4)",
+  background: "var(--ok-bg, #dcfce7)",
   color: "var(--success, #15803d)",
   borderRadius: 8,
   padding: "16px 14px",
@@ -382,14 +382,14 @@ const grantGridStyle: React.CSSProperties = {
   gap: "6px 12px",
   margin: "12px 0",
   padding: "10px 12px",
-  background: "var(--card, rgba(255,255,255,0.6))",
-  border: "1px solid var(--success-line, #bbf7d0)",
+  background: "var(--bg-subtle, rgba(255,255,255,0.6))",
+  border: "1px solid var(--line, #bbf7d0)",
   borderRadius: 8,
 };
 
 const grantKeyStyle: React.CSSProperties = {
   fontSize: 12,
-  color: "var(--text2, #475569)",
+  color: "var(--text-secondary, #475569)",
   whiteSpace: "nowrap",
 };
 
@@ -420,7 +420,7 @@ const labelStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 500,
   marginBottom: 6,
-  color: "var(--text2, #475569)",
+  color: "var(--text-secondary, #475569)",
 };
 
 const textareaStyle: React.CSSProperties = {
@@ -444,7 +444,7 @@ function submitStyle(disabled: boolean): React.CSSProperties {
     width: "100%",
     marginTop: 20,
     background: disabled
-      ? "var(--text3, #94a3b8)"
+      ? "var(--muted, #94a3b8)"
       : "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
     color: "#fff",
     border: "none",

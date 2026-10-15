@@ -144,7 +144,7 @@ export function ServerManagerView({
                 ? t("server.editTitle", { defaultValue: "编辑服务器" })
                 : t("server.addTitle", { defaultValue: "连接服务器" })}
             </h2>
-            <p style={{ margin: 0, fontSize: 13, color: "var(--text3, #64748b)" }}>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--muted, #64748b)" }}>
               {t("server.addHint", { defaultValue: "输入桌面端显示的远程访问地址" })}
             </p>
           </div>
@@ -165,7 +165,7 @@ export function ServerManagerView({
 
           {error && (
             <div style={{
-              background: "var(--error-bg, #fef2f2)", color: "var(--error, #dc2626)",
+              background: "var(--err-bg, #fef2f2)", color: "var(--error, #dc2626)",
               borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 12,
             }}>
               {error}
@@ -207,7 +207,7 @@ export function ServerManagerView({
             </button>
           )}
 
-          <p style={{ marginTop: 16, fontSize: 12, color: "var(--text3, #94a3b8)", textAlign: "center" }}>
+          <p style={{ marginTop: 16, fontSize: 12, color: "var(--muted, #94a3b8)", textAlign: "center" }}>
             {t("server.copyHint", { defaultValue: "在桌面端顶栏点击「复制远程地址」获取地址" })}
           </p>
         </div>
@@ -249,7 +249,7 @@ export function ServerManagerView({
                   <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {s.name}
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--text3, #64748b)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 12, color: "var(--muted, #64748b)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {s.url}
                   </div>
                 </div>
@@ -257,7 +257,7 @@ export function ServerManagerView({
                   <button
                     onClick={(e) => { e.stopPropagation(); startEdit(s); }}
                     style={{
-                      background: "none", border: "none", color: "var(--text3, #64748b)",
+                      background: "none", border: "none", color: "var(--muted, #64748b)",
                       cursor: "pointer", padding: 4, borderRadius: 6, fontSize: 13,
                     }}
                     title={t("server.edit", { defaultValue: "编辑" })}

@@ -190,7 +190,7 @@ export function SetupView({
           style={{
             margin: "0 0 20px",
             fontSize: 13,
-            color: "var(--text3, #64748b)",
+            color: "var(--muted, #64748b)",
             lineHeight: 1.6,
             textAlign: "left",
           }}
@@ -201,7 +201,7 @@ export function SetupView({
         {error && (
           <div
             style={{
-              background: "var(--error-bg, #fef2f2)",
+              background: "var(--err-bg, #fef2f2)",
               color: "var(--error, #dc2626)",
               borderRadius: 8,
               padding: "8px 12px",
@@ -223,7 +223,7 @@ export function SetupView({
             fontSize: 13,
             fontWeight: 500,
             marginBottom: 6,
-            color: "var(--text2, #475569)",
+            color: "var(--text-secondary, #475569)",
           }}
         >
           {t("setup.password")}
@@ -248,7 +248,7 @@ export function SetupView({
             style={{
               textAlign: "left",
               fontSize: 12,
-              color: "var(--text3, #94a3b8)",
+              color: "var(--muted, #94a3b8)",
               marginTop: 4,
               marginBottom: 12,
             }}
@@ -265,7 +265,7 @@ export function SetupView({
             fontWeight: 500,
             marginTop: 16,
             marginBottom: 6,
-            color: "var(--text2, #475569)",
+            color: "var(--text-secondary, #475569)",
           }}
         >
           {t("setup.confirm")}
@@ -305,7 +305,7 @@ export function SetupView({
             width: "100%",
             marginTop: 20,
             background: !canSubmit
-              ? "var(--text3, #94a3b8)"
+              ? "var(--muted, #94a3b8)"
               : "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
             color: "#fff",
             border: "none",
@@ -329,7 +329,7 @@ export function SetupView({
             style={{
               background: "transparent",
               border: "none",
-              color: "var(--text3, #64748b)",
+              color: "var(--muted, #64748b)",
               fontSize: 13,
               cursor: "pointer",
               padding: 0,
@@ -339,21 +339,21 @@ export function SetupView({
             {t("setup.faqTitle")}
           </button>
           {showFaq && (
-            <div style={{ marginTop: 12, fontSize: 12, color: "var(--text3, #64748b)", lineHeight: 1.7 }}>
+            <div style={{ marginTop: 12, fontSize: 12, color: "var(--muted, #64748b)", lineHeight: 1.7 }}>
               <div style={{ marginBottom: 8 }}>
-                <div style={{ fontWeight: 600, color: "var(--text2, #475569)", marginBottom: 2 }}>
+                <div style={{ fontWeight: 600, color: "var(--text-secondary, #475569)", marginBottom: 2 }}>
                   {t("setup.faqWhy")}
                 </div>
                 <div>{t("setup.faqWhyAns")}</div>
               </div>
               <div style={{ marginBottom: 8 }}>
-                <div style={{ fontWeight: 600, color: "var(--text2, #475569)", marginBottom: 2 }}>
+                <div style={{ fontWeight: 600, color: "var(--text-secondary, #475569)", marginBottom: 2 }}>
                   {t("setup.faqForgot")}
                 </div>
                 <div>{t("setup.faqForgotAns")}</div>
               </div>
               <div>
-                <div style={{ fontWeight: 600, color: "var(--text2, #475569)", marginBottom: 2 }}>
+                <div style={{ fontWeight: 600, color: "var(--text-secondary, #475569)", marginBottom: 2 }}>
                   {t("setup.faqLocal")}
                 </div>
                 <div>{t("setup.faqLocalAns")}</div>

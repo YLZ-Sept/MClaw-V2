@@ -5032,7 +5032,7 @@ function MainApp() {
   // ── Web / Capacitor auth gate: show login page if not authenticated ──
   if (needsRemoteAuth && !webAuthed) {
     if (authChecking) {
-      return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: "var(--text3, #94a3b8)" }}>Loading...</div>;
+      return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: "var(--muted, #94a3b8)" }}>Loading...</div>;
     }
     return <LoginView
       apiBaseUrl={IS_CAPACITOR ? apiBaseUrl : (IS_TAURI ? httpApiBase() : "")}

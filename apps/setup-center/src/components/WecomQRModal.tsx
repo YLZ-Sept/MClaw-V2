@@ -144,19 +144,19 @@ export function WecomQRModal({ venvDir, apiBaseUrl, onClose, onSuccess }: WecomQ
           style={{
             position: "absolute", top: 8, right: 12,
             background: "none", border: "none", fontSize: 18,
-            cursor: "pointer", color: "var(--text3)",
+            cursor: "pointer", color: "var(--muted)",
           }}
         >&times;</button>
 
         <div style={{ textAlign: "center", marginBottom: 16 }}>
           <div className="cardTitle" style={{ marginBottom: 4 }}>{t("wecom.qrTitle")}</div>
-          <div style={{ fontSize: 12, color: "var(--text3)" }}>{t("wecom.qrSubtitle")}</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>{t("wecom.qrSubtitle")}</div>
         </div>
 
         {state === "loading" && (
           <div style={{ textAlign: "center", padding: 40 }}>
             <div className="spinner" style={{ width: 32, height: 32, margin: "0 auto" }} />
-            <div style={{ marginTop: 12, fontSize: 13, color: "var(--text3)" }}>{t("wecom.qrLoading")}</div>
+            <div style={{ marginTop: 12, fontSize: 13, color: "var(--muted)" }}>{t("wecom.qrLoading")}</div>
           </div>
         )}
 
@@ -168,7 +168,7 @@ export function WecomQRModal({ venvDir, apiBaseUrl, onClose, onSuccess }: WecomQ
             }}>
               <QRCodeSVG value={qrUrl} size={200} />
             </div>
-            <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 8 }}>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
               {t("wecom.qrScanHint")}
             </div>
             <div style={{

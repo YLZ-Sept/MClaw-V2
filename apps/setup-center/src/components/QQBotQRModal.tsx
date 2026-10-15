@@ -241,7 +241,7 @@ export function QQBotQRModal({
             border: "none",
             fontSize: 18,
             cursor: "pointer",
-            color: "var(--text3)",
+            color: "var(--muted)",
           }}
         >
           ×
@@ -251,7 +251,7 @@ export function QQBotQRModal({
           <div className="cardTitle" style={{ marginBottom: 4 }}>
             {t("qqbot.qrTitle")}
           </div>
-          <div style={{ fontSize: 12, color: "var(--text3)" }}>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>
             {t("qqbot.qrSubtitle")}
           </div>
         </div>
@@ -266,7 +266,7 @@ export function QQBotQRModal({
               style={{
                 marginTop: 12,
                 fontSize: 13,
-                color: "var(--text3)",
+                color: "var(--muted)",
               }}
             >
               {t("qqbot.qrLoading")}
@@ -290,7 +290,7 @@ export function QQBotQRModal({
             <div
               style={{
                 fontSize: 12,
-                color: "var(--text3)",
+                color: "var(--muted)",
                 marginBottom: 6,
               }}
             >
@@ -335,7 +335,7 @@ export function QQBotQRModal({
               style={{
                 marginTop: 12,
                 fontSize: 13,
-                color: "var(--text3)",
+                color: "var(--muted)",
               }}
             >
               {t("qqbot.qrLoginOk")}
@@ -359,7 +359,7 @@ export function QQBotQRModal({
         {state === "partial" && (
           <div style={{ textAlign: "center", padding: 20 }}>
             <div style={{ fontSize: 28, marginBottom: 8, color: "var(--warning, #d97706)" }}>!</div>
-            <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 12, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12, lineHeight: 1.5 }}>
               {t("qqbot.qrPartialSuccess")}
             </div>
             <button className="btnSmall" onClick={onClose}>OK</button>

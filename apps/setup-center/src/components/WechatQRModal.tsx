@@ -194,7 +194,7 @@ export function WechatQRModal({
             border: "none",
             fontSize: 18,
             cursor: "pointer",
-            color: "var(--text3)",
+            color: "var(--muted)",
           }}
         >
           ×
@@ -204,7 +204,7 @@ export function WechatQRModal({
           <div className="cardTitle" style={{ marginBottom: 4 }}>
             {t("wechat.qrTitle")}
           </div>
-          <div style={{ fontSize: 12, color: "var(--text3)" }}>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>
             {t("wechat.qrSubtitle")}
           </div>
         </div>
@@ -219,7 +219,7 @@ export function WechatQRModal({
               style={{
                 marginTop: 12,
                 fontSize: 13,
-                color: "var(--text3)",
+                color: "var(--muted)",
               }}
             >
               {t("wechat.qrLoading")}
@@ -243,7 +243,7 @@ export function WechatQRModal({
             <div
               style={{
                 fontSize: 12,
-                color: state === "scaned" ? "var(--success, #16a34a)" : "var(--text3)",
+                color: state === "scaned" ? "var(--success, #16a34a)" : "var(--muted)",
                 marginBottom: 6,
                 fontWeight: state === "scaned" ? 500 : 400,
               }}
@@ -285,7 +285,7 @@ export function WechatQRModal({
             <div
               style={{
                 fontSize: 13,
-                color: "var(--text3)",
+                color: "var(--muted)",
                 marginBottom: 12,
               }}
             >
