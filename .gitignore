@@ -480,3 +480,18 @@ skills/bid-writer/
 .env.bak*
 .env.lock
 skills/douyin-comments/
+
+# ─────────────────────────────────────────────────────────────
+# 技能功能素材（2026-10-16）：上面的「Media files」通配（*.mp3/*.mp4/*.wav…）
+# 会把技能自带的功能性音频一并忽略——实测 huashu-design 的 6 个 BGM 与 37 个
+# 音效（26.9MB）全部未入库，本机打包正常但干净克隆/CI 打出的安装包会静默缺这
+# 一层，add-music.sh、narrate-pipeline.mjs 等配音链在客户机直接失效。
+# 否定规则必须写在这条通配之后才生效。
+# ─────────────────────────────────────────────────────────────
+!skills/**/*.mp3
+!skills/**/*.mp4
+!skills/**/*.wav
+!skills/**/*.ogg
+!skills/**/*.oga
+!skills/**/*.webm
+!skills/**/*.m4a

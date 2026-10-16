@@ -50,6 +50,7 @@
         "baidu-ppt-gen",
         "doc-coauthoring",
         "docx",
+        "huashu-design",
         "pdf",
         "ppt-creator",
         "pptx",
@@ -138,12 +139,14 @@
         "baidu-famou",
         "baidu-netdisk",
         "baidu-yijian",
+        "darwin-skill",
         "file-manager",
         "mcp-builder",
         "mcp-installer",
         "miaoda-app-builder",
         "moltbook",
         "netease-music",
+        "nuwa-skill",
         "skill-creator",
         "xiaodu-control"
       ]

@@ -24,5 +24,8 @@ continues to apply to third-party material.
 | [daymade/claude-code-skills](https://github.com/daymade/claude-code-skills) | See upstream | `ppt-creator` |
 | [apify/agent-skills](https://github.com/apify/agent-skills) | See upstream | `apify-scraper` |
 | [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) | See upstream | `agent-browser` |
+| [alchaincyf/nuwa-skill](https://github.com/alchaincyf/nuwa-skill) by 花叔 | MIT | `nuwa-skill` |
+| [alchaincyf/huashu-design](https://github.com/alchaincyf/huashu-design) by 花叔 | MIT | `huashu-design` |
+| [alchaincyf/darwin-skill](https://github.com/alchaincyf/darwin-skill) by 花叔 | MIT | `darwin-skill` |
 
-Last reviewed: August 2026.
+Last reviewed: October 2026.

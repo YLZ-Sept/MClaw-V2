@@ -205,6 +205,11 @@ DEFAULT_DISABLED_SKILLS: frozenset[str] = frozenset(
         "smtp-email-sender",
         "web-artifacts-builder",
         "xlsx",
+        # 2026-10-16 补：花叔（alchaincyf）三个第三方技能随包发布，同样按
+        # 「external 一律默认关闭」处理，由用户在技能市场里按需开启。
+        "darwin-skill",
+        "huashu-design",
+        "nuwa-skill",
     }
 )
 
