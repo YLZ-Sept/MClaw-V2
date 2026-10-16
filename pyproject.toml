@@ -83,6 +83,19 @@ dependencies = [
     # PDF parsing for knowledge base document ingestion
     "pdfplumber>=0.10.0",
 
+    # Office 格式解析（知识库上传：.xlsx/.xls/.docx/.doc/.pptx/.ppt）。
+    # 与 pdfplumber 同属知识库入库路径的必需依赖——缺失时前端上传直接报
+    # ImportError（见 memory/knowledge_manager.py 的 _extract_excel /
+    # _extract_pptx / _extract_doc_text）。
+    # 2026-10-16 修正：这几个包此前只挂在 finance-auto extra 下（openpyxl/xlrd）
+    # 或全仓未声明（python-docx/python-pptx/olefile），导致知识库上传 Excel/Word
+    # 在开发机与客户机都失败。约束与 finance-auto 保持一致以免解析冲突。
+    "openpyxl>=3.1.5,<4.0",
+    "xlrd==1.2.0",              # 2.x 已移除 .xls 支持，必须锁 1.2.0
+    "python-docx>=1.1.0",
+    "python-pptx>=1.0.0",
+    "olefile>=0.47",            # .doc（Word 97-2003）OLE 二进制解析
+
     # 离线授权：Ed25519 验签。核心依赖——授权校验在每个 API 请求上运行，
     # 缺它则整个后端无法启动，必须进安装包 wheelhouse。
     # 下界 42.0 远低于需求（Ed25519 自 2.6 起支持），取宽下界是为了与
@@ -341,6 +354,7 @@ path = "hatch_build.py"
 "skills/baidu-ppt-gen" = "mclaw/builtin_skills/external/baidu-ppt-gen"
 "skills/doc-coauthoring" = "mclaw/builtin_skills/external/doc-coauthoring"
 "skills/docx" = "mclaw/builtin_skills/external/docx"
+"skills/huashu-design" = "mclaw/builtin_skills/external/huashu-design"
 "skills/pdf" = "mclaw/builtin_skills/external/pdf"
 "skills/pptx" = "mclaw/builtin_skills/external/pptx"
 "skills/xlsx" = "mclaw/builtin_skills/external/xlsx"
@@ -388,12 +402,14 @@ path = "hatch_build.py"
 "skills/baidu-famou" = "mclaw/builtin_skills/external/baidu-famou"
 "skills/baidu-netdisk" = "mclaw/builtin_skills/external/baidu-netdisk"
 "skills/baidu-yijian" = "mclaw/builtin_skills/external/baidu-yijian"
+"skills/darwin-skill" = "mclaw/builtin_skills/external/darwin-skill"
 "skills/file-manager" = "mclaw/builtin_skills/external/file-manager"
 "skills/mcp-builder" = "mclaw/builtin_skills/external/mcp-builder"
 "skills/mcp-installer" = "mclaw/builtin_skills/external/mcp-installer"
 "skills/miaoda-app-builder" = "mclaw/builtin_skills/external/miaoda-app-builder"
 "skills/moltbook" = "mclaw/builtin_skills/external/moltbook"
 "skills/netease-music" = "mclaw/builtin_skills/external/netease-music"
+"skills/nuwa-skill" = "mclaw/builtin_skills/external/nuwa-skill"
 "skills/skill-creator" = "mclaw/builtin_skills/external/skill-creator"
 "skills/xiaodu-control" = "mclaw/builtin_skills/external/xiaodu-control"
 

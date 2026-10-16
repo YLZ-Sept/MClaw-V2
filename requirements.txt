@@ -54,6 +54,13 @@ Pillow>=10.0.0             # Image format conversion/processing
 
 # === Document Processing ===
 pdfplumber>=0.10.0         # PDF parsing for knowledge base ingestion
+# Office 格式解析（知识库上传 .xlsx/.xls/.docx/.doc/.pptx）。
+# 缺失时上传 Excel/Word 报 ImportError。xlrd 必须锁 1.2.0（2.x 移除 .xls）。
+openpyxl>=3.1.5,<4.0       # .xlsx
+xlrd==1.2.0                # .xls
+python-docx>=1.1.0         # .docx
+python-pptx>=1.0.0         # .pptx
+olefile>=0.47              # .doc (Word 97-2003 OLE)
 # 中文分词：知识库 FTS 检索依赖它。缺失会导致索引/查询分词口径不一致，
 # 中文召回静默失效（2026-08 与 2026-10 各踩过一次）。
 jieba>=0.42.1              # Chinese word segmentation for KB FTS
