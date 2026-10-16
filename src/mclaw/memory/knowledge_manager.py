@@ -233,10 +233,38 @@ def _extract_doc_text(file_path: Path) -> str:
     )
 
 
+def _read_text_file(file_path: Path) -> str:
+    """按 BOM → utf-8 → gb18030 的顺序读取纯文本文件。
+
+    中文 Windows 上 Excel 导出的 .csv 默认是 GBK（"Unicode 文本"则是 UTF-16），
+    中文网页另存的 .html 常是 GB2312/GBK。一律按 utf-8 读会整篇变成替换字符，
+    且**静默入库**——检索不到还不报错。gb18030 是 GBK/GB2312 的超集，一个编码
+    覆盖全部国标变体。
+
+    顺序不能反：UTF-8 文本在 gb18030 下几乎总能"解码成功"（变成乱码），
+    所以必须先试 utf-8；utf-8-sig 顺带吃掉 UTF-8 BOM（否则 \\ufeff 会混进正文）。
+    """
+    raw = file_path.read_bytes()
+    # BOM 明确的情况：UTF-16（Windows 记事本 / Excel「Unicode 文本」常有）
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return raw.decode("utf-16")
+    for encoding in ("utf-8-sig", "gb18030"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    logger.warning(
+        "[KnowledgeManager] %s 既不是 utf-8 也不是 gb18030，按 utf-8 容错解码"
+        "（正文可能含替换字符）",
+        file_path.name,
+    )
+    return raw.decode("utf-8", errors="replace")
+
+
 def _extract_text(file_path: Path, file_type: DocFileType) -> str:
     """从文件中提取纯文本"""
     if file_type == DocFileType.TEXT or file_type == DocFileType.MARKDOWN:
-        return file_path.read_text(encoding="utf-8", errors="replace")
+        return _read_text_file(file_path)
 
     if file_type == DocFileType.PDF:
         text = ""
@@ -288,15 +316,20 @@ def _extract_text(file_path: Path, file_type: DocFileType) -> str:
     if file_type == DocFileType.HTML:
         try:
             from bs4 import BeautifulSoup
-            soup = BeautifulSoup(file_path.read_text(encoding="utf-8", errors="replace"), "html.parser")
+
+            # 传 bytes 而不是 str：BS4 会按 <meta charset> / BOM 自己嗅探编码，
+            # 比在外部猜更准（中文网页另存下来常是 GB2312/GBK，且声明与实际
+            # 编码未必一致）。外面先 decode 成 str 等于把这个能力废掉。
+            soup = BeautifulSoup(file_path.read_bytes(), "html.parser")
             # Remove script/style tags
             for tag in soup(["script", "style", "nav", "footer", "header"]):
                 tag.decompose()
             return soup.get_text(separator="\n", strip=True)
         except ImportError:
-            # bare fallback: strip tags naively
+            # bare fallback: strip tags naively；没有 BS4 的编码嗅探，
+            # 退回到 BOM → utf-8 → gb18030 的通用顺序。
             import re
-            html = file_path.read_text(encoding="utf-8", errors="replace")
+            html = _read_text_file(file_path)
             text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
             text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
             text = re.sub(r"<[^>]+>", "", text)
@@ -309,7 +342,7 @@ def _extract_text(file_path: Path, file_type: DocFileType) -> str:
         return _extract_pptx(file_path, file_type)
 
     if file_type == DocFileType.CSV:
-        return file_path.read_text(encoding="utf-8", errors="replace")
+        return _read_text_file(file_path)
 
     raise ValueError(f"不支持的文件类型: {file_type}")
 
