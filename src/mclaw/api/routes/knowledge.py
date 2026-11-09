@@ -329,7 +329,11 @@ async def upload_document(request: Request, collection_id: str, file: UploadFile
         raise HTTPException(status_code=500, detail=f"文件保存失败: {e}")
 
     try:
-        doc = km.ingest_file(collection_id, tmp_path, uploaded_by=user_id)
+        # 扫描件 OCR 是 CPU 密集且可能持续数十秒，放到线程里执行，
+        # 避免阻塞事件循环导致其他请求全部卡住。
+        doc = await asyncio.to_thread(
+            km.ingest_file, collection_id, tmp_path, uploaded_by=user_id
+        )
     except ValueError as e:
         # 空内容等业务错误：保留文件，用户可下载后自行处理
         logger.warning(f"文档摄入失败（保留文件）: {e}")
@@ -418,7 +422,8 @@ async def reindex_document(request: Request, doc_id: str):
     _require_collection_exists(coll)
 
     try:
-        doc = km.reindex_document(doc_id)
+        # 同上传：重索引可能触发扫描件 OCR，不阻塞事件循环
+        doc = await asyncio.to_thread(km.reindex_document, doc_id)
     except Exception as e:
         logger.error(f"重索引失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"重索引失败: {e}")

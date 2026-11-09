@@ -70,52 +70,160 @@ def _lazy_import_chroma() -> bool:
 
 # ── 文本提取器 ─────────────────────────────────────────────────────────────────
 
-def _pdf_ocr_fallback(file_path: Path) -> str:
-    """图片型 PDF 的 OCR 回退：pdf2image → pytesseract / paddleocr"""
-    ocr_parts: list[str] = []
+# 扫描页判定：一页提取出的文字少于此长度，就当作图片页走 OCR。
+# 空白页/签字页/盖章页本来就没多少字，也会被 OCR 覆盖；OCR 结果为空时
+# 保留 pdfplumber 的原文，不会比现在更差。
+_PDF_PAGE_MIN_TEXT_CHARS = 10
+# 单份 PDF 最多 OCR 的页数，防止几百页的扫描件把上传请求拖死。
+_DEFAULT_OCR_MAX_PAGES = 200
 
-    # 尝试 pdf2image + pytesseract
+_rapidocr_engine: Any = None
+_rapidocr_lock = threading.Lock()
+# OCR 推理本身也串行化：上传与后台重建可能同时跑，多个 onnx 会话
+# 并发只会互相抢 CPU，延迟反而更差。
+_ocr_infer_lock = threading.Lock()
+
+
+def _get_ocr_engine() -> Any:
+    """惰性初始化 RapidOCR。
+
+    PP-OCRv4 的 det/rec/cls 三个 onnx 模型在 wheel 内（约 16MB），
+    首次初始化约 1–2 秒，之后复用同一个 engine。
+    """
+    global _rapidocr_engine
+    if _rapidocr_engine is not None:
+        return _rapidocr_engine
+    with _rapidocr_lock:
+        if _rapidocr_engine is None:
+            from rapidocr_onnxruntime import RapidOCR
+
+            _rapidocr_engine = RapidOCR()
+    return _rapidocr_engine
+
+
+def _ocr_max_pages() -> int:
     try:
-        from pdf2image import convert_from_path
-        import pytesseract
-        from PIL import Image
+        return max(1, int(os.environ.get("KB_OCR_MAX_PAGES", _DEFAULT_OCR_MAX_PAGES)))
+    except ValueError:
+        return _DEFAULT_OCR_MAX_PAGES
 
-        images = convert_from_path(file_path, dpi=200)
-        for i, img in enumerate(images):
-            t = pytesseract.image_to_string(img, lang="chi_sim+eng")
-            if t and t.strip():
-                ocr_parts.append(t.strip())
-        if ocr_parts:
-            logger.info(f"[OCR] pytesseract 从 {len(images)} 页中提取了 {len(ocr_parts)} 页文字")
-            return "\n\n".join(ocr_parts)
-    except ImportError:
-        pass
-    except Exception as e:
-        logger.warning(f"[OCR] pytesseract 失败: {e}")
 
-    # 回退: paddleocr（纯 Python，无需系统依赖）
+def _ocr_pdf_pages(
+    file_path: Path, page_indexes: list[int], max_pages: int
+) -> dict[int, str]:
+    """把指定页渲染成 200 DPI 图片后 OCR，返回 {页序号: 文本}。
+
+    只渲染需要 OCR 的页，混合型 PDF（前几页文字、后面扫描）也能处理。
+    依赖缺失或单页失败时返回空结果，由调用方按原文继续，不阻断导入。
+    """
     try:
-        from paddleocr import PaddleOCR
-        from pdf2image import convert_from_path
-
-        ocr = PaddleOCR(lang="ch", use_angle_cls=True, show_log=False)
-        images = convert_from_path(file_path, dpi=200)
-        for img in images:
-            import numpy as np
-            result = ocr.ocr(np.array(img), cls=True)
-            if result and result[0]:
-                lines = [line[1][0] for line in result[0] if line[1][0]]
-                if lines:
-                    ocr_parts.append("\n".join(lines))
-        if ocr_parts:
-            logger.info(f"[OCR] PaddleOCR 从 {len(images)} 页中提取了 {len(ocr_parts)} 页文字")
-            return "\n\n".join(ocr_parts)
+        import numpy as np
+        import pypdfium2 as pdfium
     except ImportError:
-        pass
-    except Exception as e:
-        logger.warning(f"[OCR] PaddleOCR 失败: {e}")
+        logger.warning("[OCR] 缺少 pypdfium2/numpy，无法对扫描件做 OCR")
+        return {}
 
-    return ""
+    try:
+        engine = _get_ocr_engine()
+    except ImportError:
+        logger.warning("[OCR] rapidocr-onnxruntime 未安装，跳过扫描页 OCR")
+        return {}
+    except Exception as e:
+        logger.warning(f"[OCR] RapidOCR 初始化失败: {e}")
+        return {}
+
+    selected = page_indexes[:max_pages]
+    if len(page_indexes) > max_pages:
+        # 不静默截断：用户需要知道这份文档只索引了前 N 个扫描页
+        logger.warning(
+            "[OCR] %s 有 %d 个扫描页，超过上限 %d，仅 OCR 前 %d 页；"
+            "可调大 KB_OCR_MAX_PAGES 或拆分 PDF 后重新上传",
+            file_path.name, len(page_indexes), max_pages, max_pages,
+        )
+
+    ocr_texts: dict[int, str] = {}
+    pdf = pdfium.PdfDocument(str(file_path))
+    try:
+        for idx in selected:
+            try:
+                bitmap = pdf[idx].render(scale=200 / 72)
+                image = bitmap.to_pil().convert("RGB")
+                with _ocr_infer_lock:
+                    result, _ = engine(np.array(image))
+            except Exception as e:
+                logger.warning(
+                    f"[OCR] {file_path.name} 第 {idx + 1} 页识别失败: {e}"
+                )
+                continue
+
+            lines: list[tuple[float, float, str]] = []
+            for item in result or []:
+                box, text = item[0], item[1]
+                if not text or not str(text).strip():
+                    continue
+                xs = [p[0] for p in box]
+                ys = [p[1] for p in box]
+                lines.append((
+                    sum(ys) / len(ys),
+                    sum(xs) / len(xs),
+                    str(text).strip(),
+                ))
+            if not lines:
+                continue
+            # 检测框按“行”排序：同一行的 y 略有抖动，先按 8px 分桶再从左到右，
+            # 避免表格单元格的顺序错乱。
+            lines.sort(key=lambda line: (round(line[0] / 8), line[1]))
+            ocr_texts[idx] = "\n".join(line[2] for line in lines)
+    finally:
+        pdf.close()
+
+    if ocr_texts:
+        logger.info(
+            "[OCR] %s 完成 %d/%d 个扫描页识别",
+            file_path.name, len(ocr_texts), len(selected),
+        )
+    return ocr_texts
+
+
+def _extract_pdf_text(file_path: Path) -> str:
+    """提取 PDF 文本；纯图片页回退到本地 OCR。
+
+    逐页判定而不是“整份都没文字才 OCR”，否则混合型 PDF（前几页正文、
+    后面扫描）会整份丢掉扫描部分。
+    """
+    page_texts: list[str] = []
+
+    # 第 1 步: pdfplumber（文字型页面）
+    try:
+        import pdfplumber
+
+        with pdfplumber.open(file_path) as pdf:
+            page_texts = [page.extract_text() or "" for page in pdf.pages]
+    except ImportError:
+        # 回退到 PyPDF2
+        try:
+            from PyPDF2 import PdfReader
+
+            reader = PdfReader(str(file_path))
+            page_texts = [page.extract_text() or "" for page in reader.pages]
+        except ImportError:
+            raise ImportError(
+                "PDF 解析需要安装 pdfplumber 或 PyPDF2: "
+                "pip install pdfplumber"
+            )
+
+    # 第 2 步: 文字过少的页当作扫描页，交给本地 OCR
+    scanned_pages = [
+        i for i, text in enumerate(page_texts)
+        if len(text.strip()) < _PDF_PAGE_MIN_TEXT_CHARS
+    ]
+    if scanned_pages:
+        ocr_texts = _ocr_pdf_pages(file_path, scanned_pages, _ocr_max_pages())
+        # 只有 OCR 出文字才覆盖原页；识别失败时保留 pdfplumber 的结果
+        for idx, text in ocr_texts.items():
+            page_texts[idx] = text
+
+    return "\n\n".join(text.strip() for text in page_texts if text.strip())
 
 
 def _extract_doc_text(file_path: Path) -> str:
@@ -268,38 +376,7 @@ def _extract_text(file_path: Path, file_type: DocFileType) -> str:
         return _read_text_file(file_path)
 
     if file_type == DocFileType.PDF:
-        text = ""
-        # 第 1 步: pdfplumber（文字型 PDF）
-        try:
-            import pdfplumber
-            text_parts: list[str] = []
-            with pdfplumber.open(file_path) as pdf:
-                for page in pdf.pages:
-                    t = page.extract_text()
-                    if t:
-                        text_parts.append(t)
-            text = "\n\n".join(text_parts)
-        except ImportError:
-            # fallback to PyPDF2
-            try:
-                from PyPDF2 import PdfReader
-                reader = PdfReader(str(file_path))
-                text = "\n\n".join(
-                    page.extract_text() or "" for page in reader.pages
-                )
-            except ImportError:
-                raise ImportError(
-                    "PDF 解析需要安装 pdfplumber 或 PyPDF2: "
-                    "pip install pdfplumber"
-                )
-
-        # 第 2 步: 文字提取为空 → 可能是图片型 PDF，尝试 OCR
-        if not text.strip():
-            ocr_text = _pdf_ocr_fallback(file_path)
-            if ocr_text:
-                return ocr_text
-
-        return text
+        return _extract_pdf_text(file_path)
 
     if file_type == DocFileType.DOCX:
         try:
@@ -962,8 +1039,8 @@ def _chunk_document(
     hint = ""
     if file_type == DocFileType.PDF or Path(file_name).suffix.lower() == ".pdf":
         hint = (
-            "（PDF 可能为图片扫描件，文字提取为空。请安装 Tesseract OCR "
-            "和 pytesseract：https://github.com/UB-Mannheim/tesseract/wiki）"
+            "（PDF 可能为图片扫描件；OCR 未识别到文字。请确认已安装 "
+            "rapidocr-onnxruntime 和 pypdfium2，或换清晰度更高的扫描件）"
         )
     raise ValueError(f"文档内容为空: {file_name}{hint}")
 

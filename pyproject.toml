@@ -83,6 +83,16 @@ dependencies = [
     # PDF parsing for knowledge base document ingestion
     "pdfplumber>=0.10.0",
 
+    # 扫描件 PDF 的本地 OCR（知识库入库路径）。
+    # RapidOCR 用 PP-OCRv4 的 ONNX 模型，模型文件随 wheel 分发，不需要
+    # torch/paddle；pypdfium2 负责把 PDF 页渲染成图片，不依赖 poppler
+    # 这类系统级二进制（Windows 客户机无法随包方便分发）。
+    # 2026-11-09：此前只有 pytesseract/paddleocr 两条走不通的回退路径，
+    # 扫描件上传必然失败。这三个包是核心依赖，必须进安装包 wheelhouse。
+    "rapidocr-onnxruntime>=1.4.4,<2.0",
+    "pypdfium2>=4.30.0",
+    "onnxruntime>=1.18,<2.0",
+
     # Office 格式解析（知识库上传：.xlsx/.xls/.docx/.doc/.pptx/.ppt）。
     # 与 pdfplumber 同属知识库入库路径的必需依赖——缺失时前端上传直接报
     # ImportError（见 memory/knowledge_manager.py 的 _extract_excel /
