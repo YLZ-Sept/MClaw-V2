@@ -25,6 +25,9 @@ _ENDPOINT_LISTS = (
     "endpoints",
     "compiler_endpoints",
     "stt_endpoints",
+    # Knowledge-base rerank providers. These are not chat endpoints: they
+    # accept query + candidate documents and return relevance scores.
+    "knowledge_endpoints",
     # Dedicated text-to-image providers. These are intentionally separate
     # from chat endpoints because generation APIs use different payloads and
     # response shapes even when the provider also exposes an OpenAI chat API.
@@ -656,6 +659,7 @@ class EndpointManager:
             "endpoints": [],
             "compiler_endpoints": [],
             "stt_endpoints": [],
+            "knowledge_endpoints": [],
             "image_endpoints": [],
             "relay_endpoints": [],
             "settings": {},

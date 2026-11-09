@@ -35,6 +35,7 @@ import { SearchSelect } from "../components/SearchSelect";
 import { ProviderSearchSelect } from "../components/ProviderSearchSelect";
 import type { EnvMap, ProviderInfo, ListedModel, EndpointDraft } from "../types";
 import { ImageEndpointsSection } from "./ImageEndpointsSection";
+import { KnowledgeEndpointsSection } from "./KnowledgeEndpointsSection";
 
 function friendlyConfigError(e: unknown): string {
   const msg = String((e as any)?.message || e);
@@ -45,7 +46,7 @@ function friendlyConfigError(e: unknown): string {
   return msg;
 }
 
-type EndpointType = "endpoints" | "compiler_endpoints" | "stt_endpoints" | "image_endpoints";
+type EndpointType = "endpoints" | "compiler_endpoints" | "stt_endpoints" | "knowledge_endpoints" | "image_endpoints";
 
 type SaveEndpointConfigResult = {
   endpoint: any;
@@ -71,10 +72,12 @@ export interface LLMViewProps {
   savedEndpoints: EndpointDraft[];
   savedCompilerEndpoints: EndpointDraft[];
   savedSttEndpoints: EndpointDraft[];
+  savedKnowledgeEndpoints: EndpointDraft[];
   savedImageEndpoints: EndpointDraft[];
   setSavedEndpoints: React.Dispatch<React.SetStateAction<EndpointDraft[]>>;
   setSavedCompilerEndpoints: React.Dispatch<React.SetStateAction<EndpointDraft[]>>;
   setSavedSttEndpoints: React.Dispatch<React.SetStateAction<EndpointDraft[]>>;
+  setSavedKnowledgeEndpoints: React.Dispatch<React.SetStateAction<EndpointDraft[]>>;
   setSavedImageEndpoints: React.Dispatch<React.SetStateAction<EndpointDraft[]>>;
   envDraft: EnvMap;
   setEnvDraft: React.Dispatch<React.SetStateAction<EnvMap>>;
@@ -99,7 +102,7 @@ export interface LLMViewProps {
 
 export function LLMView(props: LLMViewProps) {
   const {
-    savedEndpoints, savedCompilerEndpoints, savedSttEndpoints, savedImageEndpoints,
+    savedEndpoints, savedCompilerEndpoints, savedSttEndpoints, savedKnowledgeEndpoints, savedImageEndpoints,
     envDraft, setEnvDraft,
     secretShown, setSecretShown,
     busy, currentWorkspaceId, dataMode,
@@ -160,6 +163,7 @@ export function LLMView(props: LLMViewProps) {
     endpoints: new Set(),
     compiler_endpoints: new Set(),
     stt_endpoints: new Set(),
+    knowledge_endpoints: new Set(),
     image_endpoints: new Set(),
   }));
 
@@ -284,6 +288,7 @@ export function LLMView(props: LLMViewProps) {
         endpoints: new Set(savedEndpoints.map((e) => e.name)),
         compiler_endpoints: new Set(savedCompilerEndpoints.map((e) => e.name)),
         stt_endpoints: new Set(savedSttEndpoints.map((e) => e.name)),
+        knowledge_endpoints: new Set(savedKnowledgeEndpoints.map((e) => e.name)),
         image_endpoints: new Set(savedImageEndpoints.map((e) => e.name)),
       };
       let changed = false;
@@ -291,6 +296,7 @@ export function LLMView(props: LLMViewProps) {
         endpoints: new Set(),
         compiler_endpoints: new Set(),
         stt_endpoints: new Set(),
+        knowledge_endpoints: new Set(),
         image_endpoints: new Set(),
       };
       (Object.keys(keepByType) as EndpointType[]).forEach((endpointType) => {
@@ -302,7 +308,7 @@ export function LLMView(props: LLMViewProps) {
       });
       return changed ? next : prev;
     });
-  }, [savedEndpoints, savedCompilerEndpoints, savedSttEndpoints, savedImageEndpoints]);
+  }, [savedEndpoints, savedCompilerEndpoints, savedSttEndpoints, savedKnowledgeEndpoints, savedImageEndpoints]);
 
   useEffect(() => {
     if (!selectedProvider) return;
@@ -1559,6 +1565,20 @@ export function LLMView(props: LLMViewProps) {
           </>
         )}
       </div>
+
+      {/* ── Knowledge base rerank endpoints ── */}
+      <KnowledgeEndpointsSection
+        endpoints={savedKnowledgeEndpoints}
+        envDraft={envDraft}
+        disabled={endpointConfigDisabled}
+        disabledMessage={endpointConfigUnavailableMessage}
+        httpApiBase={httpApiBase}
+        reloadEndpoints={async () => {
+          await loadSavedEndpoints();
+          await onEndpointConfigChanged?.("knowledge_endpoints");
+        }}
+        askConfirm={askConfirm}
+      />
 
       {/* ── Image generation endpoints ── */}
       <ImageEndpointsSection

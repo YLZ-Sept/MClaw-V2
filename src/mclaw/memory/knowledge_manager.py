@@ -1095,6 +1095,7 @@ class KnowledgeManager:
         reranker_collections: str | None = None,
         vector_backend: str | None = None,
         onnx_model_dir: str | None = None,
+        endpoints_config_path: Path | None = None,
     ):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -1144,6 +1145,11 @@ class KnowledgeManager:
         self._reranker_collections = {
             item.strip() for item in str(collections_raw).split(",") if item.strip()
         }
+
+        # UI 配置的知识库端点优先于 .env；未配置时保持 .env 回退。
+        self._knowledge_endpoint = self._load_knowledge_endpoint(endpoints_config_path)
+        self._knowledge_endpoint_name = ""
+        self._apply_knowledge_endpoint(self._knowledge_endpoint)
 
         # 开关三态：显式 True/False 照办；未设置时只在配了在线 Rerank API 时启用。
         # 本地模型约 1.1GB 且常驻内存，不在默认路径上主动触发下载。
@@ -1379,6 +1385,89 @@ class KnowledgeManager:
 
         if pref in {"auto", "chromadb"}:
             self._do_chroma_init()
+
+    def _load_knowledge_endpoint(
+        self, endpoints_config_path: Path | None = None
+    ) -> dict | None:
+        """读取 data/llm_endpoints.json 中第一条启用的知识库端点"""
+        path = (
+            Path(endpoints_config_path)
+            if endpoints_config_path is not None
+            else self.data_dir.parent / "llm_endpoints.json"
+        )
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
+        except Exception as e:
+            logger.warning(f"[KnowledgeManager] 读取知识库端点配置失败 {path}: {e}")
+            return None
+
+        endpoints = data.get("knowledge_endpoints") or []
+        if not isinstance(endpoints, list):
+            return None
+        for ep in sorted(
+            [e for e in endpoints if isinstance(e, dict)],
+            key=lambda e: (int(e.get("priority", 999) or 999), str(e.get("name", ""))),
+        ):
+            if ep.get("enabled", True) is False:
+                continue
+            if str(ep.get("base_url") or "").strip():
+                return ep
+        return None
+
+    def _apply_knowledge_endpoint(self, endpoint: dict | None) -> None:
+        if not endpoint:
+            return
+        base = str(endpoint.get("base_url") or "").strip()
+        model = str(endpoint.get("model") or "").strip()
+        if base:
+            self._reranker_api_base = base
+        if model:
+            self._reranker_api_model = model
+
+        extra = endpoint.get("extra_params") or {}
+        style = str(extra.get("style") or endpoint.get("api_type") or "auto").strip()
+        if style == "rerank":
+            style = "auto"
+        self._reranker_api_style = style or "auto"
+
+        timeout = extra.get("timeout", endpoint.get("timeout"))
+        if timeout is not None:
+            try:
+                self._reranker_timeout_s = float(timeout)
+            except (TypeError, ValueError):
+                pass
+
+        key_env = str(endpoint.get("api_key_env") or "").strip()
+        key = str(endpoint.get("api_key") or "").strip() or self._read_env_value(key_env)
+        if key:
+            self._reranker_api_key = key
+        elif self._reranker_api_key:
+            logger.warning(
+                f"[KnowledgeManager] 知识库端点 {endpoint.get('name')} 未找到 API Key"
+                f"（{key_env or '未配置 api_key_env'}），回退到 .env 中的 Reranker Key"
+            )
+        self._knowledge_endpoint_name = str(endpoint.get("name") or "").strip()
+        logger.info(
+            f"[KnowledgeManager] 使用知识库端点: {self._knowledge_endpoint_name} "
+            f"({self._reranker_api_model}, style={self._reranker_api_style})"
+        )
+
+    def _read_env_value(self, name: str) -> str:
+        """读取动态命名的 API Key 环境变量（先 os.environ，再工作区 .env）"""
+        if not name:
+            return ""
+        value = os.environ.get(name, "")
+        if value:
+            return value
+        try:
+            from mclaw.utils.env_config import read_env_file
+
+            env_path = self.data_dir.parent.parent / ".env"
+            return read_env_file(env_path).get(name, "")
+        except Exception:
+            return ""
 
     def _resolve_onnx_model_dir(self) -> Path:
         from .onnx_embedder import DEFAULT_MODEL_DIR_NAME

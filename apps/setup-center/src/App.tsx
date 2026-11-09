@@ -844,6 +844,7 @@ function MainApp() {
   const [savedEndpoints, setSavedEndpoints] = useState<EndpointDraft[]>([]);
   const [savedCompilerEndpoints, setSavedCompilerEndpoints] = useState<EndpointDraft[]>([]);
   const [savedSttEndpoints, setSavedSttEndpoints] = useState<EndpointDraft[]>([]);
+  const [savedKnowledgeEndpoints, setSavedKnowledgeEndpoints] = useState<EndpointDraft[]>([]);
   const [savedImageEndpoints, setSavedImageEndpoints] = useState<EndpointDraft[]>([]);
 
   // status panel data
@@ -1682,6 +1683,7 @@ function MainApp() {
     setSavedEndpoints([]);
     setSavedCompilerEndpoints([]);
     setSavedSttEndpoints([]);
+    setSavedKnowledgeEndpoints([]);
     setSavedImageEndpoints([]);
     setSkillSummary(null);
     setSkillsDetail(null);
@@ -1959,6 +1961,7 @@ function MainApp() {
       setSavedEndpoints([]);
       setSavedCompilerEndpoints([]);
       setSavedSttEndpoints([]);
+      setSavedKnowledgeEndpoints([]);
       setSavedImageEndpoints([]);
       return;
     }
@@ -2034,6 +2037,27 @@ function MainApp() {
         .sort((a: EndpointDraft, b: EndpointDraft) => a.priority - b.priority);
       setSavedSttEndpoints(sttEps);
 
+      const knowledgeEps: EndpointDraft[] = (Array.isArray(parsed?.knowledge_endpoints) ? parsed.knowledge_endpoints : [])
+        .filter((e: any) => e?.name)
+        .map((e: any) => ({
+          name: String(e.name || ""),
+          provider: String(e.provider || "custom"),
+          api_type: String(e.api_type || "rerank"),
+          base_url: String(e.base_url || ""),
+          api_key_env: String(e.api_key_env || ""),
+          model: String(e.model || ""),
+          priority: Number.isFinite(Number(e.priority)) ? Number(e.priority) : 1,
+          max_tokens: 0,
+          context_window: 0,
+          timeout: Number.isFinite(Number(e.timeout)) ? Number(e.timeout) : 5,
+          capabilities: Array.isArray(e.capabilities) ? e.capabilities.map((x: any) => String(x)) : ["rerank"],
+          extra_params: e.extra_params && typeof e.extra_params === "object" ? e.extra_params : {},
+          note: e.note ? String(e.note) : null,
+          enabled: e?.enabled !== false,
+        }))
+        .sort((a: EndpointDraft, b: EndpointDraft) => a.priority - b.priority);
+      setSavedKnowledgeEndpoints(knowledgeEps);
+
       const imageEps: EndpointDraft[] = (Array.isArray(parsed?.image_endpoints) ? parsed.image_endpoints : [])
         .filter((e: any) => e?.name)
         .map((e: any) => ({
@@ -2058,6 +2082,7 @@ function MainApp() {
       setSavedEndpoints([]);
       setSavedCompilerEndpoints([]);
       setSavedSttEndpoints([]);
+      setSavedKnowledgeEndpoints([]);
       setSavedImageEndpoints([]);
     }
   }
@@ -3371,10 +3396,12 @@ function MainApp() {
         savedEndpoints={savedEndpoints}
         savedCompilerEndpoints={savedCompilerEndpoints}
         savedSttEndpoints={savedSttEndpoints}
+        savedKnowledgeEndpoints={savedKnowledgeEndpoints}
         savedImageEndpoints={savedImageEndpoints}
         setSavedEndpoints={setSavedEndpoints}
         setSavedCompilerEndpoints={setSavedCompilerEndpoints}
         setSavedSttEndpoints={setSavedSttEndpoints}
+        setSavedKnowledgeEndpoints={setSavedKnowledgeEndpoints}
         setSavedImageEndpoints={setSavedImageEndpoints}
         envDraft={envDraft}
         setEnvDraft={setEnvDraft}
@@ -3620,7 +3647,7 @@ function MainApp() {
     }
     taskDefs.push({ id: "service-start", label: "启动后端服务", status: "pending" });
     taskDefs.push({ id: "http-wait", label: "等待 HTTP 服务就绪", status: "pending" });
-    taskDefs.push({ id: "llm-config", label: "保存 LLM 配置", status: (savedEndpoints.length > 0 || savedCompilerEndpoints.length > 0 || savedSttEndpoints.length > 0 || savedImageEndpoints.length > 0) ? "pending" : "skipped" });
+    taskDefs.push({ id: "llm-config", label: "保存 LLM 配置", status: (savedEndpoints.length > 0 || savedCompilerEndpoints.length > 0 || savedSttEndpoints.length > 0 || savedKnowledgeEndpoints.length > 0 || savedImageEndpoints.length > 0) ? "pending" : "skipped" });
     taskDefs.push({ id: "env-save", label: "保存环境变量", status: "pending" });
     setObTasks(taskDefs);
 
@@ -3879,7 +3906,7 @@ function MainApp() {
       }
 
       // ── STEP: llm-config (via HTTP API, after backend is ready) ──
-      if (savedEndpoints.length > 0 || savedCompilerEndpoints.length > 0 || savedSttEndpoints.length > 0 || savedImageEndpoints.length > 0) {
+      if (savedEndpoints.length > 0 || savedCompilerEndpoints.length > 0 || savedSttEndpoints.length > 0 || savedKnowledgeEndpoints.length > 0 || savedImageEndpoints.length > 0) {
         updateTask("llm-config", { status: "running" });
         logTask("保存 LLM 配置", "running");
         if (!httpReady) {
@@ -3896,6 +3923,7 @@ function MainApp() {
               { eps: savedEndpoints, type: "endpoints" },
               { eps: savedCompilerEndpoints, type: "compiler_endpoints" },
               { eps: savedSttEndpoints, type: "stt_endpoints" },
+              { eps: savedKnowledgeEndpoints, type: "knowledge_endpoints" },
               { eps: savedImageEndpoints, type: "image_endpoints" },
             ];
             for (const { eps, type } of allBatches) {
@@ -3923,7 +3951,7 @@ function MainApp() {
               logTask("保存 LLM 配置", "error", detail);
               hasErr = true;
             } else {
-              const total = savedEndpoints.length + savedCompilerEndpoints.length + savedSttEndpoints.length + savedImageEndpoints.length;
+              const total = savedEndpoints.length + savedCompilerEndpoints.length + savedSttEndpoints.length + savedKnowledgeEndpoints.length + savedImageEndpoints.length;
               log(t("onboarding.progress.llmConfigSaved"));
               updateTask("llm-config", { status: "done", detail: `${total} 个端点` });
               logTask("保存 LLM 配置", "done", `${total} 个端点`);
@@ -3949,7 +3977,7 @@ function MainApp() {
           }
         }
         if (!httpReady) {
-          for (const ep of [...savedEndpoints, ...savedCompilerEndpoints, ...savedSttEndpoints, ...savedImageEndpoints]) {
+          for (const ep of [...savedEndpoints, ...savedCompilerEndpoints, ...savedSttEndpoints, ...savedKnowledgeEndpoints, ...savedImageEndpoints]) {
             const keyName = (ep as any).api_key_env;
             if (keyName && Object.prototype.hasOwnProperty.call(envDraft, keyName) && envDraft[keyName]) {
               entries[keyName] = envDraft[keyName];
