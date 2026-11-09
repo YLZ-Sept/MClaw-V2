@@ -85,6 +85,28 @@ def test_siliconflow_style_appends_rerank_path(monkeypatch):
     assert captured["url"] == "https://api.siliconflow.cn/v1/rerank"
 
 
+def test_bailian_qwen3_style_uses_reranks_path(monkeypatch):
+    captured: dict = {}
+    data = {"results": [{"index": 0, "relevance_score": 0.77}]}
+    monkeypatch.setattr(
+        "httpx.Client", lambda *a, **k: _FakeClient(data, captured)
+    )
+    reranker = Reranker(
+        api_base="https://ws.cn-beijing.maas.aliyuncs.com/compatible-api/v1",
+        api_key="k",
+        api_model="qwen3-rerank",
+        api_style="auto",
+    )
+    reranker._available = True
+
+    scores = reranker.rerank("查询", ["文档A"])
+
+    assert scores == [0.77]
+    assert captured["url"].endswith("/compatible-api/v1/reranks")
+    assert captured["json"]["model"] == "qwen3-rerank"
+    assert captured["json"]["query"] == "查询"
+
+
 class TestOnlineRerankWhitelist:
     def _km(self, tmp_path, monkeypatch, **kwargs):
         monkeypatch.setattr(km_module, "_lazy_import_chroma", lambda: False)

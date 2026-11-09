@@ -618,7 +618,10 @@ class Settings(BaseSettings):
     )
     kb_reranker_api_style: str = Field(
         default="auto",
-        description="Rerank API 风格: auto | siliconflow | jina | dashscope",
+        description=(
+            "Rerank API 风格: auto | siliconflow | jina | dashscope | openai_rerank"
+            "（百炼 qwen3-rerank 用 openai_rerank，路径 /reranks）"
+        ),
     )
     kb_reranker_timeout_s: float = Field(
         default=8.0,

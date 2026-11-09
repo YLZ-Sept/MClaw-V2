@@ -171,7 +171,12 @@ class Reranker:
         """
         style = self.api_style
         if style == "auto":
-            style = "dashscope" if "dashscope" in self.api_base else "siliconflow"
+            if "compatible-api" in self.api_base or "maas.aliyuncs.com" in self.api_base:
+                style = "openai_rerank"  # 百炼 qwen3-rerank
+            elif "dashscope" in self.api_base:
+                style = "dashscope"
+            else:
+                style = "siliconflow"
 
         started = time.perf_counter()
         try:
@@ -190,6 +195,21 @@ class Reranker:
                             "model": self.api_model,
                             "input": {"query": query, "documents": texts},
                             "parameters": {"return_documents": False},
+                        },
+                    )
+                elif style in {"openai_rerank", "qwen", "bailian"}:
+                    # 百炼 qwen3-rerank: OpenAI 兼容接口，路径是 /reranks（复数）
+                    url = self.api_base.rstrip("/")
+                    if not url.endswith("/reranks"):
+                        url = f"{url}/reranks"
+                    resp = client.post(
+                        url,
+                        headers=headers,
+                        json={
+                            "model": self.api_model,
+                            "query": query,
+                            "documents": texts,
+                            "top_n": len(texts),
                         },
                     )
                 else:
