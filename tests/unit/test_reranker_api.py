@@ -85,6 +85,31 @@ def test_siliconflow_style_appends_rerank_path(monkeypatch):
     assert captured["url"] == "https://api.siliconflow.cn/v1/rerank"
 
 
+def test_qwen37_dashscope_omits_return_documents(monkeypatch):
+    captured: dict = {}
+    data = {"output": {"results": [{"index": 0, "relevance_score": 0.66}]}}
+    monkeypatch.setattr(
+        "httpx.Client", lambda *a, **k: _FakeClient(data, captured)
+    )
+    reranker = Reranker(
+        api_base=(
+            "https://ws.cn-beijing.maas.aliyuncs.com/api/v1/services/"
+            "rerank/text-rerank/text-rerank"
+        ),
+        api_key="k",
+        api_model="qwen3.7-text-rerank",
+        api_style="dashscope",
+    )
+    reranker._available = True
+
+    scores = reranker.rerank("查询", ["文档A"])
+
+    assert scores == [0.66]
+    params = captured["json"]["parameters"]
+    assert params["top_n"] == 1
+    assert "return_documents" not in params
+
+
 def test_bailian_qwen3_style_uses_reranks_path(monkeypatch):
     captured: dict = {}
     data = {"results": [{"index": 0, "relevance_score": 0.77}]}

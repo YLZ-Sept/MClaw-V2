@@ -188,13 +188,18 @@ class Reranker:
             }
             with httpx.Client(timeout=self.timeout) as client:
                 if style == "dashscope":
+                    # 百炼原生接口：gte-rerank-v2 / qwen3.7-text-rerank。
+                    # qwen3.7 不支持 return_documents，传了会被拒绝或忽略。
+                    params: dict = {"top_n": len(texts)}
+                    if "qwen3.7" not in self.api_model:
+                        params["return_documents"] = False
                     resp = client.post(
                         self.api_base,
                         headers=headers,
                         json={
                             "model": self.api_model,
                             "input": {"query": query, "documents": texts},
-                            "parameters": {"return_documents": False},
+                            "parameters": params,
                         },
                     )
                 elif style in {"openai_rerank", "qwen", "bailian"}:
