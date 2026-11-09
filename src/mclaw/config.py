@@ -616,6 +616,20 @@ class Settings(BaseSettings):
         default="BAAI/bge-reranker-v2-m3",
         description="Rerank API 模型名称",
     )
+    kb_reranker_api_style: str = Field(
+        default="auto",
+        description="Rerank API 风格: auto | siliconflow | jina | dashscope",
+    )
+    kb_reranker_timeout_s: float = Field(
+        default=8.0,
+        description="Rerank API 超时秒数；超时自动回退原排序",
+    )
+    # 在线精排白名单：逗号分隔的 collection 名称或 id。为空时一律不调用
+    # 在线 API（防止把财务/人事/合同等私有集合内容发出去）。
+    kb_reranker_collections: str = Field(
+        default="",
+        description="允许在线精排的 collection 名称/id（逗号分隔）；为空则禁用在线精排",
+    )
 
     # === 搜索后端配置 (v2) ===
     search_backend: str = Field(

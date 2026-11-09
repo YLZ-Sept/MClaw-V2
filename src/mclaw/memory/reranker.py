@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 import math
 import threading
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,8 @@ class Reranker:
         api_base: str = "",
         api_key: str = "",
         api_model: str = "",
+        api_style: str = "auto",
+        timeout: float = 8.0,
         max_length: int = 512,
     ):
         self.model_name = model_name
@@ -60,6 +63,8 @@ class Reranker:
         self.api_base = (api_base or "").rstrip("/")
         self.api_key = api_key or ""
         self.api_model = api_model or "BAAI/bge-reranker-v2-m3"
+        self.api_style = (api_style or "auto").strip().lower()
+        self.timeout = float(timeout)
         self.use_api = bool(self.api_base and self.api_key)
 
         self._model = None          # 本地 CrossEncoder
@@ -158,37 +163,71 @@ class Reranker:
             return None
 
     def _rerank_api(self, query: str, texts: list[str]) -> list[float] | None:
-        """SiliconFlow / Jina 风格 POST {api_base}/rerank"""
+        """在线精排：支持 SiliconFlow / Jina 风格与 DashScope 风格。
+
+        - siliconflow/jina: POST {api_base}/rerank
+        - dashscope: POST {api_base}，body 为 input/parameters 结构，
+          api_base 需填完整服务地址
+        """
+        style = self.api_style
+        if style == "auto":
+            style = "dashscope" if "dashscope" in self.api_base else "siliconflow"
+
+        started = time.perf_counter()
         try:
             import httpx
 
-            with httpx.Client(timeout=30.0) as client:
-                resp = client.post(
-                    f"{self.api_base}/rerank",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": self.api_model,
-                        "query": query,
-                        "documents": texts,
-                        "top_n": len(texts),
-                        "return_documents": False,
-                    },
-                )
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
+            with httpx.Client(timeout=self.timeout) as client:
+                if style == "dashscope":
+                    resp = client.post(
+                        self.api_base,
+                        headers=headers,
+                        json={
+                            "model": self.api_model,
+                            "input": {"query": query, "documents": texts},
+                            "parameters": {"return_documents": False},
+                        },
+                    )
+                else:
+                    resp = client.post(
+                        f"{self.api_base}/rerank",
+                        headers=headers,
+                        json={
+                            "model": self.api_model,
+                            "query": query,
+                            "documents": texts,
+                            "top_n": len(texts),
+                            "return_documents": False,
+                        },
+                    )
                 resp.raise_for_status()
                 data = resp.json()
 
-            # 标准返回: {"results": [{"index": 0, "relevance_score": 0.97}, ...]}
-            results = data.get("results", [])
+            if style == "dashscope":
+                results = (data.get("output") or {}).get("results", []) or []
+            else:
+                results = data.get("results", []) or []
+
             scores = [0.0] * len(texts)
             for item in results:
                 idx = item.get("index")
                 score = item.get("relevance_score", item.get("score", 0.0))
                 if isinstance(idx, int) and 0 <= idx < len(texts):
                     scores[idx] = float(score)
+
+            # 审计：只记录集合/条数/耗时，不记录正文
+            logger.info(
+                f"[Reranker] API 精排完成: style={style} candidates={len(texts)} "
+                f"latency={time.perf_counter() - started:.3f}s"
+            )
             return scores
         except Exception as e:
-            logger.warning(f"[Reranker] API 精排失败，沿用 RRF 排序: {e}")
+            logger.warning(
+                f"[Reranker] API 精排失败（style={style}, "
+                f"{time.perf_counter() - started:.3f}s），沿用 RRF 排序: {e}"
+            )
             return None

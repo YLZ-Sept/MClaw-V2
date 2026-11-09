@@ -1088,6 +1088,9 @@ class KnowledgeManager:
         reranker_api_base: str | None = None,
         reranker_api_key: str | None = None,
         reranker_api_model: str | None = None,
+        reranker_api_style: str | None = None,
+        reranker_timeout_s: float | None = None,
+        reranker_collections: str | None = None,
         vector_backend: str | None = None,
         onnx_model_dir: str | None = None,
     ):
@@ -1123,6 +1126,22 @@ class KnowledgeManager:
         self._reranker_api_model = reranker_api_model or _settings_value(
             "kb_reranker_api_model", "BAAI/bge-reranker-v2-m3"
         )
+        self._reranker_api_style = reranker_api_style or _settings_value(
+            "kb_reranker_api_style", "auto"
+        )
+        self._reranker_timeout_s = (
+            reranker_timeout_s
+            if reranker_timeout_s is not None
+            else float(_settings_value("kb_reranker_timeout_s", "8"))
+        )
+        collections_raw = (
+            reranker_collections
+            if reranker_collections is not None
+            else _settings_value("kb_reranker_collections", "")
+        )
+        self._reranker_collections = {
+            item.strip() for item in str(collections_raw).split(",") if item.strip()
+        }
 
         # 开关三态：显式 True/False 照办；未设置时只在配了在线 Rerank API 时启用。
         # 本地模型约 1.1GB 且常驻内存，不在默认路径上主动触发下载。
@@ -1132,6 +1151,11 @@ class KnowledgeManager:
         if enabled is None:
             enabled = bool(self._reranker_api_base and self._reranker_api_key)
         self.reranker_enabled = bool(enabled)
+        if self.reranker_enabled and self._reranker_api_base and not self._reranker_collections:
+            logger.warning(
+                "[KnowledgeManager] 在线精排已配置但 KB_RERANKER_COLLECTIONS 为空，"
+                "不会调用在线 API（防止私有集合内容外发）"
+            )
 
         # 向量后端状态（chromadb 或轻量 ONNX）
         self._chroma_client = None
@@ -1478,6 +1502,8 @@ class KnowledgeManager:
                     api_base=self._reranker_api_base,
                     api_key=self._reranker_api_key,
                     api_model=self._reranker_api_model,
+                    api_style=self._reranker_api_style,
+                    timeout=self._reranker_timeout_s,
                 )
                 with self._init_lock:
                     self._reranker = reranker
@@ -2340,13 +2366,38 @@ class KnowledgeManager:
         # 30 条会让单次检索多出数秒，而精排收益集中在头几条。
         reranker = self._reranker
         if reranker is not None and reranker.available and len(merged) > 1:
-            candidate_count = min(self.RERANK_CANDIDATES, len(merged))
-            candidates = merged[:candidate_count]
-            reranked = self._rerank_results(query, candidates, reranker)
-            if reranked is not None:
-                return reranked[:top_k]
+            use_api = bool(getattr(reranker, "use_api", False))
+            if use_api and not self._rerank_allowed(collection_id):
+                logger.debug(
+                    f"[Reranker] 在线精排跳过：collection={collection_id} 不在白名单"
+                )
+            else:
+                candidate_count = min(self.RERANK_CANDIDATES, len(merged))
+                candidates = merged[:candidate_count]
+                if use_api:
+                    # 审计：只记录集合与条数，不记录正文
+                    logger.info(
+                        f"[Reranker] 在线精排: collection={collection_id} "
+                        f"candidates={candidate_count}"
+                    )
+                reranked = self._rerank_results(query, candidates, reranker)
+                if reranked is not None:
+                    return reranked[:top_k]
 
         return merged[:top_k]
+
+    def _rerank_allowed(self, collection_id: str | None) -> bool:
+        """在线精排白名单校验。
+
+        在线 API 会把 query + top 候选正文发出去，因此必须显式配置允许的
+        collection；未指定 collection（跨库搜索）一律不调用。
+        """
+        if not self._reranker_collections or not collection_id:
+            return False
+        if collection_id in self._reranker_collections:
+            return True
+        coll = self.get_collection(collection_id)
+        return bool(coll and coll.name in self._reranker_collections)
 
     def _rerank_results(
         self,
