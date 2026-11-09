@@ -638,6 +638,11 @@ class SaveEndpointsRequest(BaseModel):
     expected_version: str | None = None
 
 
+class TestEndpointRequest(BaseModel):
+    endpoint_type: str = "knowledge_endpoints"
+    name: str
+
+
 class DeleteEndpointRequest(BaseModel):
     endpoint_type: str = "endpoints"
     clean_env: bool = True
@@ -746,6 +751,59 @@ async def save_endpoint(body: SaveEndpointRequest, request: Request):
             "可以继续配置；如果马上要使用新模型，请重启服务或稍后再试。"
         )
     return response
+
+
+@router.post("/api/config/test-endpoint")
+async def test_endpoint(body: TestEndpointRequest):
+    """Test a saved endpoint with a fixed, non-sensitive probe payload."""
+    if body.endpoint_type != "knowledge_endpoints":
+        return {"status": "error", "error": "暂不支持测试该端点类型"}
+
+    mgr = _get_endpoint_manager()
+    endpoints = mgr.list_endpoints("knowledge_endpoints")
+    endpoint = next((ep for ep in endpoints if ep.get("name") == body.name), None)
+    if endpoint is None:
+        raise HTTPException(status_code=404, detail="端点不存在")
+
+    env_var = str(endpoint.get("api_key_env") or "").strip()
+    api_key = os.environ.get(env_var, "") if env_var else ""
+    if not api_key and env_var:
+        try:
+            from mclaw.utils.env_config import read_env_file
+
+            api_key = read_env_file(mgr.env_path).get(env_var, "")
+        except Exception:
+            api_key = ""
+    if not api_key:
+        return {"status": "error", "error": "API Key 未配置"}
+
+    extra = endpoint.get("extra_params") or {}
+    try:
+        timeout = min(float(extra.get("timeout", endpoint.get("timeout", 8)) or 8), 30)
+    except (TypeError, ValueError):
+        timeout = 8
+
+    from mclaw.memory.reranker import Reranker
+
+    reranker = Reranker(
+        api_base=str(endpoint.get("base_url") or ""),
+        api_key=api_key,
+        api_model=str(endpoint.get("model") or ""),
+        api_style=str(extra.get("style") or endpoint.get("api_type") or "auto"),
+        timeout=timeout,
+    )
+    result = reranker.test_connection()
+    if result.get("ok"):
+        return {
+            "status": "ok",
+            "latency_ms": result.get("latency_ms"),
+            "scores": result.get("scores"),
+        }
+    return {
+        "status": "error",
+        "error": result.get("error", "测试失败"),
+        "latency_ms": result.get("latency_ms"),
+    }
 
 
 @router.post("/api/config/save-endpoints")

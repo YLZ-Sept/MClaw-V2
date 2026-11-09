@@ -162,7 +162,29 @@ class Reranker:
             logger.warning(f"[Reranker] 本地精排失败，沿用 RRF 排序: {e}")
             return None
 
-    def _rerank_api(self, query: str, texts: list[str]) -> list[float] | None:
+    def test_connection(self) -> dict:
+        """用固定测试句探测在线端点，返回 ok/latency_ms/scores 或 error"""
+        if not self.use_api:
+            return {"ok": False, "error": "该端点未配置在线 API"}
+        texts = ["这是一段与测试查询相关的文本。", "这是一段无关的文本。"]
+        started = time.perf_counter()
+        try:
+            scores = self._rerank_api("测试查询", texts, raise_on_error=True)
+            return {
+                "ok": True,
+                "latency_ms": round((time.perf_counter() - started) * 1000),
+                "scores": scores,
+            }
+        except Exception as e:
+            return {
+                "ok": False,
+                "latency_ms": round((time.perf_counter() - started) * 1000),
+                "error": str(e),
+            }
+
+    def _rerank_api(
+        self, query: str, texts: list[str], *, raise_on_error: bool = False
+    ) -> list[float] | None:
         """在线精排：支持 SiliconFlow / Jina 风格与 DashScope 风格。
 
         - siliconflow/jina: POST {api_base}/rerank
@@ -255,4 +277,6 @@ class Reranker:
                 f"[Reranker] API 精排失败（style={style}, "
                 f"{time.perf_counter() - started:.3f}s），沿用 RRF 排序: {e}"
             )
+            if raise_on_error:
+                raise
             return None

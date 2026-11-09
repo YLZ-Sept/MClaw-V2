@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { DotGray, DotGreen, IconChevronUp, IconCircle, IconEdit, IconPower, IconTrash } from "../icons";
+import { DotGray, DotGreen, IconChevronUp, IconCircle, IconEdit, IconPower, IconRefresh, IconTrash } from "../icons";
 import { safeFetch } from "../providers";
 import type { EndpointDraft, EnvMap } from "../types";
 import { notifyError, notifyLoading, notifySuccess, dismissLoading } from "../utils/notify";
@@ -227,6 +227,24 @@ export function KnowledgeEndpointsSection({
     }
   }
 
+  async function testEndpoint(endpoint: EndpointDraft) {
+    const busyId = notifyLoading(t("llm.knowledgeTesting"));
+    try {
+      const response = await safeFetch(`${httpApiBase()}/api/config/test-endpoint`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint_type: "knowledge_endpoints", name: endpoint.name }),
+      });
+      const data = await response.json();
+      if (data.status !== "ok") throw new Error(data.error || t("llm.knowledgeTestFailed"));
+      notifySuccess(t("llm.knowledgeTestOk", { ms: Number(data.latency_ms || 0) }));
+    } catch (error) {
+      notifyError(String((error as Error)?.message || error));
+    } finally {
+      dismissLoading(busyId);
+    }
+  }
+
   function moveUp(name: string) {
     const names = endpoints.map((endpoint) => endpoint.name);
     const index = names.indexOf(name);
@@ -308,6 +326,7 @@ export function KnowledgeEndpointsSection({
                   <TableCell>
                     <div className="flex gap-1 justify-end">
                       <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" style={index === 0 ? { visibility: "hidden" } : undefined} onClick={() => moveUp(endpoint.name)} disabled={disabled} title={disabled ? disabledMessage : t("llm.moveUp")}><IconChevronUp size={14} /></Button>
+                      <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" onClick={() => void testEndpoint(endpoint)} disabled={disabled} title={disabled ? disabledMessage : t("llm.knowledgeTest")}><IconRefresh size={14} /></Button>
                       <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" onClick={() => void mutate("/api/config/toggle-endpoint", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: endpoint.name, endpoint_type: "knowledge_endpoints" }) })} disabled={disabled} title={disabled ? disabledMessage : endpoint.enabled === false ? t("llm.enable") : t("llm.disable")}>{endpoint.enabled !== false ? <IconPower size={14} /> : <IconCircle size={14} />}</Button>
                       <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" onClick={() => startEdit(endpoint)} disabled={disabled} title={disabled ? disabledMessage : t("llm.edit")}><IconEdit size={14} /></Button>
                       <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => askConfirm(`${t("common.confirmDeleteMsg")} "${endpoint.name}"?`, () => void mutate(`/api/config/endpoint/${encodeURIComponent(endpoint.name)}?endpoint_type=knowledge_endpoints`, { method: "DELETE" }))} disabled={disabled} title={disabled ? disabledMessage : t("common.delete")}><IconTrash size={14} /></Button>
