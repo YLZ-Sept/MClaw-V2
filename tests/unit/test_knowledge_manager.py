@@ -117,6 +117,17 @@ class TestSearchWithChunks:
         assert results[0].chunk.content == "hello world knowledge base"
         assert results[0].chunk.metadata["filename"] == "hello.pdf"
 
+    def test_rerank_text_includes_filename(self, tmp_path, monkeypatch):
+        km = _make_km(tmp_path, monkeypatch)
+        coll = km.create_collection("技术文档", "测试集合")
+        chunk_id = _insert_doc_and_chunk(
+            km, coll.id, "盘龙法院评估表.xlsx", "最高限价：50.00万元"
+        )
+
+        texts = km._fetch_rerank_texts([chunk_id])
+
+        assert texts[chunk_id].startswith("【文档：盘龙法院评估表.xlsx】")
+
     def test_filename_is_searchable_without_content_match(self, tmp_path, monkeypatch):
         km = _make_km(tmp_path, monkeypatch)
         coll = km.create_collection("技术文档", "测试集合")

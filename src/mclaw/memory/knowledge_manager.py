@@ -1075,7 +1075,9 @@ class KnowledgeManager:
     """
 
     # reranker 精排的候选上限（见 search()：CPU 上是延迟与收益的折中点）
-    RERANK_CANDIDATES = 15
+    # 15→12：目标漏召回在 rank 11，12 仍能覆盖；同时把 qwen3.7 的一次
+    # 精排耗时压到 1.5s 目标附近。
+    RERANK_CANDIDATES = 12
 
     def __init__(
         self,
@@ -2407,13 +2409,13 @@ class KnowledgeManager:
     ) -> list[SearchResult] | None:
         """用 reranker 对候选结果精排；失败返回 None（沿用原排序）"""
         chunk_ids = [r.chunk.id for r in candidates]
-        contents = self._fetch_chunk_contents(chunk_ids)
-        if len(contents) != len(candidates):
+        texts = self._fetch_rerank_texts(chunk_ids)
+        if len(texts) != len(candidates):
             # 部分 chunk 已被删除等异常情况，放弃精排
             return None
 
         try:
-            scores = reranker.rerank(query, [contents[cid] for cid in chunk_ids])
+            scores = reranker.rerank(query, [texts[cid] for cid in chunk_ids])
         except Exception as e:
             logger.warning(f"[KnowledgeManager] reranker 精排异常，沿用 RRF 排序: {e}")
             return None
@@ -2427,18 +2429,30 @@ class KnowledgeManager:
         candidates.sort(key=lambda x: x.score, reverse=True)
         return candidates
 
-    def _fetch_chunk_contents(self, chunk_ids: list[str]) -> dict[str, str]:
-        """批量读取 chunk 内容（精排需要原文）"""
+    def _fetch_rerank_texts(self, chunk_ids: list[str]) -> dict[str, str]:
+        """批量读取精排文本：正文前带上文件名。
+
+        周报/评估表模板之间的正文高度相似，只送正文时 cross-encoder 很容易
+        把“评估表模板”排到“盘龙法院评估表”前面；文件名是区分项目最直接
+        的信号，必须一起送。
+        """
         if not chunk_ids:
             return {}
         placeholders = ",".join("?" for _ in chunk_ids)
         conn = self._get_conn()
         try:
             rows = conn.execute(
-                f"SELECT id, content FROM kb_chunks WHERE id IN ({placeholders})",
+                "SELECT c.id, c.content, d.filename AS filename "
+                "FROM kb_chunks c LEFT JOIN kb_documents d ON d.id = c.doc_id "
+                f"WHERE c.id IN ({placeholders})",
                 chunk_ids,
             ).fetchall()
-            return {r["id"]: r["content"] for r in rows}
+            out: dict[str, str] = {}
+            for r in rows:
+                filename = (r["filename"] or "").strip()
+                prefix = f"【文档：{filename}】\n" if filename else ""
+                out[r["id"]] = prefix + (r["content"] or "")
+            return out
         except Exception:
             return {}
         finally:
