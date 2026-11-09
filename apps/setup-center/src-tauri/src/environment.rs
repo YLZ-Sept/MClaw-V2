@@ -41,7 +41,7 @@ mod optional_modules_tests {
         let definitions = module_definitions();
         let mut ids = HashSet::new();
 
-        assert_eq!(definitions.len(), 3);
+        assert_eq!(definitions.len(), 4);
         for definition in &definitions {
             assert!(!definition.id.trim().is_empty());
             assert!(ids.insert(definition.id.as_str()), "duplicate module id");
@@ -54,7 +54,12 @@ mod optional_modules_tests {
 
         assert_eq!(
             ids,
-            HashSet::from(["vector-memory", "whisper", "orchestration"])
+            HashSet::from([
+                "vector-memory",
+                "vector-lite",
+                "whisper",
+                "orchestration"
+            ])
         );
     }
 }

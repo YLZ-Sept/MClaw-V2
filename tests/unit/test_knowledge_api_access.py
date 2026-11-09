@@ -15,7 +15,7 @@ from mclaw.memory.knowledge_manager import KnowledgeManager
 
 def _make_client(monkeypatch, tmp_path) -> tuple[TestClient, KnowledgeManager]:
     monkeypatch.setattr(km_module, "_lazy_import_chroma", lambda: False)
-    km = KnowledgeManager(data_dir=tmp_path)
+    km = KnowledgeManager(data_dir=tmp_path, vector_backend="off")
     monkeypatch.setattr(kr, "_knowledge_manager", km)
     app = FastAPI()
     app.include_router(kr.router)

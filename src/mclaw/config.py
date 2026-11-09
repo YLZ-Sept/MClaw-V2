@@ -564,6 +564,22 @@ class Settings(BaseSettings):
         description="知识库检索是否启用同义词/缩略语查询扩展（零依赖，纯 FTS5 下同样生效）",
     )
 
+    # === 知识库向量后端（轻量 ONNX 路线）===
+    # off=纯 FTS5；auto=有 chromadb 用 chromadb，否则有 onnxruntime+模型就用
+    # ONNX；onnx=强制本地 ONNX（vector-lite）；chromadb=强制旧向量模块。
+    # ONNX 路线不需要 torch，运行时约 40MB + int8 模型约 24MB。
+    kb_vector_backend: str = Field(
+        default="auto",
+        description="知识库向量后端: off | auto | onnx | chromadb",
+    )
+    kb_onnx_model_dir: str = Field(
+        default="",
+        description=(
+            "ONNX embedding 模型目录（含 tokenizer.json 与 onnx/model_quantized.onnx）；"
+            "留空则使用 data/knowledge/models/bge-small-zh-v1.5-onnx"
+        ),
+    )
+
     # === 知识库 Reranker 精排配置 ===
     # 在 BM25+向量 RRF 融合之后，用 cross-encoder 对候选 chunk 逐对精排，
     # 显著提升 top-k 准确率。与向量模式解耦：在线 API 零依赖（只要 httpx），

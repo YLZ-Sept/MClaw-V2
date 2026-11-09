@@ -17,6 +17,23 @@
       }
     },
     {
+      "id": "vector-lite",
+      "name": "轻量语义检索",
+      "description": "本地 ONNX 向量检索（约 60MB，含 int8 模型），无需 PyTorch；知识库语义召回用",
+      "packages": [
+        "onnxruntime>=1.18",
+        "tokenizers>=0.15",
+        "numpy>=1.26"
+      ],
+      "estimated_size_mb": 80,
+      "category": "core",
+      "model": {
+        "kind": "onnx",
+        "name": "bge-small-zh-v1.5",
+        "file": "model_quantized.onnx"
+      }
+    },
+    {
       "id": "whisper",
       "name": "离线语音识别",
       "description": "使用 OpenAI Whisper 进行离线语音转文字（约 2.5GB，含 PyTorch）",

@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from mclaw.memory import knowledge_manager as km_module
 from mclaw.memory import reranker as reranker_module
 from mclaw.memory.knowledge_manager import KnowledgeManager
@@ -39,7 +41,7 @@ def _stub_reranker(monkeypatch, created: dict | None = None):
 def _make_km(tmp_path, monkeypatch) -> KnowledgeManager:
     """构造 KnowledgeManager，关闭 ChromaDB 后台加载，只走 FTS5 路径。"""
     monkeypatch.setattr(km_module, "_lazy_import_chroma", lambda: False)
-    return KnowledgeManager(data_dir=tmp_path)
+    return KnowledgeManager(data_dir=tmp_path, vector_backend="off")
 
 
 def _insert_doc_and_chunk(km: KnowledgeManager, collection_id: str, filename: str, content: str) -> str:
@@ -60,9 +62,9 @@ def _insert_doc_and_chunk(km: KnowledgeManager, collection_id: str, filename: st
     )
     tokenized = km._tokenize_for_fts(content)
     conn.execute(
-        "INSERT INTO kb_chunks_fts (rowid, content) VALUES "
-        "((SELECT rowid FROM kb_chunks WHERE id=?), ?)",
-        (chunk_id, tokenized),
+        "INSERT INTO kb_chunks_fts (rowid, content, title) VALUES "
+        "((SELECT rowid FROM kb_chunks WHERE id=?), ?, ?)",
+        (chunk_id, tokenized, km._tokenize_for_fts(filename)),
     )
     conn.commit()
     conn.close()
@@ -114,6 +116,124 @@ class TestSearchWithChunks:
         assert len(results) == 1
         assert results[0].chunk.content == "hello world knowledge base"
         assert results[0].chunk.metadata["filename"] == "hello.pdf"
+
+    def test_filename_is_searchable_without_content_match(self, tmp_path, monkeypatch):
+        km = _make_km(tmp_path, monkeypatch)
+        coll = km.create_collection("技术文档", "测试集合")
+        _insert_doc_and_chunk(
+            km, coll.id, "大理市检察院技术方案.docx", "正文完全不包含项目名称"
+        )
+
+        results = km.search_with_chunks("检察院技术方案", collection_id=coll.id, top_k=5)
+
+        assert len(results) == 1
+        assert results[0].chunk.metadata["filename"] == "大理市检察院技术方案.docx"
+
+
+class TestEmptyContentGuards:
+    def test_ingest_url_empty_does_not_create_document(self, tmp_path, monkeypatch):
+        km = _make_km(tmp_path, monkeypatch)
+        coll = km.create_collection("测试", "")
+        monkeypatch.setattr(km_module, "_extract_text_from_url", lambda url: "   ")
+
+        with pytest.raises(ValueError):
+            km.ingest_url(coll.id, "https://example.com/empty")
+
+        docs, total = km.list_documents(coll.id)
+        assert total == 0
+
+    def test_reindex_empty_document_keeps_old_chunks(self, tmp_path, monkeypatch):
+        km = _make_km(tmp_path, monkeypatch)
+        coll = km.create_collection("测试", "")
+        source = tmp_path / "doc.txt"
+        source.write_text("原始内容", encoding="utf-8")
+        doc = km.ingest_file(coll.id, source)
+        assert doc.chunk_count == 1
+
+        # 文件被清空后再重建：不能静默 ready/0 chunk，也不能丢掉原索引
+        source.write_text("   ", encoding="utf-8")
+        with pytest.raises(ValueError):
+            km.reindex_document(doc.id)
+
+        assert km.get_document(doc.id).status == "error"
+        assert len(km.get_document_chunks(doc.id)) == 1
+
+
+class TestOnnxVectorStore:
+    """轻量 ONNX 向量存储/检索（用假 embedder，不加载真实模型）"""
+
+    class _FakeEmbedder:
+        dimension = 8
+
+        def encode(self, texts, **_kwargs):
+            import numpy as np
+
+            rows = []
+            for text in texts:
+                vec = np.zeros(8, dtype=np.float32)
+                for ch in text:
+                    vec[ord(ch) % 8] += 1.0
+                norm = float(np.linalg.norm(vec)) or 1.0
+                rows.append(vec / norm)
+            return np.vstack(rows)
+
+    def test_vectors_are_stored_searched_and_deleted(self, tmp_path, monkeypatch):
+        np = pytest.importorskip("numpy")
+        km = _make_km(tmp_path, monkeypatch)
+        km._vector_backend = "onnx"
+        km._vector_enabled = True
+        km._onnx_model_id = "fake:8"
+        km._embedding_model = self._FakeEmbedder()
+
+        coll = km.create_collection("测试", "")
+        source = tmp_path / "contract.txt"
+        source.write_text("甲方合同金额为一百万元，乙方负责交付。", encoding="utf-8")
+        doc = km.ingest_file(coll.id, source)
+
+        conn = km._get_conn()
+        count = conn.execute("SELECT COUNT(*) FROM kb_chunk_vectors").fetchone()[0]
+        conn.close()
+        assert count == doc.chunk_count > 0
+
+        results = km.search_with_chunks("甲方合同金额", collection_id=coll.id, top_k=3)
+        assert results
+        assert "甲方" in results[0].chunk.content
+
+        km.delete_document(doc.id)
+        conn = km._get_conn()
+        count = conn.execute("SELECT COUNT(*) FROM kb_chunk_vectors").fetchone()[0]
+        conn.close()
+        assert count == 0
+
+
+class TestFtsTitleMigration:
+    def test_legacy_fts_table_is_rebuilt_with_title(self, tmp_path, monkeypatch):
+        km = _make_km(tmp_path, monkeypatch)
+        coll = km.create_collection("技术文档", "测试集合")
+        _insert_doc_and_chunk(km, coll.id, "旧版文档.pdf", "旧版正文内容")
+
+        # 模拟升级前的库：FTS 只有 content 列
+        conn = km._get_conn()
+        conn.execute("DROP TABLE kb_chunks_fts")
+        conn.execute(
+            "CREATE VIRTUAL TABLE kb_chunks_fts USING fts5(content, tokenize='unicode61')"
+        )
+        conn.execute(
+            "INSERT INTO kb_chunks_fts (rowid, content) VALUES (1, ?)",
+            (km._tokenize_for_fts("旧版正文内容"),),
+        )
+        conn.commit()
+        conn.close()
+
+        km2 = KnowledgeManager(data_dir=tmp_path, vector_backend="off")
+        conn = km2._get_conn()
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(kb_chunks_fts)")]
+        conn.close()
+        assert "title" in cols
+
+        results = km2.search_with_chunks("旧版文档", collection_id=coll.id, top_k=5)
+        assert len(results) == 1
+        assert results[0].chunk.metadata["filename"] == "旧版文档.pdf"
 
 
 class TestBuildKnowledgeSection:
@@ -413,7 +533,7 @@ class TestRerankerToggle:
         monkeypatch.setattr(km_module, "_settings_value", lambda key, fallback: fallback)
         monkeypatch.setattr(km_module, "_settings_opt_bool", lambda key, fallback=None: fallback)
         _stub_reranker(monkeypatch)  # 别在单测里真去加载模型
-        return KnowledgeManager(data_dir=tmp_path, **kwargs)
+        return KnowledgeManager(data_dir=tmp_path, vector_backend="off", **kwargs)
 
     def test_default_off_without_api(self, tmp_path, monkeypatch):
         km = self._km(tmp_path, monkeypatch)
@@ -464,7 +584,9 @@ class TestRerankerDecoupledFromVectorMode:
         monkeypatch.setattr(km_module, "_lazy_import_chroma", lambda: False)
         monkeypatch.setattr(km_module, "_settings_value", lambda key, fallback: fallback)
 
-        km = KnowledgeManager(data_dir=tmp_path, reranker_enabled=True)
+        km = KnowledgeManager(
+            data_dir=tmp_path, reranker_enabled=True, vector_backend="off"
+        )
 
         for _ in range(150):
             if km._reranker is not None:
@@ -484,6 +606,7 @@ class TestRerankerDecoupledFromVectorMode:
             data_dir=tmp_path,
             reranker_api_base="https://api.siliconflow.cn/v1",
             reranker_api_key="sk-x",
+            vector_backend="off",
         )
         for _ in range(150):
             if km._reranker is not None:

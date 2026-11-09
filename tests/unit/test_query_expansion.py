@@ -104,7 +104,7 @@ class TestQueryExpansionWiring:
         from mclaw.memory import knowledge_manager as km_module
 
         monkeypatch.setattr(km_module, "_lazy_import_chroma", lambda: False)
-        return KnowledgeManager(data_dir=tmp_path, **kwargs)
+        return KnowledgeManager(data_dir=tmp_path, vector_backend="off", **kwargs)
 
     def test_expansion_terms_are_segmented(self, tmp_path, monkeypatch):
         km = self._km(tmp_path, monkeypatch)

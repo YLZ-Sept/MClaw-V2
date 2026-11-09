@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import os
 import re
@@ -303,8 +304,37 @@ def _extract_text(file_path: Path, file_type: DocFileType) -> str:
     if file_type == DocFileType.DOCX:
         try:
             from docx import Document
+            from docx.oxml.ns import qn
+            from docx.table import Table
+            from docx.text.paragraph import Paragraph
+
             doc = Document(str(file_path))
-            return "\n\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            # doc.paragraphs 不包含表格内容 —— 合同/调查表/评估表的主体往往
+            # 就在表格里，只读 paragraphs 会静默丢掉大半文档。这里按 body
+            # 子元素顺序遍历，段落与表格都提取；表格行用制表符连接，交给
+            # 分块器识别为表格并保留表头。
+            segments: list[str] = []
+            for child in doc.element.body.iterchildren():
+                if child.tag == qn("w:p"):
+                    text = Paragraph(child, doc).text.strip()
+                    if text:
+                        segments.append(text)
+                elif child.tag == qn("w:tbl"):
+                    rows: list[str] = []
+                    for row in Table(child, doc).rows:
+                        cells: list[str] = []
+                        for cell in row.cells:
+                            text = cell.text.strip().replace("\n", " ")
+                            # 横向合并的单元格会被 python-docx 按网格重复返回
+                            # （同一个地址重复 3 次），连续相同值合并一次。
+                            if not cells or cells[-1] != text:
+                                cells.append(text)
+                        line = "\t".join(cells)
+                        if line.strip():
+                            rows.append(line)
+                    if rows:
+                        segments.append("\n".join(rows))
+            return "\n\n".join(segments)
         except ImportError:
             raise ImportError(
                 "DOCX 解析需要安装 python-docx: pip install python-docx"
@@ -465,62 +495,505 @@ def _extract_text_from_url(url: str) -> str:
 
 # ── 分块器 ────────────────────────────────────────────────────────────────────
 
-def _chunk_text(
-    text: str,
-    chunk_size: int = 512,
-    chunk_overlap: int = 128,
-) -> list[str]:
-    """滑动窗口分块，按段落优先分割"""
-    paragraphs = text.split("\n\n")
+_HEADING_RE = re.compile(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$")
+_BOLD_TITLE_RE = re.compile(r"^\s*\*\*(?!\s*\*)(.+?)\*\*\s*$")
+_SHEET_TITLE_RE = re.compile(r"^\s*===\s*Sheet:\s*(.+?)\s*===\s*$")
+_SLIDE_TITLE_RE = re.compile(r"^\s*===\s*第\s*(\d+)\s*页\s*===\s*$")
+_CN_HEADING_RE = re.compile(
+    r"^\s*(?:第[一二三四五六七八九十百零0-9]+[章节部分卷篇]|扩展卷|[一二三四五六七八九十]+、)\s*\S"
+)
+
+
+def _section_title(line: str) -> str | None:
+    """识别会开启新章节的行。
+
+    支持 Markdown 标题、整行加粗（Word 转 Markdown 常见）、Excel 工作表
+    标记、PPT 页码标记，以及 Word 原生文档里的「一、」「第三章」小标题。
+    """
+    m = _HEADING_RE.match(line)
+    if m:
+        return m.group(2).strip()
+    m = _SHEET_TITLE_RE.match(line)
+    if m:
+        return f"工作表：{m.group(1).strip()}"
+    m = _SLIDE_TITLE_RE.match(line)
+    if m:
+        return f"第 {m.group(1)} 页"
+    m = _BOLD_TITLE_RE.match(line)
+    if m:
+        # 整行加粗在转换自 Word 的 Markdown 里很常见（**一、本周工作重点**）。
+        # 句子中间的局部加粗不会独占一行，因此这里只接受整行。
+        return m.group(1).strip().strip("*").strip()
+
+    # Word 原生文档没有 Markdown 标记，靠「一、」「第三章」这类短行分节。
+    # 限制长度和结尾标点，避免把正文里的编号句子误判成标题。
+    s = line.strip()
+    if (
+        not _is_table_line(line)
+        and len(s) <= 40
+        and _CN_HEADING_RE.match(s)
+        and not s.endswith(("。", "；", ";", "，", ",", ".", "！", "？"))
+    ):
+        return s
+    return None
+
+
+def _is_table_line(line: str) -> bool:
+    s = line.strip()
+    if not s:
+        return False
+    if "\t" in s:
+        return len([c for c in s.split("\t") if c.strip()]) >= 2
+    if "|" in s:
+        return s.count("|") >= 2 or " | " in s
+    return False
+
+
+def _row_cells(line: str) -> list[str]:
+    if "\t" in line:
+        return [c.strip() for c in line.split("\t")]
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def _normalize_table_row(line: str) -> str:
+    """压掉表格行里用于对齐的连续空格，同时保留每个单元格的内容"""
+    if "\t" in line:
+        return "\t".join(c.strip() for c in line.split("\t")).strip()
+    if "|" in line:
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        return "| " + " | ".join(cells) + " |"
+    return line.strip()
+
+
+def _is_empty_table_row(line: str) -> bool:
+    cells = _row_cells(line)
+    return all(not c for c in cells)
+
+
+def _is_table_separator(line: str) -> bool:
+    cells = [c for c in _row_cells(line) if c]
+    return bool(cells) and all(re.fullmatch(r":?-{2,}:?", c) for c in cells)
+
+
+def _split_sections(text: str) -> list[tuple[str, str]]:
+    """按标题把文本切成 (章节名, 正文)。
+
+    转换自 Word 的周报常用 ``**一、本周工作重点**`` 这种整行加粗当小标题，
+    Excel 提取则用 ``=== Sheet: xxx ===`` 当分隔，两者都要识别，否则表格
+    会跨章节混在一起。
+    """
+    sections: list[tuple[str, str]] = []
+    title = ""
+    buf: list[str] = []
+    # 只有标题、没有正文的章节（如文档大标题后面紧跟小标题）不能丢，
+    # 把标题文本顺延到下一个有正文的章节里，否则“项目周报”这种信息会消失。
+    pending: list[str] = []
+    empty_run = 0
+
+    def flush() -> None:
+        nonlocal buf, empty_run
+        if any(line.strip() for line in buf):
+            sections.append((title, "\n".join(buf)))
+            empty_run = 0
+        elif title:
+            pending.append(title)
+            empty_run += 1
+        buf = []
+
+    for line in text.splitlines():
+        heading = _section_title(line)
+        if heading is not None:
+            flush()
+            # 连续两个以上“只有标题”的章节基本就是目录页
+            # （第一章/第二章/…每行都没正文）。这类标题链既没有内容，
+            # 还会让前缀膨胀成“第一章 / 第二章 / …”，直接断开。
+            if empty_run >= 2:
+                pending.clear()
+                title = heading
+            else:
+                title = " / ".join([*pending, heading]) if pending else heading
+                pending.clear()
+            continue
+        buf.append(line)
+    flush()
+    if pending:
+        joined_pending = "\n".join(pending)
+        if sections:
+            last_title, last_body = sections[-1]
+            sections[-1] = (last_title, f"{last_body}\n{joined_pending}")
+        else:
+            sections.append((title, joined_pending))
+    if not sections:
+        return [("", text)] if text.strip() else []
+    return sections
+
+
+def _split_blocks(body: str) -> list[tuple[str, list[str]]]:
+    """把章节正文切成连续的表格块 / 文本块"""
+    blocks: list[tuple[str, list[str]]] = []
+    cur: list[str] = []
+    kind = ""
+
+    def flush() -> None:
+        nonlocal cur, kind
+        if cur:
+            blocks.append((kind or "text", cur))
+        cur, kind = [], ""
+
+    for line in body.splitlines():
+        if not line.strip():
+            flush()
+            continue
+        k = "table" if _is_table_line(line) else "text"
+        if kind and k != kind:
+            flush()
+        kind = k
+        cur.append(line)
+    flush()
+    return blocks
+
+
+def _pack_sentences(text: str, limit: int) -> list[str]:
+    """把超长段落按句子打包成不超过 limit 的块（单句超长时硬切）"""
+    chunks: list[str] = []
+    buf = ""
+    for s in _split_sentences(text):
+        # 没有标点、整段一句的情况（Excel 导出的长描述很常见）：
+        # 先硬切成 limit 长度的片段，避免单块无限膨胀。
+        while len(s) > limit:
+            if buf:
+                chunks.append(buf)
+                buf = ""
+            chunks.append(s[:limit])
+            s = s[limit:]
+        if len(buf) + len(s) <= limit:
+            buf = f"{buf}{s}" if buf else s
+        else:
+            if buf:
+                chunks.append(buf)
+            buf = s
+    if buf:
+        chunks.append(buf)
+    return chunks
+
+
+def _split_text_chunks(text: str, chunk_size: int) -> list[str]:
+    """段落优先的正文分块（不含章节前缀、不做 overlap）"""
     chunks: list[str] = []
     current = ""
-
-    for para in paragraphs:
+    for para in re.split(r"\n\s*\n", text):
         para = para.strip()
         if not para:
             continue
         if len(current) + len(para) + 2 <= chunk_size:
             current = f"{current}\n\n{para}" if current else para
+            continue
+        if current:
+            chunks.append(current)
+            current = ""
+        if len(para) > chunk_size:
+            chunks.extend(_pack_sentences(para, chunk_size))
         else:
-            if current:
-                chunks.append(current)
-            # If a single paragraph exceeds chunk_size, split by sentence
-            if len(para) > chunk_size:
-                sentences = _split_sentences(para)
-                buf = ""
-                for s in sentences:
-                    if len(buf) + len(s) <= chunk_size:
-                        buf = f"{buf}{s}" if buf else s
-                    else:
-                        if buf:
-                            chunks.append(buf)
-                        buf = s
-                if buf:
-                    current = buf
-                else:
-                    current = ""
-            else:
-                current = para
-
+            current = para
     if current:
         chunks.append(current)
+    return chunks
 
-    # Apply overlap: each chunk (except first) prepends overlap chars from previous
-    if chunk_overlap > 0 and len(chunks) > 1:
-        overlapped = [chunks[0]]
-        for i in range(1, len(chunks)):
-            prev = chunks[i - 1]
-            if len(prev) > chunk_overlap:
-                overlapped.append(prev[-chunk_overlap:] + "\n\n" + chunks[i])
+
+def _split_oversized_row(
+    row: str, header: str, prefix_len: int, chunk_size: int
+) -> list[str]:
+    """单行表格超过预算时按单元格内容拆开，并保留标识列。
+
+    周报里的“工作内容”一列常长达上千字；如果直接按字数硬切，后半段会丢掉
+    客户名称/项目名称这些标识列，模型拿到也判断不出说的是哪个项目。
+    这里只拆最后一个单元格，每段都重复前面的标识列。
+    """
+    cells = _row_cells(row)
+    budget = max(chunk_size - prefix_len - len(header) - 2, 64)
+
+    if len(cells) <= 1:
+        return _pack_sentences(row, budget)
+
+    lead = cells[:-1]
+    lead_text = (
+        "\t".join(lead) if "\t" in row else "| " + " | ".join(lead) + " |"
+    )
+    # 标识列本身也占长度，真正能放正文的空间要再扣掉
+    content_budget = max(budget - len(lead_text) - 2, 64)
+
+    pieces = [
+        p.strip()
+        for p in re.split(r"<br\s*/?>|(?<=[。；;！？!?])", cells[-1])
+        if p.strip()
+    ] or [cells[-1]]
+
+    # 同一行的多个片段尽量打包回一个 chunk：每条 <br> 都单独成块会让
+    # 一篇周报膨胀出上百个 chunk，稀释检索名额。
+    out: list[str] = []
+    current = ""
+    for piece in pieces:
+        parts = _pack_sentences(piece, content_budget) if len(piece) > content_budget else [piece]
+        for part in parts:
+            if current and len(current) + len(part) + 2 > content_budget:
+                out.append(_format_row(lead, current, row, header))
+                current = part
             else:
-                overlapped.append(chunks[i])
-        chunks = overlapped
+                current = f"{current}<br>{part}" if current else part
+    if current:
+        out.append(_format_row(lead, current, row, header))
+    return out
+
+
+def _format_row(lead: list[str], content: str, row: str, header: str) -> str:
+    if "\t" in row:
+        line = "\t".join([*lead, content])
+    else:
+        line = "| " + " | ".join([*lead, content]) + " |"
+    return (header + "\n" if header else "") + line
+
+
+def _chunk_table(lines: list[str], prefix_len: int, chunk_size: int) -> list[str]:
+    """表格分块：保留表头并在每一块里重复，避免切出无列名的裸行"""
+    rows = [_normalize_table_row(line) for line in lines if line.strip()]
+    rows = [r for r in rows if r]
+    if not rows:
+        return []
+
+    # 找到分隔行。转换自 Word 的表格可能是「空表头 / 分隔行 / 真表头」，
+    # 标准 Markdown 则是「表头 / 分隔行 / 数据行」，两种都要兼容。
+    sep_idx = next((i for i, r in enumerate(rows) if _is_table_separator(r)), None)
+    if sep_idx is not None:
+        before = rows[sep_idx - 1] if sep_idx > 0 else ""
+        after = rows[sep_idx + 1] if sep_idx + 1 < len(rows) else ""
+        if before and not _is_empty_table_row(before) and not _is_table_separator(before):
+            header = before
+            body_rows = rows[sep_idx + 1:]
+        elif after and not _is_empty_table_row(after):
+            header = after
+            body_rows = rows[sep_idx + 2:]
+        else:
+            header = ""
+            body_rows = rows[sep_idx + 1:]
+    else:
+        # 制表符分隔的 Excel 提取没有分隔行，首行通常是列名
+        header = rows[0] if len(rows) >= 3 else ""
+        body_rows = rows[1:] if header else rows
+
+    if not body_rows:
+        return [header] if header else []
+
+    budget = max(chunk_size - prefix_len - len(header) - 2, 64)
+    chunks: list[str] = []
+    current: list[str] = []
+
+    def emit(group: list[str]) -> None:
+        chunks.append((header + "\n" if header else "") + "\n".join(group))
+
+    for row in body_rows:
+        if len(row) > budget and not current:
+            chunks.extend(_split_oversized_row(row, header, prefix_len, chunk_size))
+            continue
+        size = sum(len(r) + 1 for r in current)
+        if current and size + len(row) > budget:
+            emit(current)
+            current = [row]
+        else:
+            current.append(row)
+    if current:
+        emit(current)
+    return chunks
+
+
+def _chunk_section(
+    body: str, prefix: str, chunk_size: int, chunk_overlap: int
+) -> list[str]:
+    """章节内分块；表格块不参与 overlap，正文块保持原有的重叠行为"""
+    body_budget = max(chunk_size - len(prefix), chunk_size // 2)
+    items: list[tuple[str, bool]] = []  # (正文, 是否表格)
+    text_buf = ""
+
+    def flush_text() -> None:
+        nonlocal text_buf
+        if text_buf.strip():
+            items.extend((c, False) for c in _split_text_chunks(text_buf, body_budget))
+        text_buf = ""
+
+    for kind, lines in _split_blocks(body):
+        if kind == "table":
+            flush_text()
+            items.extend(
+                (c, True) for c in _chunk_table(lines, len(prefix), chunk_size)
+            )
+        else:
+            para = "\n".join(lines).strip()
+            if not para:
+                continue
+            text_buf = f"{text_buf}\n\n{para}" if text_buf else para
+    flush_text()
+
+    result: list[str] = []
+    prev_text = ""
+    for text, is_table in items:
+        if is_table:
+            result.append(prefix + text)
+            prev_text = ""
+            continue
+        original = text
+        if prev_text and chunk_overlap > 0 and len(prev_text) > chunk_overlap:
+            text = prev_text[-chunk_overlap:] + "\n\n" + text
+        result.append(prefix + text)
+        prev_text = original
+    return result
+
+
+def _is_table_chunk(chunk: str) -> bool:
+    for line in chunk.splitlines():
+        s = line.strip()
+        if s and ("\t" in line or "|" in line):
+            return True
+    return False
+
+
+def _chunk_group(chunk: str) -> str:
+    """chunk 前缀的顶级章节（第八章 / 一、），用于限制小 chunk 合并范围"""
+    m = re.match(
+        r"^\[(第[一二三四五六七八九十百零0-9]+[章节部分卷篇]|[一二三四五六七八九十]+、)",
+        chunk,
+    )
+    return m.group(1) if m else ""
+
+
+def _chunk_body_text(chunk: str) -> str:
+    """去掉 chunk 的 ``[章节]`` 前缀，只留正文"""
+    if chunk.startswith("["):
+        end = chunk.find("]\n")
+        if end != -1:
+            return chunk[end + 2:]
+    return chunk
+
+
+def _drop_duplicate_chunks(chunks: list[str]) -> list[str]:
+    """丢掉被相邻 chunk 完整包含的重复块。
+
+    Excel/Word 提取里常出现「表标题」单独一行、下一行才是表格本身：
+    分块后会产生一个 20 字的标题块，BM25 对短文档天然打高分，导致
+    “攻防演习值班人名单”命中 2026年HVV值班表 这种标题噪音。
+    """
+    kept: list[str] = []
+    for i, chunk in enumerate(chunks):
+        body = _chunk_body_text(chunk).strip()
+        if len(body) >= 8:
+            prev = _chunk_body_text(chunks[i - 1]).strip() if i > 0 else ""
+            nxt = _chunk_body_text(chunks[i + 1]).strip() if i + 1 < len(chunks) else ""
+            if body in prev or body in nxt:
+                continue
+        kept.append(chunk)
+    return kept
+
+
+def _absorb_tiny_chunks(chunks: list[str], min_len: int = 60) -> list[str]:
+    """把过短的正文块并进相邻块，避免短块靠长度优势抢占排名。
+
+    只合并正文块：表格块即使很短也保留，因为表头/列名本身是检索上下文。
+    """
+    out: list[str] = []
+    for chunk in chunks:
+        body = _chunk_body_text(chunk).strip()
+        if len(body) < min_len and out and not _is_table_chunk(chunk):
+            out[-1] = out[-1] + "\n\n" + chunk
+        else:
+            out.append(chunk)
+    if (
+        len(out) > 1
+        and len(_chunk_body_text(out[0]).strip()) < min_len
+        and not _is_table_chunk(out[0])
+    ):
+        out[1] = out[0] + "\n\n" + out[1]
+        out.pop(0)
+    return out
+
+
+def _merge_small_chunks(chunks: list[str], chunk_size: int) -> list[str]:
+    """合并同一顶级章节下的相邻小文本块。
+
+    技术方案类 Word 文档的 5.1.1/5.1.2 小节常常只有几十个字，一节一个
+    chunk 会让 500 字的窗口大部分空着，也稀释检索名额。这里只在同一
+    章（如“第八章”）内合并，且绝不合并表格块，避免丢失表头结构。
+    """
+    out: list[str] = []
+    for chunk in chunks:
+        if out:
+            prev = out[-1]
+            group_prev = _chunk_group(prev)
+            group_cur = _chunk_group(chunk)
+            if (
+                group_prev
+                and group_prev == group_cur
+                and not _is_table_chunk(prev)
+                and not _is_table_chunk(chunk)
+                and len(prev) + len(chunk) + 2 <= chunk_size
+            ):
+                out[-1] = prev + "\n\n" + chunk
+                continue
+        out.append(chunk)
+    return out
+
+
+def _chunk_document(
+    text: str,
+    file_name: str,
+    file_type: DocFileType | None = None,
+    *,
+    is_url: bool = False,
+) -> list[str]:
+    """分块并保证结果非空。
+
+    上传、URL 导入、单文档重建三条路径都必须走这里：此前只有上传路径
+    做了空内容校验，另外两条会静默把文档标成 ready/0 chunk，用户只看到
+    “索引成功”但永远搜不到内容。
+    """
+    chunks = _chunk_text(text)
+    if chunks:
+        return chunks
+
+    if is_url:
+        raise ValueError("网页内容为空，可能无法访问、需要登录或返回空页面")
+    hint = ""
+    if file_type == DocFileType.PDF or Path(file_name).suffix.lower() == ".pdf":
+        hint = (
+            "（PDF 可能为图片扫描件，文字提取为空。请安装 Tesseract OCR "
+            "和 pytesseract：https://github.com/UB-Mannheim/tesseract/wiki）"
+        )
+    raise ValueError(f"文档内容为空: {file_name}{hint}")
+
+
+def _chunk_text(
+    text: str,
+    chunk_size: int = 512,
+    chunk_overlap: int = 128,
+) -> list[str]:
+    """结构化分块：按章节切分，表格保留表头，正文段落优先。
+
+    旧实现只按 ``\\n\\n`` 和字数切，实测周报的表格被切成 1–9 号无表头的
+    裸行，模型拿到「王加聪」也不知道是哪个班次。现在：
+    - 章节标题（Markdown # / 整行加粗 / Excel Sheet）作为 chunk 前缀；
+    - 连续表格行整体处理，表头在每块里重复；
+    - 超长表格行只拆最后一列，保留前面的标识列。
+    """
+    chunks: list[str] = []
+    for title, body in _split_sections(text):
+        prefix = f"[{title}]\n" if title else ""
+        chunks.extend(_chunk_section(body, prefix, chunk_size, chunk_overlap))
 
     # 丢弃无有效检索字符的 chunk（纯 markdown 表格边框线、分隔符、空白）。
     # 实测某份周报 15 个 chunk 里有 3 个是这种，检索命中它们等于白占名额。
     # 放在这里而不是 _persist_chunks：所有调用方拿到的就是干净列表，
     # _mark_doc_ready(doc_id, len(chunks)) 的 chunk_count 才不会算多。
-    return [c for c in chunks if not _is_degenerate_chunk(c)]
+    chunks = [c for c in chunks if not _is_degenerate_chunk(c)]
+    chunks = _drop_duplicate_chunks(chunks)
+    chunks = _merge_small_chunks(chunks, chunk_size)
+    return _absorb_tiny_chunks(chunks)
 
 
 # 至少含一个汉字/字母/数字才算有效内容
@@ -538,6 +1011,23 @@ def _split_sentences(text: str) -> list[str]:
     # Split on Chinese/English sentence endings
     parts = re.split(r"(?<=[。！？.!?\n])\s*", text)
     return [p.strip() for p in parts if p.strip()]
+
+
+# 查询侧停用词：疑问词、助词、量词和“现在/还剩”这类口语填充词。
+# 只影响查询，不影响索引，避免误删正文里的实词。
+_QUERY_STOPWORDS = frozenset(
+    {
+        "的", "了", "吗", "呢", "吧", "啊", "呀", "哦", "么", "是", "在", "有",
+        "和", "与", "及", "或", "对", "从", "到", "为", "把", "被", "让", "就",
+        "都", "也", "还", "又", "很", "最", "更", "不", "没", "无", "这", "那",
+        "哪", "哪个", "哪些", "哪家", "哪里", "什么", "怎么", "怎样", "如何",
+        "多少", "几个", "个", "条", "件", "项", "次", "位", "名", "里", "中",
+        "上", "下", "前", "后", "内", "外", "时", "时候", "请问", "一下", "帮我",
+        "查", "找", "看", "请", "给", "我", "你", "他", "她", "它", "们",
+        "关于", "有没有", "是否", "需要", "可以", "能", "会", "要", "现在",
+        "还有", "还剩", "剩", "几台", "几", "台",
+    }
+)
 
 
 def _estimate_tokens(text: str) -> int:
@@ -598,6 +1088,8 @@ class KnowledgeManager:
         reranker_api_base: str | None = None,
         reranker_api_key: str | None = None,
         reranker_api_model: str | None = None,
+        vector_backend: str | None = None,
+        onnx_model_dir: str | None = None,
     ):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -608,6 +1100,15 @@ class KnowledgeManager:
         self.download_source = download_source or _settings_value(
             "model_download_source", "auto"
         )
+        self._onnx_model_dir_override = onnx_model_dir or ""
+        self._vector_backend_pref = (
+            vector_backend or _settings_value("kb_vector_backend", "auto")
+        ).strip().lower()
+        if self._vector_backend_pref not in {"off", "auto", "onnx", "chromadb"}:
+            logger.warning(
+                f"[KnowledgeManager] 未知向量后端 {self._vector_backend_pref!r}，按 auto 处理"
+            )
+            self._vector_backend_pref = "auto"
 
         # Reranker 精排配置（仅向量模式就绪后启用）
         self._reranker_model_name = reranker_model or _settings_value(
@@ -632,11 +1133,15 @@ class KnowledgeManager:
             enabled = bool(self._reranker_api_base and self._reranker_api_key)
         self.reranker_enabled = bool(enabled)
 
-        # ChromaDB state
+        # 向量后端状态（chromadb 或轻量 ONNX）
         self._chroma_client = None
         self._chroma_collection = None
         self._embedding_model = None
         self._vector_enabled = False
+        self._vector_backend = ""          # "" | "chromadb" | "onnx"
+        self._onnx_model_id = ""           # 模型指纹，切换时重建向量
+        self._onnx_vector_cache: dict[str, tuple[Any, list[str]]] = {}
+        self._onnx_cache_lock = threading.RLock()
         # 查询扩展（同义词/缩略语，FTS5 下的语义代偿）
         self._expand_query_enabled = bool(
             _settings_opt_bool("kb_query_expansion_enabled", True)
@@ -654,8 +1159,8 @@ class KnowledgeManager:
         self._db_path = self.data_dir / "knowledge.db"
         self._init_sqlite()
 
-        # Start background ChromaDB init
-        self._start_chroma_init()
+        # 后台初始化向量后端（ONNX / ChromaDB / 纯 FTS5）
+        self._start_vector_init()
 
         # 精排独立于向量模式启动（在线 API 零依赖，纯 FTS5 下也能用）
         self._start_reranker_init()
@@ -730,6 +1235,7 @@ class KnowledgeManager:
 
             CREATE VIRTUAL TABLE IF NOT EXISTS kb_chunks_fts USING fts5(
                 content,
+                title,
                 tokenize='unicode61'
             );
 
@@ -739,6 +1245,24 @@ class KnowledgeManager:
                 ON kb_chunks(doc_id);
             CREATE INDEX IF NOT EXISTS idx_kb_chunks_collection
                 ON kb_chunks(collection_id);
+
+            -- 轻量 ONNX 向量：直接存 SQLite BLOB，避免引入 ChromaDB。
+            -- 向量在内存中按 collection 聚合，单库规模 5 万 chunk 以内足够。
+            CREATE TABLE IF NOT EXISTS kb_chunk_vectors (
+                chunk_id TEXT PRIMARY KEY,
+                doc_id TEXT NOT NULL,
+                collection_id TEXT NOT NULL,
+                model TEXT NOT NULL,
+                dimension INTEGER NOT NULL,
+                vector BLOB NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_kb_vectors_collection
+                ON kb_chunk_vectors(collection_id);
+
+            CREATE TABLE IF NOT EXISTS kb_vector_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
         """)
         # Migration: add uploaded_by to existing tables
         try:
@@ -751,15 +1275,167 @@ class KnowledgeManager:
                 conn.execute(f"ALTER TABLE kb_collections ADD COLUMN {col} TEXT DEFAULT {default}")
             except sqlite3.OperationalError:
                 pass
+        self._migrate_fts_title(conn)
         conn.commit()
         conn.close()
         logger.info(f"[KnowledgeManager] SQLite 初始化完成: {self._db_path}")
+
+    def _migrate_fts_title(self, conn: sqlite3.Connection) -> None:
+        """把旧版只有 content 列的 FTS 表升级为 content + title。
+
+        文件名以前不进索引，用户按文档名/项目名搜不到。新增 title 列后
+        ``bm25`` 可以给文件名更高的权重。旧表无法 ALTER 加列，只能重建；
+        重建数据直接来自 kb_chunks + kb_documents，不需要重新解析原文件。
+        """
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(kb_chunks_fts)")]
+        if "title" in cols:
+            return
+
+        logger.info("[KnowledgeManager] 升级 FTS 索引：新增 title 列并重建")
+        conn.execute("DROP TABLE IF EXISTS kb_chunks_fts")
+        conn.execute(
+            "CREATE VIRTUAL TABLE kb_chunks_fts USING fts5("
+            "content, title, tokenize='unicode61')"
+        )
+        rows = conn.execute(
+            "SELECT c.rowid AS rid, c.content AS content, d.filename AS filename "
+            "FROM kb_chunks c LEFT JOIN kb_documents d ON d.id = c.doc_id"
+        ).fetchall()
+        for rid, content, filename in rows:
+            conn.execute(
+                "INSERT INTO kb_chunks_fts (rowid, content, title) VALUES (?, ?, ?)",
+                (
+                    rid,
+                    self._tokenize_for_fts(content or ""),
+                    self._tokenize_for_fts(filename or ""),
+                ),
+            )
+        logger.info(f"[KnowledgeManager] FTS 重建完成: {len(rows)} chunks")
 
     def _get_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self._db_path))
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
+
+    # ── 向量后端初始化 ──────────────────────────────────────────────────────
+
+    def _start_vector_init(self) -> None:
+        """后台选择并初始化向量后端（不阻塞启动）"""
+        with self._init_lock:
+            if self._init_started:
+                return
+            self._init_started = True
+
+        threading.Thread(
+            target=self._do_vector_init,
+            name="KnowledgeManager-vector-init",
+            daemon=True,
+        ).start()
+
+    def _do_vector_init(self) -> None:
+        pref = self._vector_backend_pref
+        if pref == "off":
+            logger.info("[KnowledgeManager] 向量后端已关闭，使用纯 FTS5 模式")
+            return
+
+        if pref in {"auto", "onnx"}:
+            try:
+                self._do_onnx_init()
+                return
+            except Exception as e:
+                logger.warning(f"[KnowledgeManager] ONNX 向量后端不可用: {e}")
+                if pref == "onnx":
+                    logger.warning(
+                        "[KnowledgeManager] 已强制 onnx 但初始化失败，降级纯 FTS5"
+                    )
+                    return
+
+        if pref in {"auto", "chromadb"}:
+            self._do_chroma_init()
+
+    def _resolve_onnx_model_dir(self) -> Path:
+        from .onnx_embedder import DEFAULT_MODEL_DIR_NAME
+
+        raw = self._onnx_model_dir_override or _settings_value("kb_onnx_model_dir", "")
+        if not raw:
+            return self.data_dir / "models" / DEFAULT_MODEL_DIR_NAME
+        path = Path(raw).expanduser()
+        if path.is_absolute():
+            return path
+        try:
+            from mclaw.config import settings as _settings
+
+            root = Path(getattr(_settings, "project_root", Path.cwd()))
+        except Exception:
+            root = Path.cwd()
+        return root / path
+
+    def _do_onnx_init(self) -> None:
+        """初始化轻量 ONNX 向量后端（不依赖 ChromaDB / torch）"""
+        from .onnx_embedder import OnnxEmbedder
+
+        model_dir = self._resolve_onnx_model_dir()
+        ok, reason = OnnxEmbedder.is_available(model_dir)
+        if not ok and self._vector_backend_pref == "onnx":
+            # 显式启用 onnx 时允许首次下载（客户机可联网）；auto 模式不擅自下载
+            logger.info(f"[KnowledgeManager] ONNX 模型缺失，尝试下载: {reason}")
+            ok, reason = OnnxEmbedder.ensure_model(model_dir)
+        if not ok:
+            raise RuntimeError(f"{reason}（模型目录: {model_dir}）")
+
+        embedder = OnnxEmbedder(model_dir)
+        model_id = f"onnx:{embedder.model_file}:{embedder.dimension}"
+
+        with self._init_lock:
+            self._embedding_model = embedder
+            self._onnx_model_id = model_id
+            self._vector_enabled = True
+            self._vector_backend = "onnx"
+
+        logger.info(
+            f"[KnowledgeManager] ONNX 向量模式就绪 "
+            f"(model={model_id}, dir={model_dir})"
+        )
+        self._prepare_onnx_vector_store(model_id)
+
+    def _prepare_onnx_vector_store(self, model_id: str) -> None:
+        """模型指纹校验 + 缺失向量的后台补建"""
+        conn = self._get_conn()
+        try:
+            row = conn.execute(
+                "SELECT value FROM kb_vector_meta WHERE key = 'model'"
+            ).fetchone()
+            old_model = row["value"] if row else ""
+            should_reindex = False
+            if old_model and old_model != model_id:
+                logger.warning(
+                    f"[KnowledgeManager] ONNX 模型切换 {old_model} → {model_id}，"
+                    "清空旧向量并重建"
+                )
+                conn.execute("DELETE FROM kb_chunk_vectors")
+                should_reindex = True
+            conn.execute(
+                "INSERT OR REPLACE INTO kb_vector_meta (key, value) VALUES ('model', ?)",
+                (model_id,),
+            )
+            if not should_reindex:
+                missing = conn.execute(
+                    "SELECT COUNT(*) FROM kb_documents d "
+                    "WHERE d.status = 'ready' AND NOT EXISTS ("
+                    "  SELECT 1 FROM kb_chunk_vectors v "
+                    "  JOIN kb_chunks c ON c.id = v.chunk_id "
+                    "  WHERE c.doc_id = d.id AND v.model = ?"
+                    ")",
+                    (model_id,),
+                ).fetchone()[0]
+                should_reindex = missing > 0
+            conn.commit()
+        finally:
+            conn.close()
+
+        if should_reindex:
+            self.schedule_reindex_all(reason="ONNX 向量初始化/补建")
 
     # ── ChromaDB 初始化 ─────────────────────────────────────────────────────
 
@@ -905,6 +1581,7 @@ class KnowledgeManager:
                 self._chroma_client = client
                 self._chroma_collection = collection
                 self._vector_enabled = True
+                self._vector_backend = "chromadb"
 
             logger.info(
                 f"[KnowledgeManager] ChromaDB ✓ 已就绪 "
@@ -1177,10 +1854,13 @@ class KnowledgeManager:
 
         # 删除
         chunk_count = conn.execute("DELETE FROM kb_chunks WHERE doc_id = ?", (doc_id,)).rowcount
+        conn.execute("DELETE FROM kb_chunk_vectors WHERE doc_id = ?", (doc_id,))
         conn.execute("DELETE FROM kb_chunks_fts WHERE rowid NOT IN (SELECT rowid FROM kb_chunks)")
         conn.execute("DELETE FROM kb_documents WHERE id = ?", (doc_id,))
         conn.commit()
         conn.close()
+        with self._onnx_cache_lock:
+            self._onnx_vector_cache.clear()
 
         # 删除向量
         if emb_ids and self._chroma_collection:
@@ -1239,8 +1919,9 @@ class KnowledgeManager:
                 "updated_at=? WHERE id=?",
                 (checksum, file_size, now, doc.id),
             )
-            # 删除旧 chunks
+            # 删除旧 chunks 和旧向量
             conn.execute("DELETE FROM kb_chunks WHERE doc_id = ?", (doc.id,))
+            conn.execute("DELETE FROM kb_chunk_vectors WHERE doc_id = ?", (doc.id,))
         else:
             conn.execute(
                 "INSERT INTO kb_documents (id, collection_id, filename, file_path, "
@@ -1271,6 +1952,9 @@ class KnowledgeManager:
         now = time.time()
         url_hash = _hashlib.sha256(url.encode()).hexdigest()[:16]
         text = _extract_text_from_url(url)
+        # 先分块并校验非空，再写文档记录：空页面不能留下 ready/0 chunk 的
+        # 假成功记录。
+        chunks = _chunk_document(text, url, is_url=True)
         checksum = _hashlib.sha256(text.encode()).hexdigest()
 
         doc = KnowledgeDocument(
@@ -1293,13 +1977,12 @@ class KnowledgeManager:
             "VALUES (?,?,?,?,?,?,?,?,0,?,?,?)",
             (doc.id, doc.collection_id, doc.filename, None,
              doc.file_type, doc.file_size, doc.checksum, doc.status,
-             doc.created_at, doc.updated_at, str(doc.metadata).replace("'", '"')),
+             doc.created_at, doc.updated_at, json.dumps(doc.metadata, ensure_ascii=False)),
         )
         conn.commit()
         conn.close()
 
         # Index chunks from extracted text
-        chunks = _chunk_text(text)
         self._persist_chunks(doc, chunks)
         self._embed_chunks(doc, chunks)
 
@@ -1311,18 +1994,7 @@ class KnowledgeManager:
         self._mark_doc_status(doc.id, DocStatus.INDEXING)
 
         text = _extract_text(file_path, file_type)
-        chunks = _chunk_text(text)
-
-        if not chunks:
-            suffix = file_path.suffix.lower()
-            hint = ""
-            if suffix == ".pdf":
-                hint = (
-                    "（PDF 可能为图片扫描件，文字提取为空。"
-                    "请安装 Tesseract OCR 和 pytesseract："
-                    "https://github.com/UB-Mannheim/tesseract/wiki）"
-                )
-            raise ValueError(f"文档内容为空: {file_path.name}{hint}")
+        chunks = _chunk_document(text, file_path.name, file_type)
 
         self._persist_chunks(doc, chunks)
         self._embed_chunks(doc, chunks)
@@ -1335,6 +2007,7 @@ class KnowledgeManager:
     def _persist_chunks(self, doc: KnowledgeDocument, chunks: list[str]) -> None:
         """将 chunks 写入 SQLite + FTS5"""
         conn = self._get_conn()
+        tokenized_title = self._tokenize_for_fts(doc.filename)
         for i, text in enumerate(chunks):
             chunk_id = _short_uuid()
             token_count = _estimate_tokens(text)
@@ -1343,13 +2016,14 @@ class KnowledgeManager:
                 "VALUES (?, ?, ?, ?, ?, ?)",
                 (chunk_id, doc.id, doc.collection_id, text, i, token_count),
             )
-            # 同步写入 FTS5（预分词）
+            # 同步写入 FTS5（预分词）。title 让“按文档名找资料”也能命中，
+            # 查询侧用 bm25 的列权重把标题命中排到正文命中之前。
             tokenized = self._tokenize_for_fts(text)
             conn.execute(
-                "INSERT INTO kb_chunks_fts (rowid, content) VALUES ("
-                "  (SELECT rowid FROM kb_chunks WHERE id = ?), ?"
+                "INSERT INTO kb_chunks_fts (rowid, content, title) VALUES ("
+                "  (SELECT rowid FROM kb_chunks WHERE id = ?), ?, ?"
                 ")",
-                (chunk_id, tokenized),
+                (chunk_id, tokenized, tokenized_title),
             )
         conn.commit()
         conn.close()
@@ -1370,6 +2044,39 @@ class KnowledgeManager:
         texts = [r["content"] for r in chunk_rows]
         chunk_ids = [r["id"] for r in chunk_rows]
         embedding_ids = [f"kb_{cid}" for cid in chunk_ids]
+
+        if self._vector_backend == "onnx":
+            try:
+                import numpy as np
+
+                vectors = self._embedding_model.encode(texts, batch_size=32)
+                for cid, vec in zip(chunk_ids, vectors):
+                    conn.execute(
+                        "INSERT OR REPLACE INTO kb_chunk_vectors "
+                        "(chunk_id, doc_id, collection_id, model, dimension, vector) "
+                        "VALUES (?,?,?,?,?,?)",
+                        (
+                            cid,
+                            doc.id,
+                            doc.collection_id,
+                            self._onnx_model_id,
+                            len(vec),
+                            np.asarray(vec, dtype=np.float32).tobytes(),
+                        ),
+                    )
+                conn.commit()
+                with self._onnx_cache_lock:
+                    self._onnx_vector_cache.pop(doc.collection_id, None)
+                    self._onnx_vector_cache.pop("__all__", None)
+                logger.info(
+                    f"[KnowledgeManager] ONNX 向量化完成: {doc.filename} → "
+                    f"{len(vectors)} vectors"
+                )
+            except Exception as e:
+                logger.warning(f"[KnowledgeManager] ONNX 向量化失败: {e}")
+            finally:
+                conn.close()
+            return
 
         try:
             # 生成 embeddings
@@ -1412,41 +2119,49 @@ class KnowledgeManager:
         if not doc:
             raise ValueError(f"文档不存在: {doc_id}")
 
-        if doc.file_type == DocFileType.URL.value:
-            url = doc.metadata.get("source_url", "")
-            if not url:
-                raise ValueError("URL 文档缺少 source_url")
-            text = _extract_text_from_url(url)
-            if not text.strip():
-                raise ValueError(
-                    f"无法抓取 URL 内容（{url}），该链接可能已失效、需要登录或返回空页面"
+        try:
+            if doc.file_type == DocFileType.URL.value:
+                url = doc.metadata.get("source_url", "")
+                if not url:
+                    raise ValueError("URL 文档缺少 source_url")
+                text = _extract_text_from_url(url)
+                chunks = _chunk_document(text, url, is_url=True)
+            elif doc.file_path:
+                file_path = Path(doc.file_path)
+                if not file_path.exists():
+                    raise FileNotFoundError(
+                        f"文档文件已丢失: {file_path.name}，请删除此记录后重新上传"
+                    )
+                file_type = (
+                    DocFileType(doc.file_type)
+                    if doc.file_type in [e.value for e in DocFileType]
+                    else DocFileType.TEXT
                 )
-        elif doc.file_path:
-            file_path = Path(doc.file_path)
-            if not file_path.exists():
-                raise FileNotFoundError(
-                    f"文档文件已丢失: {file_path.name}，请删除此记录后重新上传"
-                )
-            file_type = DocFileType(doc.file_type) if doc.file_type in [e.value for e in DocFileType] else DocFileType.TEXT
-            text = _extract_text(file_path, file_type)
-        else:
-            raise ValueError(f"无法定位文档内容: {doc_id}")
+                text = _extract_text(file_path, file_type)
+                chunks = _chunk_document(text, file_path.name, file_type)
+            else:
+                raise ValueError(f"无法定位文档内容: {doc_id}")
+        except Exception as e:
+            self._mark_doc_error(doc_id, str(e))
+            raise
 
-        # 删除旧 chunks 和向量
+        # 分块成功后才删除旧 chunks 和向量：重建失败时保留原索引，
+        # 至少搜索还能用，不会因为一次重试把文档彻底弄空。
         old_emb = self._get_chunk_embedding_ids(doc_id)
         conn = self._get_conn()
         conn.execute("DELETE FROM kb_chunks WHERE doc_id = ?", (doc_id,))
+        conn.execute("DELETE FROM kb_chunk_vectors WHERE doc_id = ?", (doc_id,))
         conn.execute("DELETE FROM kb_chunks_fts WHERE rowid NOT IN (SELECT rowid FROM kb_chunks)")
         conn.commit()
         conn.close()
+        with self._onnx_cache_lock:
+            self._onnx_vector_cache.clear()
         if old_emb and self._chroma_collection:
             try:
                 self._chroma_collection.delete(ids=old_emb)
             except Exception:
                 pass
 
-        # 重新分块索引
-        chunks = _chunk_text(text)
         self._mark_doc_status(doc_id, DocStatus.INDEXING)
         self._persist_chunks(doc, chunks)
         self._embed_chunks(doc, chunks)
@@ -1495,6 +2210,19 @@ class KnowledgeManager:
                     f"[KnowledgeManager] 重建进度: {i}/{total} "
                     f"(成功 {success}, 失败 {failed})"
                 )
+
+        # 清掉已删除/重建失败文档留下的孤儿向量
+        conn = self._get_conn()
+        try:
+            conn.execute(
+                "DELETE FROM kb_chunk_vectors "
+                "WHERE chunk_id NOT IN (SELECT id FROM kb_chunks)"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        with self._onnx_cache_lock:
+            self._onnx_vector_cache.clear()
 
         stats = {"total": total, "success": success, "failed": failed}
         # 全部成功才清除 pending 标记：否则留到下次启动继续重试，
@@ -1552,6 +2280,8 @@ class KnowledgeManager:
                 "progress": dict(self._reindex_progress or {}),
                 "last": dict(self._reindex_last_stats or {}) or None,
                 "vector_enabled": self._vector_enabled,
+                "vector_backend": self._vector_backend,
+                "onnx_model": self._onnx_model_id,
                 "model": self.model_name,
             }
 
@@ -1594,7 +2324,15 @@ class KnowledgeManager:
         """
         bm25_results = self._search_bm25(query, collection_id, top_k * 2)
         vector_results = self._search_vector(query, collection_id, top_k * 2)
-        merged = self._rrf_fusion(bm25_results, vector_results, k=60)
+        # ONNX 向量的实测最佳权重是 BM25:向量 = 1:0.5（38 条评测集：
+        # Hit@8 0.895→0.921，无类别倒退）；ChromaDB 沿用等权。
+        if self._vector_backend == "onnx":
+            merged = self._rrf_fusion(
+                bm25_results, vector_results, k=60,
+                bm25_weight=1.0, vector_weight=0.5,
+            )
+        else:
+            merged = self._rrf_fusion(bm25_results, vector_results, k=60)
         merged.sort(key=lambda x: x.score, reverse=True)
 
         # Reranker 精排：对 RRF 融合后的候选逐对精细打分。
@@ -1656,14 +2394,17 @@ class KnowledgeManager:
             conn.close()
 
     @staticmethod
-    def _sanitize_fts_query(query: str) -> str:
+    def _sanitize_fts_query(query: str, joiner: str = " OR ") -> str:
         """Make user input safe for FTS5 MATCH."""
-        special = set('"*(){}[]^~:')
+        # 除 FTS5 的查询语法字符外，日期/型号里的 . - / 也会触发
+        # "fts5: syntax error near ."；统一替换成空格（unicode61 本来也
+        # 会在这些字符处断词，不会损失检索能力）。
+        special = set('"*(){}[]^~:.,/\\?')
         cleaned = "".join(c if c not in special else " " for c in query)
         tokens = cleaned.split()
         if not tokens:
             return '""'
-        return " OR ".join(tokens)
+        return joiner.join(tokens)
 
     def _synonyms(self) -> list[list[str]]:
         """同义词等价组（内置表 + data_dir/synonyms.json），懒加载并缓存"""
@@ -1712,6 +2453,33 @@ class KnowledgeManager:
         except ImportError:
             return text
 
+    @staticmethod
+    def _filter_query_tokens(segmented: str) -> list[str]:
+        return [
+            t
+            for t in segmented.split()
+            if t
+            and t.lower() not in _QUERY_STOPWORDS
+            and t.upper() not in {"AND", "OR", "NOT", "NEAR"}
+        ]
+
+    @staticmethod
+    def _query_tokens(text: str) -> str:
+        """查询侧精确分词 + 去停用词，用于 AND 查询。
+
+        注意不要用 cut_for_search：它会把“防火墙”拆成“防火/火墙/防火墙”
+        三个 token，OR 查询里等于给这个词三倍权重，反而把真正含“库存”的
+        设备台账压到第 10 名以后。
+        """
+        try:
+            import jieba
+
+            parts = [t for t in jieba.cut(text) if t.strip()]
+        except ImportError:
+            parts = text.split()
+        tokens = KnowledgeManager._filter_query_tokens(" ".join(parts))
+        return " ".join(tokens) if tokens else " ".join(parts)
+
     def _fts_match(
         self, safe_query: str, collection_id: str | None, limit: int
     ) -> dict[str, float]:
@@ -1721,7 +2489,7 @@ class KnowledgeManager:
         try:
             if collection_id:
                 rows = conn.execute(
-                    "SELECT c.id, c.content, bm25(kb_chunks_fts) AS rank "
+                    "SELECT c.id, c.content, bm25(kb_chunks_fts, 1.0, 3.0) AS rank "
                     "FROM kb_chunks_fts f "
                     "JOIN kb_chunks c ON c.rowid = f.rowid "
                     "WHERE kb_chunks_fts MATCH ? AND c.collection_id = ? "
@@ -1730,7 +2498,7 @@ class KnowledgeManager:
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT c.id, bm25(kb_chunks_fts) AS rank "
+                    "SELECT c.id, bm25(kb_chunks_fts, 1.0, 3.0) AS rank "
                     "FROM kb_chunks_fts f "
                     "JOIN kb_chunks c ON c.rowid = f.rowid "
                     "WHERE kb_chunks_fts MATCH ? "
@@ -1743,11 +2511,14 @@ class KnowledgeManager:
         finally:
             conn.close()
 
-        # Convert BM25 rank to score: lower rank = better -> score = 1/(1+rank)
+        # SQLite 的 bm25() 返回负值，越小（越负）越相关。直接取反即可，
+        # 不要用 1/(1+rank)：rank 在 (-2, -1) 区间时分母过零，分数会在
+        # 巨大正数和负数之间跳变，导致候选排序不再单调（实测会把真正
+        # 命中的长 chunk 排到十几名开外）。
         for r in rows:
             rank = r["rank"] if isinstance(r, sqlite3.Row) else r[1]
             chunk_id = r["id"] if isinstance(r, sqlite3.Row) else r[0]
-            result[chunk_id] = 1.0 / (1.0 + rank)
+            result[chunk_id] = -rank
         return result
 
     @staticmethod
@@ -1780,10 +2551,30 @@ class KnowledgeManager:
     def _search_bm25(
         self, query: str, collection_id: str | None, limit: int
     ) -> dict[str, float]:
-        """FTS5 + jieba BM25 搜索：原查询为主，同义词扩展补召回"""
-        result = self._fts_match(
-            self._sanitize_fts_query(self._segment(query)), collection_id, limit
+        """FTS5 + jieba BM25 搜索：AND 优先、OR 补召回，同义词再补一层。
+
+        纯 OR 查询会被高频词带偏：问“信舷防火墙还有多少库存”时，所有供应商
+        文档都含“防火墙”，真正含“库存”的设备台账反而排到第 10 名开外。
+        现在先用精确分词做 AND（要求关键实体共现），AND 结果不够时再用
+        cut_for_search 的 OR 结果补齐，并让 OR 结果排在 AND 结果之后。
+        """
+        and_query = self._sanitize_fts_query(self._query_tokens(query), " AND ")
+        or_query = self._sanitize_fts_query(
+            " ".join(self._filter_query_tokens(self._segment(query))), " OR "
         )
+
+        and_scores = (
+            self._fts_match(and_query, collection_id, limit)
+            if " AND " in and_query
+            else {}
+        )
+        or_scores = self._fts_match(or_query, collection_id, limit)
+
+        if and_scores:
+            # weight < 1 保证只靠 OR 命中的 chunk 排在 AND 命中之后
+            result = self._merge_expansion(and_scores, or_scores, weight=0.5)
+        else:
+            result = or_scores
 
         extras = self._expansion_terms(query)
         if extras:
@@ -1795,10 +2586,72 @@ class KnowledgeManager:
                 result = self._merge_expansion(result, expanded)
         return result
 
+    def _load_onnx_vectors(
+        self, collection_id: str | None
+    ) -> tuple[Any, list[str]]:
+        """加载并缓存某 collection 的全部 ONNX 向量（内存余弦检索）"""
+        cache_key = collection_id or "__all__"
+        with self._onnx_cache_lock:
+            cached = self._onnx_vector_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+        import numpy as np
+
+        conn = self._get_conn()
+        try:
+            if collection_id:
+                rows = conn.execute(
+                    "SELECT chunk_id, vector FROM kb_chunk_vectors "
+                    "WHERE collection_id = ? AND model = ?",
+                    (collection_id, self._onnx_model_id),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT chunk_id, vector FROM kb_chunk_vectors WHERE model = ?",
+                    (self._onnx_model_id,),
+                ).fetchall()
+        finally:
+            conn.close()
+
+        ids = [r["chunk_id"] for r in rows]
+        if rows:
+            matrix = np.vstack(
+                [np.frombuffer(r["vector"], dtype=np.float32) for r in rows]
+            ).astype(np.float32)
+        else:
+            dim = getattr(self._embedding_model, "dimension", 0) or 0
+            matrix = np.zeros((0, dim), dtype=np.float32)
+
+        with self._onnx_cache_lock:
+            self._onnx_vector_cache[cache_key] = (matrix, ids)
+        return matrix, ids
+
+    def _search_vector_onnx(
+        self, query: str, collection_id: str | None, limit: int
+    ) -> dict[str, float]:
+        if not self._vector_enabled or self._embedding_model is None:
+            return {}
+        try:
+            import numpy as np
+
+            q = self._embedding_model.encode([query])[0]
+            matrix, ids = self._load_onnx_vectors(collection_id)
+            if not ids:
+                return {}
+            sims = matrix @ np.asarray(q, dtype=np.float32)
+            top = np.argsort(-sims)[:limit]
+            return {ids[i]: float(sims[i]) for i in top}
+        except Exception as e:
+            logger.warning(f"[KnowledgeManager] ONNX 向量搜索失败: {e}")
+            return {}
+
     def _search_vector(
         self, query: str, collection_id: str | None, limit: int
     ) -> dict[str, float]:
-        """ChromaDB 向量搜索"""
+        """向量搜索：ONNX 内存余弦 / ChromaDB"""
+        if self._vector_backend == "onnx":
+            return self._search_vector_onnx(query, collection_id, limit)
         if not self._vector_enabled or not self._chroma_collection:
             return {}
 
@@ -1840,8 +2693,10 @@ class KnowledgeManager:
         bm25_scores: dict[str, float],
         vector_scores: dict[str, float],
         k: int = 60,
+        bm25_weight: float = 1.0,
+        vector_weight: float = 1.0,
     ) -> list[SearchResult]:
-        """Reciprocal Rank Fusion 融合 BM25 和向量排名"""
+        """加权 Reciprocal Rank Fusion 融合 BM25 和向量排名"""
         def _ranked(scores: dict[str, float]) -> dict[str, int]:
             sorted_items = sorted(scores.items(), key=lambda x: x[1], reverse=True)
             return {chunk_id: rank + 1 for rank, (chunk_id, _) in enumerate(sorted_items)}
@@ -1856,7 +2711,10 @@ class KnowledgeManager:
         for chunk_id in all_chunk_ids:
             bm25_rank = bm25_ranks.get(chunk_id, len(bm25_ranks) + 1)
             vector_rank = vector_ranks.get(chunk_id, len(vector_ranks) + 1)
-            rrf_score = 1.0 / (k + bm25_rank) + 1.0 / (k + vector_rank)
+            rrf_score = (
+                bm25_weight / (k + bm25_rank)
+                + vector_weight / (k + vector_rank)
+            )
 
             source = "hybrid"
             if chunk_id in bm25_scores and chunk_id not in vector_scores:
