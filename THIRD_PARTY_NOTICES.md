@@ -107,6 +107,43 @@ FastAPI is used as the HTTP API framework, served by Uvicorn as the ASGI server.
 
 ---
 
+## Local Embedding Model (ONNX)
+
+Optional semantic search (`vector-lite` module) bundles an int8 ONNX export of
+`BAAI/bge-small-zh-v1.5`. Files are downloaded from the pinned mirrors in
+`src/mclaw/memory/onnx_embedder.py` and verified against fixed SHA-256 hashes
+before use; the same pins are enforced by the installer bundler.
+
+### BAAI bge-small-zh-v1.5
+
+**Source:** https://huggingface.co/BAAI/bge-small-zh-v1.5
+**License:** MIT License
+**Copyright:** © Beijing Academy of Artificial Intelligence (BAAI)
+
+Text embedding model used for local vector search in the knowledge base.
+The bundled ONNX conversion is the `Xenova/bge-small-zh-v1.5` export
+(https://huggingface.co/Xenova/bge-small-zh-v1.5), which inherits the
+upstream MIT license.
+
+### ONNX Runtime
+
+**Source:** https://github.com/microsoft/onnxruntime
+**License:** MIT License
+**Copyright:** © Microsoft Corporation
+
+Runs the quantized embedding model on CPU without PyTorch. Also used by the
+knowledge base OCR path (RapidOCR).
+
+### Hugging Face tokenizers
+
+**Source:** https://github.com/huggingface/tokenizers
+**License:** Apache License 2.0
+**Copyright:** © Hugging Face Inc.
+
+Tokenizes text before ONNX embedding.
+
+---
+
 ## Desktop Runtime Toolchain
 
 The desktop application may include or download runtime/toolchain components

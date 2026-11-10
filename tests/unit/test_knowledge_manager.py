@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -627,3 +628,36 @@ class TestRerankerDecoupledFromVectorMode:
         assert km._vector_enabled is False
         assert km._reranker is not None
         assert km._reranker.started is True
+
+
+class TestOnnxModelDirResolution:
+    """vector-lite 模块随包分发的模型应优先于工作区默认目录。"""
+
+    def test_prefers_bundled_vector_lite_model(self, tmp_path, monkeypatch):
+        km = _make_km(tmp_path, monkeypatch)
+        home = tmp_path / "home"
+        model_dir = home / "modules" / "vector-lite" / "models" / "bge-small-zh-v1.5-onnx"
+        (model_dir / "onnx").mkdir(parents=True)
+        (model_dir / "tokenizer.json").write_text("{}", encoding="utf-8")
+        (model_dir / "onnx" / "model_quantized.onnx").write_bytes(b"stub")
+
+        monkeypatch.setattr(km_module, "_settings_value", lambda key, fallback: "")
+        monkeypatch.setattr(
+            "mclaw.config.settings",
+            SimpleNamespace(mclaw_home=home, project_root=tmp_path),
+        )
+
+        assert km._resolve_onnx_model_dir() == model_dir
+
+    def test_falls_back_to_workspace_data_dir(self, tmp_path, monkeypatch):
+        km = _make_km(tmp_path, monkeypatch)
+
+        monkeypatch.setattr(km_module, "_settings_value", lambda key, fallback: "")
+        monkeypatch.setattr(
+            "mclaw.config.settings",
+            SimpleNamespace(mclaw_home=tmp_path / "home", project_root=tmp_path),
+        )
+
+        assert km._resolve_onnx_model_dir() == (
+            tmp_path / "models" / "bge-small-zh-v1.5-onnx"
+        )

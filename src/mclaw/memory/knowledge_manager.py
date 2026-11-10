@@ -1547,21 +1547,53 @@ class KnowledgeManager:
             return ""
 
     def _resolve_onnx_model_dir(self) -> Path:
-        from .onnx_embedder import DEFAULT_MODEL_DIR_NAME
+        from .onnx_embedder import DEFAULT_MODEL_DIR_NAME, _find_model_file
 
         raw = self._onnx_model_dir_override or _settings_value("kb_onnx_model_dir", "")
-        if not raw:
-            return self.data_dir / "models" / DEFAULT_MODEL_DIR_NAME
-        path = Path(raw).expanduser()
-        if path.is_absolute():
-            return path
+        if raw:
+            path = Path(raw).expanduser()
+            if path.is_absolute():
+                return path
+            try:
+                from mclaw.config import settings as _settings
+
+                root = Path(getattr(_settings, "project_root", Path.cwd()))
+            except Exception:
+                root = Path.cwd()
+            return root / path
+
+        # 默认位置：先找随安装包分发的 vector-lite 模块模型，再回退到
+        # 工作区 data/knowledge/models（首次下载会写到那里）。
+        default_dir = self.data_dir / "models" / DEFAULT_MODEL_DIR_NAME
+        for candidate in self._onnx_model_dir_candidates(DEFAULT_MODEL_DIR_NAME):
+            if (candidate / "tokenizer.json").is_file() and _find_model_file(candidate):
+                return candidate
+        return default_dir
+
+    @staticmethod
+    def _onnx_model_dir_candidates(model_dir_name: str) -> list[Path]:
+        """已安装的 vector-lite 模块可能自带模型（离线客户机）。"""
+        candidates: list[Path] = []
         try:
             from mclaw.config import settings as _settings
 
-            root = Path(getattr(_settings, "project_root", Path.cwd()))
+            home = Path(_settings.mclaw_home)
         except Exception:
-            root = Path.cwd()
-        return root / path
+            home = Path.home() / ".mclaw"
+        candidates.append(home / "modules" / "vector-lite" / "models" / model_dir_name)
+
+        try:
+            from mclaw.runtime_env import get_bootstrap_manifest_path
+
+            manifest = get_bootstrap_manifest_path()
+            if manifest is not None:
+                resources = Path(manifest).parent.parent
+                candidates.append(
+                    resources / "modules" / "vector-lite" / "models" / model_dir_name
+                )
+        except Exception:
+            pass
+        return candidates
 
     def _do_onnx_init(self) -> None:
         """初始化轻量 ONNX 向量后端（不依赖 ChromaDB / torch）"""

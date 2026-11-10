@@ -12,10 +12,13 @@ Usage:
 """
 
 import argparse
+import hashlib
+import importlib.util
 import json
 import os
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -99,14 +102,88 @@ def download_wheels(module_id: str, module_def: dict, mirror: str | None = None)
     print(f"  [OK] {module_id}: {len(wheel_files)} packages, {total_size / 1024 / 1024:.1f} MB")
 
 
+def _load_onnx_embedder():
+    """Load the runtime ONNX embedder so the bundled model matches what the
+    app expects at first run (same file list, mirrors, and sha256 pins)."""
+    path = PROJECT_ROOT / "src" / "mclaw" / "memory" / "onnx_embedder.py"
+    spec = importlib.util.spec_from_file_location("_mclaw_onnx_embedder", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load ONNX embedder from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _download_onnx_file(rel: str, expected: str, dest: Path, mirrors: tuple[str, ...]) -> bool:
+    """Download one pinned model file, verifying sha256; resumable via .part."""
+    if dest.is_file() and hashlib.sha256(dest.read_bytes()).hexdigest() == expected:
+        return True
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    last_error: Exception | None = None
+    for mirror in mirrors:
+        url = f"{mirror}/{rel}"
+        tmp = dest.with_suffix(dest.suffix + ".part")
+        try:
+            print(f"  [Model] Downloading {url}")
+            with urllib.request.urlopen(url, timeout=120) as resp, open(tmp, "wb") as fh:
+                while True:
+                    block = resp.read(1024 * 256)
+                    if not block:
+                        break
+                    fh.write(block)
+            digest = hashlib.sha256(tmp.read_bytes()).hexdigest()
+            if digest != expected:
+                raise ValueError(f"sha256 mismatch: got {digest}, want {expected}")
+            os.replace(tmp, dest)
+            return True
+        except Exception as e:  # try the next mirror
+            last_error = e
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+    print(f"  [WARN] Failed to download {rel}: {last_error}")
+    return False
+
+
+def _download_onnx_model(module_id: str, model: dict) -> None:
+    """Bundle a pinned ONNX embedding model (no torch needed)."""
+    embedder = _load_onnx_embedder()
+    model_file = model.get("file") or "model_quantized.onnx"
+    rel_model = f"onnx/{model_file}"
+    pinned = embedder._MODEL_FILES
+    if rel_model not in pinned:
+        raise ValueError(f"Module {module_id}: {rel_model} has no pinned sha256")
+    target_dir = MODULES_DIR / module_id / "models" / embedder.DEFAULT_MODEL_DIR_NAME
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"\n  [Model] Downloading {module_id} ONNX model files -> {target_dir}")
+    ok = True
+    for rel, expected in pinned.items():
+        # tokenizer.json/config.json are always needed; only the configured
+        # ONNX weight file is downloaded (quantized by default).
+        if rel.startswith("onnx/") and rel != rel_model:
+            continue
+        ok = _download_onnx_file(rel, expected, target_dir / rel, embedder._MODEL_MIRRORS) and ok
+    if ok:
+        size = sum(f.stat().st_size for f in target_dir.rglob("*") if f.is_file())
+        print(f"  [OK] ONNX model bundled: {size / 1024 / 1024:.1f} MB")
+    else:
+        print(f"  [WARN] ONNX model bundle incomplete: {target_dir}")
+
+
 def download_model(module_id: str, module_def: dict):
     """Download model files needed by module"""
     model = module_def.get("model")
     if not model:
         return
 
-    if model.get("kind") != "sentence-transformers" or not model.get("name"):
-        raise ValueError(f"Unsupported model definition for module {module_id}")
+    kind = model.get("kind")
+    if kind == "onnx":
+        _download_onnx_model(module_id, model)
+        return
+    if kind != "sentence-transformers" or not model.get("name"):
+        raise ValueError(f"Unsupported model definition for module {module_id} (kind={kind!r})")
     model_name = json.dumps(model["name"])
     model_script = f"""
 import os
