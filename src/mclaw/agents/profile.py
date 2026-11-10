@@ -40,6 +40,7 @@ BUILTIN_CATEGORIES: list[dict[str, Any]] = [
     {"id": "productivity", "label": "生活效率", "color": "#E74C3C", "builtin": True},
     {"id": "devops", "label": "开发运维", "color": "#95A5A6", "builtin": True},
     {"id": "digital-employee", "label": "数字员工", "color": "#F39C12", "builtin": True},
+    {"id": "enterprise-ops", "label": "企业运营", "color": "#0F766E", "builtin": True},
 ]
 _BUILTIN_IDS = frozenset(c["id"] for c in BUILTIN_CATEGORIES)
 
@@ -125,6 +126,10 @@ class AgentProfile:
     description: str = ""
     type: AgentType = AgentType.CUSTOM
     role: str = "worker"  # "worker" | "coordinator"
+
+    # 岗位卡：标准交付物与示例问题（企业运营岗位展示/快捷入口用）
+    deliverables: list[str] = field(default_factory=list)
+    example_prompts: list[str] = field(default_factory=list)
 
     # 技能配置
     skills: list[str] = field(default_factory=list)

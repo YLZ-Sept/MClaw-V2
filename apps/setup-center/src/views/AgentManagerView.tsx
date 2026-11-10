@@ -30,6 +30,8 @@ type AgentProfile = {
   mcp_servers: string[];
   mcp_mode: string;
   custom_prompt: string;
+  deliverables?: string[];
+  example_prompts?: string[];
   preferred_endpoint?: string | null;
   endpoint_policy?: "prefer" | "require";
   category?: string;
@@ -86,6 +88,8 @@ const EMPTY_PROFILE: AgentProfile = {
   mcp_servers: [],
   mcp_mode: "all",
   custom_prompt: "",
+  deliverables: [],
+  example_prompts: [],
   preferred_endpoint: null,
   endpoint_policy: "prefer",
   category: "",
@@ -515,6 +519,8 @@ export function AgentManagerView({
       skills: profile.skills || [],
       skills_mode: profile.skills_mode || "all",
       knowledge_collections: profile.knowledge_collections || [],
+      deliverables: profile.deliverables || [],
+      example_prompts: profile.example_prompts || [],
     });
     setIsCreating(false);
     setEditorOpen(true);
@@ -699,14 +705,17 @@ export function AgentManagerView({
 
   const getCategoryLabel = (catId: string): string => {
     if (!catId) return t("agentManager.categoryAll");
-    const found = categories.find((c) => c.id === catId);
-    if (found) return found.label;
     const i18nMap: Record<string, string> = {
       general: "categoryGeneral", content: "categoryContent",
       enterprise: "categoryEnterprise", education: "categoryEducation",
       productivity: "categoryProductivity", devops: "categoryDevops",
+      "digital-employee": "categoryDigitalEmployee",
+      "enterprise-ops": "categoryEnterpriseOps",
     };
-    return i18nMap[catId] ? t(`agentManager.${i18nMap[catId]}`) : catId;
+    if (i18nMap[catId]) return t(`agentManager.${i18nMap[catId]}`);
+    const found = categories.find((c) => c.id === catId);
+    if (found) return found.label;
+    return catId;
   };
 
   const langKey = i18n.language?.startsWith("zh") ? "zh" : "en";
@@ -1276,6 +1285,36 @@ export function AgentManagerView({
                 placeholder="A brief description..."
               />
             </div>
+
+            {/* Job card: deliverables + example prompts (read-only) */}
+            {((editingProfile.deliverables?.length || 0) > 0 ||
+              (editingProfile.example_prompts?.length || 0) > 0) && (
+              <div className="space-y-2 rounded-lg border p-3">
+                <Label className="text-xs opacity-70">{t("agentManager.jobCard")}</Label>
+                {(editingProfile.deliverables?.length || 0) > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium opacity-80">{t("agentManager.deliverables")}</div>
+                    <ul className="list-disc space-y-0.5 pl-4 text-xs opacity-70">
+                      {editingProfile.deliverables!.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(editingProfile.example_prompts?.length || 0) > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium opacity-80">{t("agentManager.examplePrompts")}</div>
+                    <ul className="space-y-1">
+                      {editingProfile.example_prompts!.map((item) => (
+                        <li key={item} className="rounded bg-muted px-2 py-1 text-xs opacity-80">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Category */}
             <div className="space-y-1.5">

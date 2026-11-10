@@ -1,8 +1,8 @@
 """D 轮：SYSTEM 预置 ↔ 部门空知识库骨架的绑定一致性 + 部署回填。
 
 覆盖：
-1. 6 个数字员工预置的 knowledge_collections 与 _DIGITAL_EMPLOYEE_KB_BINDINGS 一致；
-   骨架 id 互异且以 ``sys-`` 开头；除这 6 个外无其他 SYSTEM 预置声明非空绑定。
+1. 数字员工 + 企业运营预置的 knowledge_collections 与 _DIGITAL_EMPLOYEE_KB_BINDINGS
+   一致；骨架 id 互异且以 ``sys-`` 开头；除映射内的预置外无其他 SYSTEM 预置声明非空绑定。
 2. deploy_system_presets 的升级路径会把 knowledge_collections 回填到已部署的
    （非自定义、SYSTEM）profile 上。
 3. KB manager 不可用（get_knowledge_manager 抛错）时 deploy 不抛异常、绑定照常写入。
@@ -12,9 +12,9 @@ from __future__ import annotations
 
 from mclaw.agents import presets as presets_mod
 from mclaw.agents.presets import (
-    SYSTEM_PRESETS,
     _DEPARTMENT_KB,
     _DIGITAL_EMPLOYEE_KB_BINDINGS,
+    SYSTEM_PRESETS,
     deploy_system_presets,
     get_preset_by_id,
 )
@@ -38,10 +38,10 @@ class TestBindingsConsistency:
     def test_skeleton_ids_distinct_and_reserved(self):
         ids = [meta.collection_id for meta in _DEPARTMENT_KB.values()]
         assert len(ids) == len(set(ids))
-        assert len(ids) == 5
+        assert len(ids) == 9
         assert all(cid.startswith("sys-") for cid in ids)
 
-    def test_only_digital_employees_declare_kb_bindings(self):
+    def test_only_mapped_presets_declare_kb_bindings(self):
         for preset in SYSTEM_PRESETS:
             if preset.id in _DIGITAL_EMPLOYEE_KB_BINDINGS:
                 continue
@@ -67,7 +67,7 @@ class TestDeployBackfillsKnowledgeBinding:
         }
         assert deployed >= 1
 
-    def test_ops_binds_all_five(self, tmp_path, monkeypatch):
+    def test_ops_binds_all_department_kbs(self, tmp_path, monkeypatch):
         monkeypatch.setattr(presets_mod, "_ensure_digital_employee_kb_skeletons", lambda: None)
         store = ProfileStore(tmp_path)
         store.save(_preset_copy_without_kb("ops-director-assistant"))
@@ -75,7 +75,7 @@ class TestDeployBackfillsKnowledgeBinding:
         deploy_system_presets(store)
 
         stored = store.get("ops-director-assistant")
-        assert len(stored.knowledge_collections) == 5
+        assert len(stored.knowledge_collections) == len(_DEPARTMENT_KB)
         assert sorted(stored.knowledge_collections) == sorted(
             _DIGITAL_EMPLOYEE_KB_BINDINGS["ops-director-assistant"]
         )

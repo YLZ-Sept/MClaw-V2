@@ -560,7 +560,11 @@ class AgentFactory:
 
         对不应保留的插件执行 unload，清理其 hooks、tools、channels。
         """
-        if profile.plugins_mode == "all" or not profile.plugins:
+        if profile.plugins_mode == "all":
+            return
+        # inclusive + 空列表 = 不加载任何插件（敏感岗位最小权限）。
+        # exclusive + 空列表才是“不排除任何插件”的默认语义。
+        if profile.plugins_mode == "exclusive" and not profile.plugins:
             return
 
         pm = getattr(agent, "_plugin_manager", None)

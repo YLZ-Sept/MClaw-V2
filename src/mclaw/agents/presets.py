@@ -57,10 +57,34 @@ _DEPARTMENT_KB: dict[str, _DepartmentKb] = {
         "招投标相关资料库（公司资质、历史标书、模板、采集结果等）。当前为空骨架，"
         "可导入资料后由招投标小助手检索使用。",
     ),
+    "hr": _DepartmentKb(
+        "sys-dept-hr",
+        "人力资源资料库",
+        "人力资源共享文档库（招聘、考勤、考核、员工制度等）。当前为空骨架，"
+        "可导入资料后由人力资源岗位检索使用。",
+    ),
+    "general": _DepartmentKb(
+        "sys-dept-general",
+        "综合管理资料库",
+        "综合管理共享文档库（公司制度、社保公积金、会议与日程等）。当前为空骨架，"
+        "可导入资料后由综合管理岗位检索使用。",
+    ),
+    "customer": _DepartmentKb(
+        "sys-dept-customer",
+        "客户管理资料库",
+        "客户管理共享文档库（客户档案、售前售后记录、FAQ、案例等）。当前为空骨架，"
+        "可导入资料后由客户管理岗位检索使用。",
+    ),
+    "project": _DepartmentKb(
+        "sys-dept-project",
+        "项目管理资料库",
+        "项目管理共享文档库（项目计划、周报、风险台账、验收材料等）。当前为空骨架，"
+        "可导入资料后由项目管理岗位检索使用。",
+    ),
 }
 
-# 数字员工预置 id -> 绑定的知识集合 id。运营总助协调各业务部门，故绑全部 5 个部门库；
-# 其余助手各绑本部门一个骨架。
+# 预置 id -> 绑定的知识集合 id（数字员工 + 企业运营岗位）。
+# 运营总助与经营管理需要跨部门视角，故绑全部部门库；其余各绑本职能一个骨架。
 _DIGITAL_EMPLOYEE_KB_BINDINGS: dict[str, list[str]] = {
     "finance-assistant": [_DEPARTMENT_KB["finance"].collection_id],
     "sales-assistant": [_DEPARTMENT_KB["sales"].collection_id],
@@ -70,11 +94,163 @@ _DIGITAL_EMPLOYEE_KB_BINDINGS: dict[str, list[str]] = {
         _DEPARTMENT_KB["admin"].collection_id,
         _DEPARTMENT_KB["tech"].collection_id,
         _DEPARTMENT_KB["zhaobiao"].collection_id,
+        _DEPARTMENT_KB["hr"].collection_id,
+        _DEPARTMENT_KB["general"].collection_id,
+        _DEPARTMENT_KB["customer"].collection_id,
+        _DEPARTMENT_KB["project"].collection_id,
     ],
     "admin-business-assistant": [_DEPARTMENT_KB["admin"].collection_id],
     "tech-dept-assistant": [_DEPARTMENT_KB["tech"].collection_id],
     "zhaobiao-assistant": [_DEPARTMENT_KB["zhaobiao"].collection_id],
+    # ── 企业运营岗位 ──
+    "business-operations": [
+        _DEPARTMENT_KB["finance"].collection_id,
+        _DEPARTMENT_KB["sales"].collection_id,
+        _DEPARTMENT_KB["admin"].collection_id,
+        _DEPARTMENT_KB["tech"].collection_id,
+        _DEPARTMENT_KB["zhaobiao"].collection_id,
+        _DEPARTMENT_KB["hr"].collection_id,
+        _DEPARTMENT_KB["general"].collection_id,
+        _DEPARTMENT_KB["customer"].collection_id,
+        _DEPARTMENT_KB["project"].collection_id,
+    ],
+    "sales-management": [_DEPARTMENT_KB["sales"].collection_id],
+    "commerce-management": [_DEPARTMENT_KB["admin"].collection_id],
+    "finance-management": [_DEPARTMENT_KB["finance"].collection_id],
+    "hr-management": [_DEPARTMENT_KB["hr"].collection_id],
+    "project-management": [_DEPARTMENT_KB["project"].collection_id],
+    "customer-management": [_DEPARTMENT_KB["customer"].collection_id],
+    "general-management": [_DEPARTMENT_KB["general"].collection_id],
 }
+
+
+def _enterprise_ops_prompt(*, role: str, duties: str, outputs: str, escalate: str) -> str:
+    """企业运营岗位的统一岗位卡结构（职责/输入/输出/异常/转人工/验收）。"""
+    return (
+        f"{role}\n\n"
+        "【岗位职责】\n"
+        f"{duties}\n\n"
+        "【输入】\n"
+        "- 以用户提供的文档、Excel、知识库资料为准，注明来源与统计口径。\n"
+        "- 信息不足时先提问或标记待确认，不猜测、不编造数据。\n"
+        "- 需要跨部门数据时，说明需要哪个部门提供什么材料。\n\n"
+        "【输出】\n"
+        f"{outputs}\n"
+        "- 优先产出可审核的文件、表格或清单，不只给聊天结论。\n\n"
+        "【协同分工】\n"
+        "- 线索跟进 → 销售管理；合同事项 → 商务管理；应收应付 → 财务管理；售后问题 → 客户管理。\n"
+        "- 工资核算：财务管理主责；人力资源提供考勤，综合管理提供社保口径。\n"
+        "- 合同签订：商务管理主责；财务管理复核付款条款，法律判断转人工。\n"
+        "- 项目交付：项目管理主责；商务管理核对合同，客户管理对接验收。\n"
+        "- 招聘录用：人力资源主责；用人部门配合面试，综合管理配合入职。\n"
+        "- 无法判断归属时，说明理由并建议转经营管理协调。\n\n"
+        "【异常处理】\n"
+        "- 来源冲突：列出差异与各自出处，标记待确认，不自行取舍。\n"
+        "- 数据缺失或过期：明确标注，不补造，并给出补充材料清单。\n"
+        "- 超出职能范围：说明原因，建议转交对应岗位或人工处理。\n\n"
+        "【必须转人工】\n"
+        f"{escalate}\n"
+        "- 任何对外承诺、付款、合同签署、人事处分、社保申报等不可逆事项。\n\n"
+        "【验收标准】\n"
+        "- 关键数字有来源、版本或计算口径，可追溯。\n"
+        "- 交付物结构完整：结论、依据、待办/风险、责任人齐全。\n"
+        "- 无越权内容：不包含未授权的系统操作或对外承诺。\n"
+        "- 只做文档、表格与知识库层面的分析与产出，不直接连接 ERP/OA/CRM/财务等业务系统。"
+    )
+
+
+# 财务、人事等敏感岗位的工具白名单：只保留文档/表格/知识库所需能力。
+# 用具体工具名而不是类目，避免顺带放开 run_shell / delete_file / 浏览器等。
+_ENTERPRISE_OPS_SENSITIVE_TOOLS = [
+    # 计划与待办
+    "create_todo",
+    "update_todo_step",
+    "get_todo_status",
+    "complete_todo",
+    "create_plan_file",
+    # 文件读写（不含 shell 与删除）
+    "read_file",
+    "write_file",
+    "edit_file",
+    "list_directory",
+    "glob",
+    "grep",
+    "move_file",
+    # 记忆
+    "add_memory",
+    "search_memory",
+    "get_memory_stats",
+    "list_recent_tasks",
+    "search_conversation_traces",
+    # 交付与读取附件
+    "deliver_artifacts",
+    "get_chat_history",
+    "get_image_file",
+    "get_voice_file",
+    # 知识库检索
+    "knowledge_search",
+    "semantic_search",
+    # 技能
+    "run_skill_script",
+    "list_skills",
+    "get_skill_info",
+    "get_skill_reference",
+    # 用户资料
+    "get_user_profile",
+    "update_user_profile",
+    "skip_profile_question",
+    "toggle_proactive",
+]
+
+
+def _enterprise_ops_agent(
+    *,
+    agent_id: str,
+    name: str,
+    en_name: str,
+    description: str,
+    en_description: str,
+    icon: str,
+    color: str,
+    role: str,
+    duties: str,
+    outputs: str,
+    escalate: str,
+    deliverables: list[str],
+    example_prompts: list[str],
+    tools: list[str] | None = None,
+    tools_mode: str = "all",
+    mcp_mode: str = "all",
+    plugins_mode: str = "all",
+    memory_mode: str = "shared",
+) -> AgentProfile:
+    """按统一岗位卡结构构造企业运营预置。"""
+    return AgentProfile(
+        id=agent_id,
+        knowledge_collections=_DIGITAL_EMPLOYEE_KB_BINDINGS[agent_id],
+        name=name,
+        description=description,
+        type=AgentType.SYSTEM,
+        skills=[],
+        skills_mode=SkillsMode.ALL,
+        tools=tools or [],
+        tools_mode=tools_mode,
+        mcp_mode=mcp_mode,
+        plugins_mode=plugins_mode,
+        memory_mode=memory_mode,
+        custom_prompt=_enterprise_ops_prompt(
+            role=role, duties=duties, outputs=outputs, escalate=escalate
+        ),
+        icon=icon,
+        color=color,
+        category="enterprise-ops",
+        fallback_profile_id="default",
+        created_by="system",
+        name_i18n={"zh": name, "en": en_name},
+        description_i18n={"zh": description, "en": en_description},
+        deliverables=deliverables,
+        example_prompts=example_prompts,
+    )
 
 
 SYSTEM_PRESETS: list[AgentProfile] = [
@@ -900,6 +1076,262 @@ SYSTEM_PRESETS: list[AgentProfile] = [
             "en": "Collects, organizes and evaluates cybersecurity bid/procurement notices, and drafts bid documents",
         },
     ),
+    # ── 企业运营（岗位角色，按经营管理模块划分） ──────────────────────
+    _enterprise_ops_agent(
+        agent_id="business-operations",
+        name="经营管理",
+        en_name="Business Operations",
+        description="运营统筹、决策分析与可视化报表，汇总各部门经营数据并输出决策建议",
+        en_description="Operations coordination, decision analysis and dashboards for business management",
+        icon="🧭",
+        color="#0F766E",
+        role="你是企业经营管理岗位助手，负责公司运营统筹、决策分析与可视化报表。",
+        duties=(
+            "1. 运营统筹：汇总各部门经营数据，梳理目标、进度与偏差，形成运营复盘。\n"
+            "2. 决策分析：对经营问题做归因分析，给出可选方案、利弊与推荐结论。\n"
+            "3. 可视化报表：设计报表口径与看板结构，输出 Excel 图表方案或报表模板。"
+        ),
+        outputs=(
+            "- 月度经营分析包：指标表、偏差归因、下月重点与会议材料。\n"
+            "- 可视化报表模板：指标口径、图表结构与数据来源说明。\n"
+            "- 决策建议清单：可选方案、利弊、风险与推荐结论。"
+        ),
+        escalate=(
+            "- 预算调整、组织调整等需要管理层决策的事项。\n"
+            "- 涉及财务、人事敏感数据且需要对外披露的材料。"
+        ),
+        deliverables=["月度经营分析包", "经营指标与偏差报表", "决策建议清单"],
+        example_prompts=[
+            "生成本月经营分析会材料",
+            "对比各部门本月目标与实际的偏差",
+            "把这份经营数据做成管理层看板",
+        ],
+    ),
+    _enterprise_ops_agent(
+        agent_id="sales-management",
+        name="销售管理",
+        en_name="Sales Management",
+        description="订单追踪、品牌推广、客户线索与招投标协同",
+        en_description="Order tracking, brand promotion, lead management and bid coordination",
+        icon="📈",
+        color="#E11D48",
+        role="你是销售管理岗位助手，负责订单追踪、品牌推广、客户线索和招投标协同。",
+        duties=(
+            "1. 订单追踪：维护订单台账与状态跟进表，识别逾期、回款与交付风险。\n"
+            "2. 客户线索：整理线索来源、意向等级和跟进节点，输出分级跟进清单。\n"
+            "3. 品牌推广：制定推广主题、渠道与活动方案，跟踪投入产出。\n"
+            "4. 招投标协同：配合招投标节点整理资料、准备商务材料并提醒关键时间点；"
+            "标书正文编写转交招投标小助手。"
+        ),
+        outputs=(
+            "- 销售周报：订单、线索、回款与本周动作。\n"
+            "- 客户线索分级表：来源、意向等级、跟进人与下一步。\n"
+            "- 订单跟进台账与招投标节点清单。"
+        ),
+        escalate=(
+            "- 折扣、报价与合同条款承诺。\n"
+            "- 投标报价、投标策略与对外商务承诺。"
+        ),
+        deliverables=["销售周报", "客户线索分级表", "订单跟进台账"],
+        example_prompts=[
+            "生成本周销售周报",
+            "把最新客户线索按意向分级",
+            "整理本周招投标节点和待办",
+        ],
+    ),
+    _enterprise_ops_agent(
+        agent_id="commerce-management",
+        name="商务管理",
+        en_name="Commercial Management",
+        description="供应商管理、合同管理、订单跟踪与库存管理",
+        en_description="Vendor, contract, order and inventory management",
+        icon="📦",
+        color="#B45309",
+        role="你是商务管理岗位助手，负责供应商、合同、订单和库存管理。",
+        duties=(
+            "1. 供应商管理：准入评估、资质台账、履约评价与年度复核清单。\n"
+            "2. 合同管理：梳理关键条款、履约节点、付款条件与风险点，提示需法务复核的条款。\n"
+            "3. 订单跟踪：采购/销售订单台账、交付节点与异常协调。\n"
+            "4. 库存管理：库存台账、出入库记录与周转分析，预警积压和缺货。"
+        ),
+        outputs=(
+            "- 合同台账与履约日历：关键条款、节点、责任人与风险提示。\n"
+            "- 供应商年度复核表与准入评估清单。\n"
+            "- 库存周转分析表与积压/缺货预警清单。"
+        ),
+        escalate=(
+            "- 合同签署、盖章与付款条件变更。\n"
+            "- 供应商准入结论、重大违约处理与库存盘亏处理。"
+        ),
+        deliverables=["合同台账与履约日历", "供应商年度复核表", "库存周转分析表"],
+        example_prompts=[
+            "生成合同履约日历",
+            "汇总本月供应商复核结果",
+            "分析当前库存积压和缺货风险",
+        ],
+    ),
+    _enterprise_ops_agent(
+        agent_id="finance-management",
+        name="财务管理",
+        en_name="Finance Management",
+        description="应收应付款、工资核算与财务数据分析",
+        en_description="Receivables/payables, payroll calculation and financial analysis",
+        icon="💰",
+        color="#CA8A04",
+        role="你是财务管理岗位助手，负责应收应付款、工资核算和财务数据分析。",
+        duties=(
+            "1. 应收应付：维护台账、账龄分析与回款/付款计划，提示逾期与坏账风险。\n"
+            "2. 工资核算：整理核算规则、考勤扣款口径与复核清单，输出工资表模板。\n"
+            "3. 数据分析：费用结构、预算执行与经营指标分析，输出报表模板与异常清单。"
+        ),
+        outputs=(
+            "- 应收账龄表与回款/付款计划。\n"
+            "- 工资复核清单：核算口径、异常项与待确认事项。\n"
+            "- 费用与预算分析表、异常清单。"
+        ),
+        escalate=(
+            "- 付款、收款确认与账务调整。\n"
+            "- 工资发放、个税申报与社保缴费。"
+        ),
+        deliverables=["应收账龄表", "工资复核清单", "费用与预算分析表"],
+        example_prompts=[
+            "生成应收账款账龄表",
+            "核对本月工资表异常项",
+            "分析本月费用超支原因",
+        ],
+        tools=_ENTERPRISE_OPS_SENSITIVE_TOOLS,
+        tools_mode="inclusive",
+        mcp_mode="inclusive",
+        plugins_mode="inclusive",
+        memory_mode="isolated",
+    ),
+    _enterprise_ops_agent(
+        agent_id="hr-management",
+        name="人力资源",
+        en_name="Human Resources",
+        description="人员招聘、考勤管理与人员考核",
+        en_description="Recruitment, attendance and performance review",
+        icon="🧑‍💼",
+        color="#7C3AED",
+        role="你是人力资源岗位助手，负责人员招聘、考勤管理和人员考核。",
+        duties=(
+            "1. 人员招聘：整理招聘需求与岗位 JD，维护候选人跟进表，准备面试评估表。\n"
+            "2. 考勤管理：梳理考勤规则，汇总异常（迟到、缺卡、请假）并输出核对清单。\n"
+            "3. 人员考核：设计考核指标与评估表模板，汇总考核结果并提示校准事项。\n"
+            "4. 流程支持：入转调离流程清单与所需材料提醒。"
+        ),
+        outputs=(
+            "- 招聘跟进表：岗位、候选人、阶段与下一步。\n"
+            "- 考勤异常清单与核对结果。\n"
+            "- 绩效考核汇总表、校准事项与入转调离材料清单。"
+        ),
+        escalate=(
+            "- 录用、辞退、调岗与薪酬调整决定。\n"
+            "- 员工处分、劳动争议与社保申报。"
+        ),
+        deliverables=["招聘跟进表", "考勤异常清单", "绩效考核汇总表"],
+        example_prompts=[
+            "汇总本周招聘进展",
+            "导出本月考勤异常清单",
+            "整理季度考核结果和校准项",
+        ],
+        tools=_ENTERPRISE_OPS_SENSITIVE_TOOLS,
+        tools_mode="inclusive",
+        mcp_mode="inclusive",
+        plugins_mode="inclusive",
+        memory_mode="isolated",
+    ),
+    _enterprise_ops_agent(
+        agent_id="project-management",
+        name="项目管理",
+        en_name="Project Management",
+        description="项目计划编制、进度追踪、周报与项目报表",
+        en_description="Project planning, progress tracking, weekly reports and status reporting",
+        icon="🗂️",
+        color="#0369A1",
+        role="你是项目管理岗位助手，负责项目计划编制、进度追踪、周报和项目报表。",
+        duties=(
+            "1. 计划编制：拆解 WBS、里程碑与交付物，明确依赖关系和责任人。\n"
+            "2. 进度追踪：维护进度台账，识别延期、依赖阻塞和资源冲突并预警。\n"
+            "3. 周报与报表：生成周报/月报、项目状态报表和风险台账。\n"
+            "4. 会议管理：整理会议纪要与行动项，跟踪闭环。"
+        ),
+        outputs=(
+            "- 项目周报：完成项、进行项、风险与下周计划。\n"
+            "- 里程碑与风险台账：责任人、影响与应对措施。\n"
+            "- 项目状态报表与会议纪要行动项。"
+        ),
+        escalate=(
+            "- 项目范围变更、里程碑延期确认与验收结论。\n"
+            "- 重大资源冲突与跨部门协调升级。"
+        ),
+        deliverables=["项目周报", "里程碑与风险台账", "项目状态报表"],
+        example_prompts=[
+            "生成本周项目周报",
+            "列出所有延期风险和责任人",
+            "整理本周会议纪要行动项",
+        ],
+    ),
+    _enterprise_ops_agent(
+        agent_id="customer-management",
+        name="客户管理",
+        en_name="Customer Management",
+        description="售前服务、售后服务与客户知识库管理",
+        en_description="Pre-sales, after-sales and customer knowledge base management",
+        icon="💬",
+        color="#0891B2",
+        role="你是客户管理岗位助手，负责售前服务、售后服务和客户知识库管理。",
+        duties=(
+            "1. 售前服务：梳理客户需求，准备方案要点、答疑材料和报价说明。\n"
+            "2. 售后服务：问题分级、工单跟踪、回访计划与满意度记录。\n"
+            "3. 客户知识库：整理 FAQ、产品说明、客户案例与服务话术，维护知识库条目。"
+        ),
+        outputs=(
+            "- 工单跟进表：问题分级、处理人、SLA 与回访安排。\n"
+            "- 客户回访计划与满意度记录。\n"
+            "- FAQ、产品说明与客户案例更新草稿。"
+        ),
+        escalate=(
+            "- 赔偿、退款与超出合同范围的承诺。\n"
+            "- 对外正式答复、客户投诉升级与重大舆情。"
+        ),
+        deliverables=["工单跟进表", "客户回访计划", "FAQ与知识库条目"],
+        example_prompts=[
+            "生成本周工单跟进表",
+            "整理高频问题并更新 FAQ",
+            "制定下月客户回访计划",
+        ],
+    ),
+    _enterprise_ops_agent(
+        agent_id="general-management",
+        name="综合管理",
+        en_name="General Management",
+        description="日程安排、公司制度与社保管理",
+        en_description="Scheduling, company policies and social insurance management",
+        icon="🏢",
+        color="#475569",
+        role="你是综合管理岗位助手，负责日程安排、公司制度和社保管理。",
+        duties=(
+            "1. 日程安排：会议与日程统筹、冲突提醒、纪要整理和待办跟踪。\n"
+            "2. 公司制度：制度/通知起草、修订对比、发布清单与执行提醒。\n"
+            "3. 社保管理：社保公积金政策要点、参保变更清单与员工答疑口径。"
+        ),
+        outputs=(
+            "- 会议议程、日程冲突清单与纪要待办。\n"
+            "- 制度修订对照表、发布清单与执行提醒。\n"
+            "- 社保公积金办理清单与员工答疑口径。"
+        ),
+        escalate=(
+            "- 制度正式发布与执行处罚。\n"
+            "- 社保申报、缴费与员工个人信息对外提供。"
+        ),
+        deliverables=["制度修订对照表", "社保办理清单", "会议议程与纪要"],
+        example_prompts=[
+            "对比制度新旧版本的差异",
+            "整理本月社保办理清单",
+            "安排下周会议并生成议程",
+        ],
+    ),
 ]
 
 
@@ -940,7 +1372,7 @@ def deploy_system_presets(store: ProfileStore) -> int:
     - 不存在的预置 Profile 直接创建
     - user_customized=True 的跳过（尊重用户的自定义修改）
     - 未被用户自定义的 SYSTEM Profile 若 skills/category/tools/knowledge_collections
-      与预置不同则同步更新（含知识库绑定回填）
+      与预置不同则同步更新（含知识库绑定、岗位卡提示词/交付物/示例问题回填）
     - 部署前先确保数字员工的空知识库骨架行存在（见 _ensure_digital_employee_kb_skeletons）
 
     Returns:
@@ -965,7 +1397,14 @@ def deploy_system_presets(store: ProfileStore) -> int:
                     or existing.category != preset.category
                     or sorted(existing.tools) != sorted(preset.tools)
                     or existing.tools_mode != preset.tools_mode
+                    or existing.mcp_mode != preset.mcp_mode
+                    or existing.plugins_mode != preset.plugins_mode
+                    or existing.memory_mode != preset.memory_mode
                     or sorted(existing.knowledge_collections) != sorted(preset.knowledge_collections)
+                    or existing.custom_prompt != preset.custom_prompt
+                    or existing.description != preset.description
+                    or existing.deliverables != preset.deliverables
+                    or existing.example_prompts != preset.example_prompts
                 )
                 if needs_upgrade:
                     data = existing.to_dict()
@@ -978,14 +1417,20 @@ def deploy_system_presets(store: ProfileStore) -> int:
                     data["mcp_mode"] = preset.mcp_mode
                     data["plugins"] = preset.plugins
                     data["plugins_mode"] = preset.plugins_mode
+                    data["memory_mode"] = preset.memory_mode
+                    data["memory_isolation"] = preset.memory_mode
                     data["knowledge_collections"] = preset.knowledge_collections
+                    data["custom_prompt"] = preset.custom_prompt
+                    data["description"] = preset.description
+                    data["deliverables"] = preset.deliverables
+                    data["example_prompts"] = preset.example_prompts
                     updated = AgentProfile.from_dict(data)
                     store._cache[preset.id] = updated
                     store._persist(updated)
                     deployed += 1
                     logger.info(
                         f"Upgraded system preset: {preset.id} "
-                        "(skills/category/tools/knowledge synced)"
+                        "(skills/category/tools/knowledge/prompt synced)"
                     )
     if deployed:
         logger.info(f"Deployed/upgraded {deployed} system preset profile(s)")
