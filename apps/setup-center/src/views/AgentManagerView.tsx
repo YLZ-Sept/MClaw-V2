@@ -884,7 +884,7 @@ export function AgentManagerView({
               display: "inline-flex", alignItems: "center", gap: 4,
             }}
           >
-            {cat.label}
+            {getCategoryLabel(cat.id)}
             <Badge variant="secondary" className={cn("ml-1 px-1.5 py-0 text-[11px] min-w-[1.25rem] justify-center rounded-full", activeCategory === cat.id ? "bg-white/25 text-primary-foreground" : "bg-foreground/10 text-foreground/60")}>{categoryProfileCounts.get(cat.id) || 0}</Badge>
             {!cat.builtin && (
               <span
@@ -1327,7 +1327,7 @@ export function AgentManagerView({
                 <SelectContent>
                   <SelectItem value="_none_">—</SelectItem>
                   {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
+                    <SelectItem key={cat.id} value={cat.id}>{getCategoryLabel(cat.id)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1359,7 +1359,7 @@ export function AgentManagerView({
                                 : "border-transparent hover:bg-accent"
                             }`}
                           >
-                            {cat.label}
+                            {getCategoryLabel(cat.id)}
                           </button>
                         ))}
                       </div>
