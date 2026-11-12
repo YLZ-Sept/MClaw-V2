@@ -1392,11 +1392,308 @@ AIGC_VIDEO_STUDIO: dict = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Enterprise operations — 8 岗位协同（对应「企业运营」Agent 分类）
+#
+# 与 startup-company 等模板不同，这里的 8 个节点显式绑定 ``agent_profile_id``，
+# 直接复用企业运营预置的岗位卡/知识库/权限语义。节点工具只放行文档、表格、
+# 知识库、交付和技能脚本，不放开 shell / 删除 / 浏览器 / 桌面操作。
+#
+# 注意：org 节点的 KB 检索目前走主 Agent 的 handler registry，节点级
+# ``knowledge_collections`` 尚未逐节点注入；因此节点 prompt 同时要求
+# “以用户/上级提供的文件和工作区资料为准”，不把知识库检索作为唯一来源。
+# ---------------------------------------------------------------------------
+
+_ENTERPRISE_OPS_NODE_TOOLS = [
+    # 交互：信息不足时向上级/用户提问
+    "ask_user",
+    # 计划与待办
+    "create_todo",
+    "update_todo_step",
+    "get_todo_status",
+    "complete_todo",
+    "create_plan_file",
+    # 文件读写（不含 shell / delete_file）
+    "read_file",
+    "write_file",
+    "edit_file",
+    "append_file",
+    "list_directory",
+    "glob",
+    "grep",
+    "move_file",
+    # 记忆
+    "add_memory",
+    "search_memory",
+    "get_memory_stats",
+    "list_recent_tasks",
+    "search_conversation_traces",
+    # 交付与读取附件
+    "deliver_artifacts",
+    "get_chat_history",
+    "get_image_file",
+    "get_voice_file",
+    # 知识库检索
+    "knowledge_search",
+    "semantic_search",
+    # 技能
+    "run_skill_script",
+    "list_skills",
+    "get_skill_info",
+    "get_skill_reference",
+    # 用户资料
+    "get_user_profile",
+    "update_user_profile",
+    "skip_profile_question",
+    "toggle_proactive",
+]
+
+
+def _enterprise_ops_node(
+    *,
+    node_id: str,
+    role_title: str,
+    role_goal: str,
+    role_backstory: str,
+    custom_prompt: str,
+    department: str,
+    level: int,
+    x: int,
+    y: int,
+    avatar: str,
+    can_delegate: bool,
+) -> dict:
+    return {
+        "id": node_id,
+        "role_title": role_title,
+        "role_goal": role_goal,
+        "role_backstory": role_backstory,
+        "agent_source": "local",
+        "agent_profile_id": node_id,
+        "position": {"x": x, "y": y},
+        "level": level,
+        "department": department,
+        "avatar": avatar,
+        "custom_prompt": custom_prompt,
+        "external_tools": list(_ENTERPRISE_OPS_NODE_TOOLS),
+        "can_delegate": can_delegate,
+        "can_escalate": True,
+    }
+
+
+ENTERPRISE_OPERATIONS: dict = {
+    "name": "企业运营中心（8 岗）",
+    "description": (
+        "经营管理统筹，销售/商务/财务/人力/项目/客户/综合 7 个岗位协同。"
+        "覆盖月度经营分析、销售周报、合同台账、工资复核、招聘考勤、项目周报、"
+        "工单回访、制度社保等企业运营场景。"
+    ),
+    "icon": "🧭",
+    "tags": ["enterprise", "operations", "business", "8-roles"],
+    "user_persona": {
+        "title": "经营负责人",
+        "display_name": "经营负责人",
+        "description": "经营目标下达与最终验收人",
+    },
+    "core_business": (
+        "围绕月度经营分析会，由经营管理统一拆解目标并派发给 7 个岗位："
+        "销售出周报与线索分级，商务出合同台账与履约日历，财务出应收账龄与"
+        "工资复核，人力出招聘跟进与考勤异常，项目出项目周报与风险台账，"
+        "客户出工单跟进与 FAQ，综合出制度修订与社保清单；最后汇总为经营分析包。"
+        "所有岗位只做文档、表格、知识库层面的分析与产出，不直接连接 ERP/OA/CRM。"
+    ),
+    "heartbeat_enabled": False,
+    "heartbeat_interval_s": 3600,
+    "heartbeat_prompt": "检查 7 个岗位的交付进度和阻塞，必要时提醒经营管理协调。",
+    "standup_enabled": False,
+    "standup_cron": "0 9 * * 1-5",
+    "standup_agenda": "各岗位汇报本周进展、风险和需要协调的事项。",
+    "allow_cross_level": False,
+    "max_delegation_depth": 2,
+    "conflict_resolution": "manager",
+    "scaling_enabled": False,
+    "max_nodes": 8,
+    "scaling_approval": "user",
+    "nodes": [
+        _enterprise_ops_node(
+            node_id="business-operations",
+            role_title="经营管理",
+            role_goal="拆解经营目标，派发给 7 个岗位，汇总经营分析包与决策建议",
+            role_backstory="企业经营管理负责人，擅长目标拆解、经营分析和跨部门协调。",
+            custom_prompt=(
+                "你是企业经营管理协调者。收到经营目标后，先拆解为销售、商务、财务、"
+                "人力、项目、客户、综合七条线的具体任务，再逐个派发给直属岗位；"
+                "自己负责口径统一、进度跟踪、冲突裁决和最终汇总，不代替下级执行专业工作。"
+                "汇总时必须保留数据来源与统计口径，列出偏差、风险、待办和责任人。"
+                "预算调整、组织调整、对外披露等事项必须转人工。"
+                "只做文档、表格、知识库层面的分析与产出，不直接连接 ERP/OA/CRM/财务系统。"
+            ),
+            department="经营管理",
+            level=0,
+            x=400,
+            y=0,
+            avatar="ceo",
+            can_delegate=True,
+        ),
+        _enterprise_ops_node(
+            node_id="sales-management",
+            role_title="销售管理",
+            role_goal="维护订单、客户线索与销售周报，协同招投标节点",
+            role_backstory="销售管理岗位，负责订单、线索、品牌推广和招投标协同。",
+            custom_prompt=(
+                "你是销售管理岗位。负责订单台账、客户线索分级、销售周报和招投标节点协同。"
+                "输出要包含数据来源、跟进人、下一步和风险；线索冲突或口径不一致时列差异待确认。"
+                "折扣、报价、合同条款承诺、投标报价与对外商务承诺必须转人工。"
+                "标书正文编写转交招投标小助手。只做文档、表格、知识库层面的产出。"
+            ),
+            department="销售部",
+            level=1,
+            x=0,
+            y=160,
+            avatar="marketer",
+            can_delegate=False,
+        ),
+        _enterprise_ops_node(
+            node_id="commerce-management",
+            role_title="商务管理",
+            role_goal="维护供应商、合同、订单和库存台账，提示履约风险",
+            role_backstory="商务管理岗位，负责供应商、合同、订单和库存管理。",
+            custom_prompt=(
+                "你是商务管理岗位。负责供应商准入与复核、合同关键条款与履约节点、"
+                "采购/销售订单跟踪、库存周转与积压缺货预警。输出合同台账、履约日历、"
+                "供应商复核表和库存分析表；条款冲突或来源不一致时列差异待确认。"
+                "合同签署、盖章、付款条件变更、供应商准入结论和重大违约处理必须转人工。"
+                "只做文档、表格、知识库层面的产出。"
+            ),
+            department="商务部",
+            level=1,
+            x=110,
+            y=160,
+            avatar="analyst",
+            can_delegate=False,
+        ),
+        _enterprise_ops_node(
+            node_id="finance-management",
+            role_title="财务管理",
+            role_goal="维护应收应付、工资复核和费用分析，提示资金风险",
+            role_backstory="财务管理岗位，负责应收应付、工资核算和费用分析。",
+            custom_prompt=(
+                "你是财务管理岗位。负责应收应付台账、账龄分析、工资复核清单和费用/预算分析。"
+                "关键数字必须注明来源、版本和计算口径；异常项列出待确认事项，不补造数据。"
+                "付款、收款确认、账务调整、工资发放、个税申报和社保缴费必须转人工。"
+                "只使用用户提供的脱敏/样例数据，只做文档、表格、知识库层面的产出，"
+                "不直接连接财务系统。"
+            ),
+            department="财务部",
+            level=1,
+            x=220,
+            y=160,
+            avatar="cfo",
+            can_delegate=False,
+        ),
+        _enterprise_ops_node(
+            node_id="hr-management",
+            role_title="人力资源",
+            role_goal="维护招聘、考勤和考核清单，提示人事合规事项",
+            role_backstory="人力资源岗位，负责招聘、考勤和人员考核。",
+            custom_prompt=(
+                "你是人力资源岗位。负责招聘需求/JD、候选人跟进、考勤异常清单、"
+                "绩效考核汇总和入转调离材料清单。输出要可直接核对；缺失信息列补充清单。"
+                "录用、辞退、调岗、薪酬调整、员工处分、劳动争议和社保申报必须转人工。"
+                "只使用脱敏/样例数据，只做文档、表格、知识库层面的产出。"
+            ),
+            department="人力资源部",
+            level=1,
+            x=330,
+            y=160,
+            avatar="hr",
+            can_delegate=False,
+        ),
+        _enterprise_ops_node(
+            node_id="project-management",
+            role_title="项目管理",
+            role_goal="维护项目计划、进度、周报和风险台账，跟踪行动项闭环",
+            role_backstory="项目管理岗位，负责计划、进度、周报和风险。",
+            custom_prompt=(
+                "你是项目管理岗位。负责 WBS/里程碑拆解、进度台账、项目周报、"
+                "风险台账和会议行动项跟踪。周报必须包含完成项、进行项、风险与下周计划；"
+                "风险必须有责任人、影响和应对措施。范围变更、里程碑延期确认、验收结论"
+                "和重大资源冲突必须转人工。只做文档、表格、知识库层面的产出。"
+            ),
+            department="项目管理部",
+            level=1,
+            x=440,
+            y=160,
+            avatar="pm",
+            can_delegate=False,
+        ),
+        _enterprise_ops_node(
+            node_id="customer-management",
+            role_title="客户管理",
+            role_goal="维护售前售后工单、回访计划和客户 FAQ",
+            role_backstory="客户管理岗位，负责售前、售后和客户知识库。",
+            custom_prompt=(
+                "你是客户管理岗位。负责售前需求梳理、售后工单分级与 SLA 跟踪、"
+                "回访计划、满意度记录和 FAQ/客户案例更新。输出工单跟进表、回访计划"
+                "和知识库条目草稿；客户投诉或问题升级要分级说明。赔偿、退款、"
+                "超出合同范围的承诺、对外正式答复和重大舆情必须转人工。"
+                "只做文档、表格、知识库层面的产出。"
+            ),
+            department="客户管理部",
+            level=1,
+            x=550,
+            y=160,
+            avatar="support",
+            can_delegate=False,
+        ),
+        _enterprise_ops_node(
+            node_id="general-management",
+            role_title="综合管理",
+            role_goal="维护日程会议、制度修订和社保办理清单",
+            role_backstory="综合管理岗位，负责日程、制度和社保管理。",
+            custom_prompt=(
+                "你是综合管理岗位。负责会议与日程统筹、冲突提醒、纪要待办、"
+                "制度/通知起草与修订对照、社保公积金办理清单和员工答疑口径。"
+                "输出要包含材料清单、责任人和时间节点；制度冲突或口径不一致时列差异待确认。"
+                "制度正式发布、执行处罚、社保申报缴费和员工个人信息对外提供必须转人工。"
+                "只做文档、表格、知识库层面的产出。"
+            ),
+            department="综合管理部",
+            level=1,
+            x=660,
+            y=160,
+            avatar="analyst",
+            can_delegate=False,
+        ),
+    ],
+    "edges": [
+        {"id": "e-ops-sales", "source": "business-operations", "target": "sales-management", "edge_type": "hierarchy", "label": ""},
+        {"id": "e-ops-commerce", "source": "business-operations", "target": "commerce-management", "edge_type": "hierarchy", "label": ""},
+        {"id": "e-ops-finance", "source": "business-operations", "target": "finance-management", "edge_type": "hierarchy", "label": ""},
+        {"id": "e-ops-hr", "source": "business-operations", "target": "hr-management", "edge_type": "hierarchy", "label": ""},
+        {"id": "e-ops-project", "source": "business-operations", "target": "project-management", "edge_type": "hierarchy", "label": ""},
+        {"id": "e-ops-customer", "source": "business-operations", "target": "customer-management", "edge_type": "hierarchy", "label": ""},
+        {"id": "e-ops-general", "source": "business-operations", "target": "general-management", "edge_type": "hierarchy", "label": ""},
+        {"id": "e-sales-commerce", "source": "sales-management", "target": "commerce-management", "edge_type": "collaborate", "label": "订单/合同协同"},
+        {"id": "e-commerce-finance", "source": "commerce-management", "target": "finance-management", "edge_type": "collaborate", "label": "付款/应收协同"},
+        {"id": "e-project-customer", "source": "project-management", "target": "customer-management", "edge_type": "collaborate", "label": "交付/验收协同"},
+        {"id": "e-hr-general", "source": "hr-management", "target": "general-management", "edge_type": "collaborate", "label": "入转调离/社保协同"},
+        {"id": "e-finance-hr", "source": "finance-management", "target": "hr-management", "edge_type": "collaborate", "label": "工资/考勤口径协同"},
+        {"id": "e-sales-project", "source": "sales-management", "target": "project-management", "edge_type": "collaborate", "label": "商机/交付协同"},
+        {"id": "e-finance-ops", "source": "finance-management", "target": "business-operations", "edge_type": "escalate", "label": "预算/付款升级"},
+        {"id": "e-hr-ops", "source": "hr-management", "target": "business-operations", "edge_type": "escalate", "label": "人事决定升级"},
+        {"id": "e-commerce-ops", "source": "commerce-management", "target": "business-operations", "edge_type": "escalate", "label": "合同签署升级"},
+        {"id": "e-project-ops", "source": "project-management", "target": "business-operations", "edge_type": "escalate", "label": "范围/延期升级"},
+    ],
+}
+
+
 ALL_TEMPLATES: dict[str, dict] = {
     "startup-company": STARTUP_COMPANY,
     "software-team": SOFTWARE_TEAM,
     "content-ops": CONTENT_OPS,
     "aigc-video-studio": AIGC_VIDEO_STUDIO,
+    "enterprise-operations": ENTERPRISE_OPERATIONS,
 }
 
 
@@ -1405,6 +1702,7 @@ TEMPLATE_POLICY_MAP: dict[str, str] = {
     "software-team": "software-team",
     "content-ops": "content-ops",
     "aigc-video-studio": "default",
+    "enterprise-operations": "default",
 }
 
 
@@ -1573,6 +1871,25 @@ _REMOVED_BUILTIN_TEMPLATES: tuple[str, ...] = (
 )
 
 
+def _upgrade_enterprise_operations_tools(data: dict) -> bool:
+    """Add ask_user to existing enterprise-operations node tool lists.
+
+    The template was seeded before ``ask_user`` was added to the enterprise
+    ops whitelist. Built-ins are otherwise preserved, so do a narrow in-place
+    upgrade instead of overwriting the whole template (which may carry user
+    edits to names/positions/prompts).
+    """
+    changed = False
+    for node in data.get("nodes", []):
+        if not isinstance(node, dict):
+            continue
+        tools = node.get("external_tools")
+        if isinstance(tools, list) and "ask_user" not in tools:
+            tools.insert(0, "ask_user")
+            changed = True
+    return changed
+
+
 def ensure_builtin_templates(templates_dir: Path) -> None:
     """Install built-in templates and migrate known stale built-ins.
 
@@ -1618,6 +1935,21 @@ def ensure_builtin_templates(templates_dir: Path) -> None:
                         "[Templates] Upgraded AIGC template edges/budget: %s",
                         tid,
                     )
+        if tid == "enterprise-operations":
+            try:
+                current = json.loads(p.read_text(encoding="utf-8"))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("[Templates] Failed to inspect template %s: %s", p, exc)
+                continue
+            if isinstance(current, dict) and _upgrade_enterprise_operations_tools(current):
+                p.write_text(
+                    json.dumps(current, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                logger.info(
+                    "[Templates] Upgraded enterprise-operations node tools: %s",
+                    tid,
+                )
 
 
 # ===========================================================================
