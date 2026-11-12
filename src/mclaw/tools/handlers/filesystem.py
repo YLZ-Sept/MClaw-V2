@@ -121,6 +121,13 @@ class FilesystemHandler:
         "delete_file": ApprovalClass.DESTRUCTIVE,
     }
 
+    # 企业运营岗位的最终交付物后缀。相对路径/工作区内的绝对路径会被重定向到
+    # 当前会话 working directory，避免 8 岗把交付物散落到 data/temp、output、
+    # data/out 等目录。临时 .py/.json 校验脚本不受影响。
+    _DELIVERABLE_SUFFIXES: frozenset[str] = frozenset(
+        {".md", ".xlsx", ".docx", ".csv", ".txt", ".pdf", ".pptx"}
+    )
+
     def __init__(self, agent: "Agent"):
         """
         初始化处理器
@@ -130,6 +137,70 @@ class FilesystemHandler:
         """
         self.agent = agent
         self._read_file_cache: dict[tuple[str, int, int], str] = {}
+
+    def _redirect_enterprise_ops_deliverable(self, raw: str) -> str:
+        """把企业运营岗位的最终交付物重定向到会话工作目录。"""
+        try:
+            profile_id = getattr(self.agent, "_agent_profile_id", None)
+            if not profile_id:
+                return raw
+            from ...agents.profile import get_profile_store
+            from ...core.working_directory import config_workspace
+
+            profile = get_profile_store().get(profile_id)
+            if profile is None or getattr(profile, "category", "") != "enterprise-ops":
+                return raw
+
+            target = Path(raw).expanduser()
+            if target.suffix.lower() not in self._DELIVERABLE_SUFFIXES:
+                return raw
+
+            session = getattr(self.agent, "_current_session", None)
+            logger.info(
+                "[Filesystem] redirect probe profile=%s has_session=%s raw=%s",
+                profile_id,
+                session is not None,
+                raw,
+            )
+            # 优先用当前会话的 working directory。PolicyContext 在部分
+            # sync/后台路径下可能未携带 session cwd，而 _current_session 一定
+            # 是本次对话的 Session，能稳定拿到用户选择的交付目录。
+            if session is not None:
+                from ...core.working_directory import session_working_directory
+
+                workdir = session_working_directory(
+                    session, require_available=True
+                ).resolve(strict=False)
+            else:
+                workdir = self._working_directory().resolve(strict=False)
+            logger.info(
+                "[Filesystem] redirect workdir=%s target=%s", workdir, target
+            )
+            if not target.is_absolute():
+                redirected = (workdir / target).resolve(strict=False)
+            else:
+                resolved = target.resolve(strict=False)
+                try:
+                    resolved.relative_to(workdir)
+                    return raw
+                except ValueError:
+                    pass
+                try:
+                    resolved.relative_to(config_workspace().resolve(strict=False))
+                except ValueError:
+                    return raw  # 工作区外的显式路径，尊重调用方
+                redirected = (workdir / target.name).resolve(strict=False)
+
+            redirected.parent.mkdir(parents=True, exist_ok=True)
+            logger.info(
+                "[Filesystem] redirected enterprise-ops deliverable %s -> %s",
+                raw,
+                redirected,
+            )
+            return str(redirected)
+        except Exception as exc:  # noqa: BLE001 — 重定向失败时按原路径写入
+            logger.debug("[Filesystem] deliverable redirect skipped: %s", exc)
+            return raw
 
     @staticmethod
     def _terminal_namespace() -> str:
@@ -680,6 +751,7 @@ class FilesystemHandler:
             return "❌ write_file 缺少必要参数 'path'。请提供文件路径和内容后重试。"
         if content is None:
             return "❌ write_file 缺少必要参数 'content'。请提供文件内容后重试。"
+        path = self._redirect_enterprise_ops_deliverable(path)
         guard = self._guard_path_boundary(path, op="write")
         if guard:
             return guard
@@ -770,6 +842,7 @@ class FilesystemHandler:
             return "❌ append_file 缺少必要参数 'path'。请提供文件路径和内容后重试。"
         if content is None:
             return "❌ append_file 缺少必要参数 'content'。请提供要追加的内容后重试。"
+        path = self._redirect_enterprise_ops_deliverable(path)
         guard = self._guard_path_boundary(path, op="write")
         if guard:
             return guard

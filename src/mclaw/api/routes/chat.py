@@ -3409,8 +3409,9 @@ async def chat_sync(request: Request, body: ChatRequest):
     conversation_id = body.conversation_id
     request_id = f"chat_sync_{_uuid.uuid4().hex[:12]}"
     session_manager = getattr(request.app.state, "session_manager", None)
+    desktop_session = None
     try:
-        _bootstrap_working_directory(request, body, session_manager)
+        desktop_session = _bootstrap_working_directory(request, body, session_manager)
     except HTTPException as exc:
         return JSONResponse(
             status_code=exc.status_code,
@@ -3495,13 +3496,25 @@ async def chat_sync(request: Request, body: ChatRequest):
         session_messages_history: list[dict] = []
         if session_manager:
             try:
+                _sync_working_directory = getattr(desktop_session, "working_directory", None)
                 session = session_manager.get_session(
                     channel="api-sync",
                     chat_id=conversation_id,
                     user_id="api_sync_user",
                     create_if_missing=True,
+                    working_directory=_sync_working_directory,
                 )
                 if session is not None:
+                    # get_session 在某些历史路径下不会把 working_directory
+                    # 写进已存在的 session；这里显式同步一次，保证工具执行
+                    # （write_file / deliver_artifacts）使用同一个交付目录。
+                    if _sync_working_directory:
+                        session.working_directory = _sync_working_directory
+                    logger.info(
+                        "[Chat API /sync] working dirs desktop=%s api_sync=%s",
+                        getattr(desktop_session, "working_directory", None),
+                        getattr(session, "working_directory", None),
+                    )
                     apply_classification_to_session(session, classify_entry("api-sync"))
                     if body.agent_profile_id:
                         _apply_agent_profile(session, body.agent_profile_id)
