@@ -122,6 +122,7 @@ def test_preset_ids_unique():
 def test_sensitive_roles_minimal_permissions(profile_id):
     preset = get_preset_by_id(profile_id)
     assert preset.memory_mode == "isolated"
+    assert preset.memory_inherit_global is False
     assert preset.tools_mode == "inclusive"
     assert preset.mcp_mode == "inclusive"
     assert preset.mcp_servers == []
@@ -150,10 +151,40 @@ def test_sensitive_roles_minimal_permissions(profile_id):
         "general-management",
     ],
 )
-def test_non_sensitive_roles_keep_default_permissions(profile_id):
+def test_non_sensitive_roles_use_isolated_memory_and_whitelist(profile_id):
     preset = get_preset_by_id(profile_id)
-    assert preset.memory_mode == "shared"
-    assert preset.tools_mode == "all"
+    assert preset.memory_mode == "isolated"
+    assert preset.memory_inherit_global is False
+    assert "ask_user" in preset.tools
+    assert preset.tools_mode == "inclusive"
+    assert preset.mcp_mode == "inclusive"
+    assert preset.mcp_servers == []
+    assert preset.plugins_mode == "inclusive"
+    assert preset.plugins == []
+    forbidden = {
+        "browser",
+        "desktop",
+        "scheduled",
+        "research",
+        "run_shell",
+        "run_powershell",
+        "delete_file",
+    }
+    assert not forbidden & set(preset.tools)
+
+
+@pytest.mark.parametrize("profile_id", list(ENTERPRISE_OPS))
+def test_all_enterprise_ops_roles_isolate_memory(profile_id):
+    preset = get_preset_by_id(profile_id)
+    assert preset.memory_mode == "isolated"
+    assert preset.memory_inherit_global is False
+
+
+@pytest.mark.parametrize("profile_id", list(ENTERPRISE_OPS))
+def test_prompt_enforces_attachment_delivery(profile_id):
+    prompt = get_preset_by_id(profile_id).custom_prompt
+    assert "deliver_artifacts" in prompt
+    assert "当前工作目录" in prompt
 
 
 def test_job_card_contains_handoff_rules():

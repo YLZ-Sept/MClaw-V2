@@ -255,3 +255,38 @@ def test_mcp_inclusive_empty_filters_catalog_to_no_servers():
 
     assert catalog.clone_calls == [([], "inclusive")]
     assert agent.mcp_catalog.server_count == 0
+
+
+def test_enterprise_ops_inclusive_whitelist_blocks_high_risk_tools():
+    """企业运营岗位默认白名单应保留文档/知识库工具，过滤 shell/删除/浏览器等。"""
+    from mclaw.agents.presets import get_preset_by_id
+
+    profile = get_preset_by_id("sales-management")
+    tool_names = [
+        "read_file",
+        "write_file",
+        "knowledge_search",
+        "deliver_artifacts",
+        "run_shell",
+        "run_powershell",
+        "delete_file",
+        "browser",
+        "desktop",
+        "scheduled",
+        "research",
+    ]
+    agent = SimpleNamespace(_tools=[_tool(name) for name in tool_names])
+
+    AgentFactory._apply_tool_filter(agent, profile)
+
+    names = {tool["name"] for tool in agent._tools}
+    assert {"read_file", "write_file", "knowledge_search", "deliver_artifacts"} <= names
+    assert not {
+        "run_shell",
+        "run_powershell",
+        "delete_file",
+        "browser",
+        "desktop",
+        "scheduled",
+        "research",
+    } & names

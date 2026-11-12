@@ -2114,7 +2114,7 @@ class KnowledgeManager:
         # 检查是否已存在（相同路径+内容）
         conn = self._get_conn()
         existing = conn.execute(
-            "SELECT id, checksum FROM kb_documents WHERE collection_id = ? AND file_path = ?",
+            "SELECT * FROM kb_documents WHERE collection_id = ? AND file_path = ?",
             (collection_id, str(file_path)),
         ).fetchone()
         if existing and existing["checksum"] == checksum:

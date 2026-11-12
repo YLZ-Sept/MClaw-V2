@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -136,7 +138,14 @@ def _enterprise_ops_prompt(*, role: str, duties: str, outputs: str, escalate: st
         "- 需要跨部门数据时，说明需要哪个部门提供什么材料。\n\n"
         "【输出】\n"
         f"{outputs}\n"
-        "- 优先产出可审核的文件、表格或清单，不只给聊天结论。\n\n"
+        "- 优先产出可审核的文件、表格或清单，不只给聊天结论。\n"
+        "- 只有在完成任务所必需的数据缺失时才使用 ask_user；格式、版式、文件名等"
+        "非关键选择请按默认最优格式直接产出，不要停下来等待。\n\n"
+        "【附件交付】\n"
+        "- 生成任何文件后，必须调用 deliver_artifacts 交付；只在文字里说“已保存/见附件”不算交付。\n"
+        "- 交付回执失败时，说明失败原因，并在正文给出可复制内容。\n"
+        "- 所有最终交付文件统一写入当前工作目录；临时脚本/校验文件可写 data/temp，"
+        "但最终交付物必须复制到工作目录并交付，不要散落到 output/、data/out 等目录。\n\n"
         "【协同分工】\n"
         "- 线索跟进 → 销售管理；合同事项 → 商务管理；应收应付 → 财务管理；售后问题 → 客户管理。\n"
         "- 工资核算：财务管理主责；人力资源提供考勤，综合管理提供社保口径。\n"
@@ -159,9 +168,12 @@ def _enterprise_ops_prompt(*, role: str, duties: str, outputs: str, escalate: st
     )
 
 
-# 财务、人事等敏感岗位的工具白名单：只保留文档/表格/知识库所需能力。
+# 企业运营岗位的默认工具白名单：只保留文档/表格/知识库/交付所需能力。
 # 用具体工具名而不是类目，避免顺带放开 run_shell / delete_file / 浏览器等。
+# 8 个岗位统一使用 isolated 记忆，且不继承全局记忆，保证岗位之间互不可见。
 _ENTERPRISE_OPS_SENSITIVE_TOOLS = [
+    # 交互：信息不足时向用户提问
+    "ask_user",
     # 计划与待办
     "create_todo",
     "update_todo_step",
@@ -219,12 +231,17 @@ def _enterprise_ops_agent(
     deliverables: list[str],
     example_prompts: list[str],
     tools: list[str] | None = None,
-    tools_mode: str = "all",
-    mcp_mode: str = "all",
-    plugins_mode: str = "all",
-    memory_mode: str = "shared",
+    tools_mode: str = "inclusive",
+    mcp_mode: str = "inclusive",
+    plugins_mode: str = "inclusive",
+    memory_mode: str = "isolated",
+    memory_inherit_global: bool = False,
 ) -> AgentProfile:
-    """按统一岗位卡结构构造企业运营预置。"""
+    """按统一岗位卡结构构造企业运营预置。
+
+    默认最小权限：具体工具白名单 + 不加载 MCP/插件；需要更多能力的岗位
+    必须显式覆盖 tools/tools_mode。
+    """
     return AgentProfile(
         id=agent_id,
         knowledge_collections=_DIGITAL_EMPLOYEE_KB_BINDINGS[agent_id],
@@ -233,11 +250,12 @@ def _enterprise_ops_agent(
         type=AgentType.SYSTEM,
         skills=[],
         skills_mode=SkillsMode.ALL,
-        tools=tools or [],
+        tools=list(_ENTERPRISE_OPS_SENSITIVE_TOOLS) if tools is None else list(tools),
         tools_mode=tools_mode,
         mcp_mode=mcp_mode,
         plugins_mode=plugins_mode,
         memory_mode=memory_mode,
+        memory_inherit_global=memory_inherit_global,
         custom_prompt=_enterprise_ops_prompt(
             role=role, duties=duties, outputs=outputs, escalate=escalate
         ),
@@ -1365,73 +1383,229 @@ def _ensure_digital_employee_kb_skeletons() -> None:
         logger.warning("[Presets] 部门知识骨架创建失败（非致命）: %s", exc)
 
 
+def _ensure_enterprise_ops_templates() -> None:
+    """幂等导入随包分发的 10 份企业运营模板。
+
+    KB manager 未就绪（首次启动时序）时静默跳过，不阻断 preset 部署；
+    下次启动或手动执行 ``scripts/import_enterprise_templates.py`` 会补齐。
+    """
+    try:
+        from .enterprise_templates import ensure_enterprise_templates
+
+        ensure_enterprise_templates()
+    except Exception as exc:  # noqa: BLE001 — 模板导入失败不阻断 preset 部署
+        if getattr(exc, "status_code", None) == 503:
+            logger.debug("[Presets] KB manager 未就绪，企业运营模板延迟导入")
+        else:
+            logger.warning("[Presets] 企业运营模板导入失败（非致命）: %s", exc)
+
+
+# ── 预设版本与同步标记 ──────────────────────────────────────────────
+
+# deploy_system_presets 会同步的字段。哈希只覆盖这些字段，用户改名字、图标、
+# 首选端点等不在其中的字段时，不会误报“预设有更新”。
+_PRESET_TRACKED_FIELDS = (
+    "skills",
+    "skills_mode",
+    "category",
+    "tools",
+    "tools_mode",
+    "mcp_servers",
+    "mcp_mode",
+    "plugins",
+    "plugins_mode",
+    "memory_mode",
+    "memory_inherit_global",
+    "knowledge_collections",
+    "custom_prompt",
+    "description",
+    "deliverables",
+    "example_prompts",
+)
+
+# 这些列表的顺序没有语义，比较和哈希前先排序。
+_UNORDERED_PRESET_FIELDS = frozenset(
+    {"skills", "tools", "mcp_servers", "plugins", "knowledge_collections"}
+)
+
+
+def _preset_field_value(profile: AgentProfile, name: str):
+    value = getattr(profile, name)
+    if name == "skills_mode":
+        return value.value
+    if name in _UNORDERED_PRESET_FIELDS:
+        return sorted(value or [])
+    return value
+
+
+def compute_preset_hash(profile: AgentProfile) -> str:
+    """计算预设受管字段的稳定哈希，用于判断“有更新”。"""
+    payload = {name: _preset_field_value(profile, name) for name in _PRESET_TRACKED_FIELDS}
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _preset_fields_differ(existing: AgentProfile, preset: AgentProfile) -> bool:
+    """只比较 deploy_system_presets 会同步的字段。"""
+    return any(
+        _preset_field_value(existing, name) != _preset_field_value(preset, name)
+        for name in _PRESET_TRACKED_FIELDS
+    )
+
+
+def _stamped_preset(preset: AgentProfile) -> AgentProfile:
+    data = preset.to_dict()
+    data["preset_synced_hash"] = compute_preset_hash(preset)
+    return AgentProfile.from_dict(data)
+
+
+def _stamp_preset_hash(profile: AgentProfile, preset_hash: str) -> AgentProfile:
+    data = profile.to_dict()
+    data["preset_synced_hash"] = preset_hash
+    return AgentProfile.from_dict(data)
+
+
+def _apply_preset_fields(
+    existing: AgentProfile,
+    preset: AgentProfile,
+    preset_hash: str,
+) -> AgentProfile:
+    data = existing.to_dict()
+    data["skills"] = list(preset.skills)
+    data["skills_mode"] = preset.skills_mode.value
+    data["category"] = preset.category
+    data["tools"] = list(preset.tools)
+    data["tools_mode"] = preset.tools_mode
+    data["mcp_servers"] = list(preset.mcp_servers)
+    data["mcp_mode"] = preset.mcp_mode
+    data["plugins"] = list(preset.plugins)
+    data["plugins_mode"] = preset.plugins_mode
+    data["memory_mode"] = preset.memory_mode
+    data["memory_isolation"] = preset.memory_mode
+    data["memory_inherit_global"] = preset.memory_inherit_global
+    data["knowledge_collections"] = list(preset.knowledge_collections)
+    data["custom_prompt"] = preset.custom_prompt
+    data["description"] = preset.description
+    data["deliverables"] = list(preset.deliverables)
+    data["example_prompts"] = list(preset.example_prompts)
+    data["preset_synced_hash"] = preset_hash
+    return AgentProfile.from_dict(data)
+
+
+def preset_update_available(profile: AgentProfile) -> bool:
+    """已自定义的系统预置是否存在未应用的预设更新。"""
+    if not profile.is_system or not profile.user_customized:
+        return False
+    preset = get_preset_by_id(profile.id)
+    if preset is None:
+        return False
+    preset_hash = compute_preset_hash(preset)
+    if profile.preset_ignored_hash == preset_hash:
+        return False
+    if not profile.preset_synced_hash:
+        # 旧版本没有哈希。只按受管字段的实际差异判断，避免“只改名字/图标”
+        # 也弹更新；同时不会漏掉权限收紧、岗位卡更新这类真实变更。
+        return bool(preset_diff(profile))
+    return profile.preset_synced_hash != preset_hash
+
+
+def preset_diff(profile: AgentProfile) -> dict[str, dict[str, object]]:
+    """返回自定义预置与当前 SYSTEM_PRESETS 的受管字段差异。
+
+    只比较 deploy_system_presets 会同步的字段；用户改过的 name/icon/color/
+    endpoint 等不在其中，不会被“有更新”提示干扰。
+    """
+    preset = get_preset_by_id(profile.id)
+    if preset is None:
+        return {}
+    diff: dict[str, dict[str, object]] = {}
+    for name in _PRESET_TRACKED_FIELDS:
+        current = _preset_field_value(profile, name)
+        target = _preset_field_value(preset, name)
+        if current != target:
+            diff[name] = {"current": current, "preset": target}
+    return diff
+
+
+def preset_apply_updates(profile: AgentProfile) -> dict[str, object]:
+    """构造“应用预设更新”所需的 store.update 字段。
+
+    覆盖全部受管字段（包括岗位卡 custom_prompt），保留 name/icon/color/
+    endpoint 等用户身份配置；应用后清除“忽略”标记。调用方应先确认用户
+    知道这会覆盖自定义提示词/工具配置。
+    """
+    preset = get_preset_by_id(profile.id)
+    if preset is None:
+        raise KeyError(f"No system preset found for {profile.id}")
+    updates: dict[str, object] = {
+        name: _preset_field_value(preset, name) for name in _PRESET_TRACKED_FIELDS
+    }
+    updates["preset_synced_hash"] = compute_preset_hash(preset)
+    updates["preset_ignored_hash"] = ""
+    return updates
+
+
+def preset_ignore_update(profile: AgentProfile) -> dict[str, object]:
+    """构造“忽略本次预设更新”所需的 store.update 字段。"""
+    preset = get_preset_by_id(profile.id)
+    if preset is None:
+        raise KeyError(f"No system preset found for {profile.id}")
+    return {"preset_ignored_hash": compute_preset_hash(preset)}
+
+
 def deploy_system_presets(store: ProfileStore) -> int:
     """
     部署系统预置 Profile（首次启动或升级时调用）。
 
-    - 不存在的预置 Profile 直接创建
-    - user_customized=True 的跳过（尊重用户的自定义修改）
-    - 未被用户自定义的 SYSTEM Profile 若 skills/category/tools/knowledge_collections
-      与预置不同则同步更新（含知识库绑定、岗位卡提示词/交付物/示例问题回填）
+    - 不存在的预置 Profile 直接创建，并写入当前预设哈希
+    - user_customized=True 的跳过同步（尊重用户的自定义修改）；旧版没有
+      哈希的预置不写基线，由 preset_update_available 按受管字段差异判断
+    - 未被用户自定义的 SYSTEM Profile 若受管字段与预置不同则同步更新，
+      同时刷新哈希
     - 部署前先确保数字员工的空知识库骨架行存在（见 _ensure_digital_employee_kb_skeletons）
 
     Returns:
-        新增或升级的 Profile 数量
+        新增或升级的 Profile 数量（仅补哈希的迁移不计入）
     """
     # 先确保骨架行，保证 store.save()/升级写库时绑定所指向的 collection 已存在。
     _ensure_digital_employee_kb_skeletons()
+    # 再幂等导入随包模板；KB manager 未就绪时跳过，不影响 preset 部署。
+    _ensure_enterprise_ops_templates()
     deployed = 0
     for preset in SYSTEM_PRESETS:
+        preset_hash = compute_preset_hash(preset)
         if not store.exists(preset.id):
-            store.save(preset)
+            store.save(_stamped_preset(preset))
             deployed += 1
             logger.info(f"Deployed system preset: {preset.id} ({preset.name})")
-        else:
-            existing = store.get(preset.id)
-            if existing and existing.is_system:
-                if existing.user_customized:
-                    logger.debug(f"Skipping customized preset: {preset.id} (user_customized=True)")
-                    continue
-                needs_upgrade = (
-                    sorted(existing.skills) != sorted(preset.skills)
-                    or existing.category != preset.category
-                    or sorted(existing.tools) != sorted(preset.tools)
-                    or existing.tools_mode != preset.tools_mode
-                    or existing.mcp_mode != preset.mcp_mode
-                    or existing.plugins_mode != preset.plugins_mode
-                    or existing.memory_mode != preset.memory_mode
-                    or sorted(existing.knowledge_collections) != sorted(preset.knowledge_collections)
-                    or existing.custom_prompt != preset.custom_prompt
-                    or existing.description != preset.description
-                    or existing.deliverables != preset.deliverables
-                    or existing.example_prompts != preset.example_prompts
-                )
-                if needs_upgrade:
-                    data = existing.to_dict()
-                    data["skills"] = preset.skills
-                    data["skills_mode"] = preset.skills_mode.value
-                    data["category"] = preset.category
-                    data["tools"] = preset.tools
-                    data["tools_mode"] = preset.tools_mode
-                    data["mcp_servers"] = preset.mcp_servers
-                    data["mcp_mode"] = preset.mcp_mode
-                    data["plugins"] = preset.plugins
-                    data["plugins_mode"] = preset.plugins_mode
-                    data["memory_mode"] = preset.memory_mode
-                    data["memory_isolation"] = preset.memory_mode
-                    data["knowledge_collections"] = preset.knowledge_collections
-                    data["custom_prompt"] = preset.custom_prompt
-                    data["description"] = preset.description
-                    data["deliverables"] = preset.deliverables
-                    data["example_prompts"] = preset.example_prompts
-                    updated = AgentProfile.from_dict(data)
-                    store._cache[preset.id] = updated
-                    store._persist(updated)
-                    deployed += 1
-                    logger.info(
-                        f"Upgraded system preset: {preset.id} "
-                        "(skills/category/tools/knowledge/prompt synced)"
-                    )
+            continue
+
+        existing = store.get(preset.id)
+        if existing is None or not existing.is_system:
+            continue
+
+        if existing.user_customized:
+            # 旧版自定义预置没有哈希：不要直接写当前基线，否则会漏掉本次
+            # 权限收紧等真实变更。留给 preset_update_available 按字段差异判断。
+            logger.debug(f"Skipping customized preset: {preset.id} (user_customized=True)")
+            continue
+
+        if _preset_fields_differ(existing, preset):
+            updated = _apply_preset_fields(existing, preset, preset_hash)
+            store._cache[preset.id] = updated
+            store._persist(updated)
+            deployed += 1
+            logger.info(
+                f"Upgraded system preset: {preset.id} "
+                "(skills/tools/knowledge/prompt synced)"
+            )
+        elif existing.preset_synced_hash != preset_hash:
+            # 字段没变但哈希为空/过期（例如从旧版本迁移），只补标记，不算升级。
+            updated = _stamp_preset_hash(existing, preset_hash)
+            store._cache[preset.id] = updated
+            store._persist(updated)
+            logger.debug(f"Refreshed preset hash: {preset.id}")
+
     if deployed:
         logger.info(f"Deployed/upgraded {deployed} system preset profile(s)")
     return deployed

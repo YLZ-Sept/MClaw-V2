@@ -184,6 +184,14 @@ class AgentProfile:
     # 用户自定义标记：系统预设被用户编辑后置 True，升级时不再覆盖
     user_customized: bool = False
 
+    # 预设同步标记：最近一次与 SYSTEM_PRESETS 同步时，受管字段的 SHA-256。
+    # 未自定义的预置会在启动时自动同步并刷新；已自定义的预置保留旧哈希，
+    # 供“有更新”提示判断，不参与运行时逻辑。
+    preset_synced_hash: str = ""
+
+    # 用户选择“忽略本次预设更新”时记录当前预设哈希；预置再次变化后自动失效。
+    preset_ignored_hash: str = ""
+
     # Hub 来源（从 Agent Store 安装时记录来源信息）
     hub_source: dict[str, Any] | None = None
 
@@ -253,6 +261,12 @@ class AgentProfile:
             field_name="memory_mode",
         )
         self.memory_inherit_global = _coerce_bool(self.memory_inherit_global)
+        # 旧版本可能把这两个字段写成 null；统一归一到空串，避免哈希比较出现
+        # None != "..." 的假更新。
+        if not isinstance(self.preset_synced_hash, str):
+            self.preset_synced_hash = ""
+        if not isinstance(self.preset_ignored_hash, str):
+            self.preset_ignored_hash = ""
         if not self.created_at:
             self.created_at = datetime.now(UTC).isoformat()
         # Invariant: 默认 name_i18n[zh] 与 name 一致；description 同理。
