@@ -753,6 +753,7 @@ class _BrainBackedNodeAgent:
         "_dispatch_callback",
         "_event_emitter",
         "_tool_host_provider",
+        "_memory_manager",
     )
 
     def __init__(
@@ -769,8 +770,41 @@ class _BrainBackedNodeAgent:
         self._dispatch_callback = dispatch_callback
         self._event_emitter = event_emitter
         self._tool_host_provider = tool_host_provider
+        self._memory_manager = None
 
     async def run(
+        self,
+        content: str,
+        *,
+        cancel_event: asyncio.Event | None = None,
+    ) -> str:
+        from ..core.agent_context import (
+            reset_current_agent_context,
+            set_current_agent_context,
+        )
+
+        profile_id = getattr(self._spec, "agent_profile_id", None)
+        memory_manager = self._get_memory_manager() if profile_id else None
+        tokens = set_current_agent_context(
+            profile_id=profile_id, memory_manager=memory_manager
+        )
+        try:
+            return await self._run_inner(content, cancel_event=cancel_event)
+        finally:
+            reset_current_agent_context(tokens)
+
+    def _get_memory_manager(self):
+        if self._memory_manager is not None:
+            return self._memory_manager
+        profile_id = getattr(self._spec, "agent_profile_id", None)
+        if not profile_id:
+            return None
+        from ..agents.isolated_memory import get_isolated_memory_manager
+
+        self._memory_manager = get_isolated_memory_manager(profile_id, self._brain)
+        return self._memory_manager
+
+    async def _run_inner(
         self,
         content: str,
         *,

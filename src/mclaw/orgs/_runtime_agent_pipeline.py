@@ -154,6 +154,9 @@ class AgentSpec:
     external_tools: tuple[str, ...] = ()
     enable_file_tools: bool = True
     available_nodes: tuple[tuple[str, str], ...] = ()
+    # Node's bound AgentProfile id. Used to scope knowledge collections and
+    # isolated memory to the role instead of the main desktop Agent.
+    agent_profile_id: str | None = None
 
 
 def _capability_label(node: Any) -> str:
@@ -362,6 +365,7 @@ class ProfileResolver:
         external_tools = self._external_tools_for(node_obj)
         enable_file_tools = self._enable_file_tools_for(node_obj)
         available_nodes = self._available_nodes_for(org, node_id)
+        agent_profile_id = getattr(node_obj, "agent_profile_id", None)
         return AgentSpec(
             org_id=org_id,
             node_id=node_id,
@@ -372,6 +376,7 @@ class ProfileResolver:
             unattended=unattended,
             external_tools=external_tools,
             enable_file_tools=enable_file_tools,
+            agent_profile_id=str(agent_profile_id) if agent_profile_id else None,
             available_nodes=available_nodes,
         )
 
@@ -476,9 +481,21 @@ class ProfileResolver:
         nodes = getattr(org, "nodes", None)
         if nodes is None:
             return ()
+        iter_nodes: Iterable[Any] = nodes.values() if isinstance(nodes, Mapping) else nodes
+        # A leaf node with an escalate edge to its manager is NOT a
+        # coordinator. Without this guard the finance/HR/etc. nodes saw their
+        # boss as a "direct report" and delegated the whole task upward,
+        # fanning out the entire organization for a single-role command.
+        current_node = None
+        for node in iter_nodes:
+            node_id = getattr(node, "id", None) or getattr(node, "node_id", None)
+            if node_id == current_node_id:
+                current_node = node
+                break
+        if current_node is not None and getattr(current_node, "can_delegate", True) is False:
+            return ()
         # Index node_id -> label once.
         labels: dict[str, str] = {}
-        iter_nodes: Iterable[Any] = nodes.values() if isinstance(nodes, Mapping) else nodes
         for node in iter_nodes:
             node_id = getattr(node, "id", None) or getattr(node, "node_id", None)
             if not isinstance(node_id, str) or not node_id:

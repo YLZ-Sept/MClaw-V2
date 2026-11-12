@@ -448,6 +448,13 @@ class MemoryHandler:
         if self._guide_marker_path is not None and self._guide_marker_path.exists():
             self._guide_injected = True
 
+    @property
+    def _memory_manager(self):
+        """Node-scoped manager when executing inside an org node, else the agent's."""
+        from ...core.agent_context import get_current_memory_manager
+
+        return get_current_memory_manager() or self.agent.memory_manager
+
     def _compute_guide_marker_path(self) -> Path | None:
         try:
             from ...config import settings
@@ -533,7 +540,7 @@ class MemoryHandler:
             tracker = ConsolidationTracker(settings.project_root / "data" / "scheduler")
             since, until = tracker.get_memory_consolidation_time_range()
 
-            result = await self.agent.memory_manager.consolidate_daily()
+            result = await self._memory_manager.consolidate_daily()
 
             tracker.record_memory_consolidation(result)
 
@@ -605,7 +612,7 @@ class MemoryHandler:
         scope, scope_owner, tags, scope_note = self._memory_scope_for_manual_add(
             content,
             mem_type_str,
-            self.agent.memory_manager,
+            self._memory_manager,
             explicit_scope=explicit_scope,
             user_intent_hint=user_intent_hint,
         )
@@ -615,8 +622,8 @@ class MemoryHandler:
             return "该内容已记录过，无需重复保存。"
 
         try:
-            store = self.agent.memory_manager.store
-            owner_getter = getattr(self.agent.memory_manager, "_current_owner", None)
+            store = self._memory_manager.store
+            owner_getter = getattr(self._memory_manager, "_current_owner", None)
             user_id, workspace_id = (
                 owner_getter() if callable(owner_getter) else ("default", "default")
             )
@@ -680,7 +687,7 @@ class MemoryHandler:
             tags=tags,
         )
 
-        memory_id = self.agent.memory_manager.add_memory(
+        memory_id = self._memory_manager.add_memory(
             memory,
             scope=scope,
             scope_owner=scope_owner,
@@ -732,7 +739,7 @@ class MemoryHandler:
         type_filter = params.get("type")
         now = datetime.now()
 
-        mm = self.agent.memory_manager
+        mm = self._memory_manager
         conversation_id = (
             getattr(self.agent, "_current_conversation_id", "")
             or getattr(self.agent, "_current_session_id", "")
@@ -876,7 +883,7 @@ class MemoryHandler:
         # 出存在其它用户。把 stats 收敛到当前 owner 视角。desktop 单用户场景
         # owner 是 default/default，行为不变。
         owner_uid, owner_wsid = self._current_owner_pair()
-        stats = self.agent.memory_manager.get_stats(user_id=owner_uid, workspace_id=owner_wsid)
+        stats = self._memory_manager.get_stats(user_id=owner_uid, workspace_id=owner_wsid)
 
         output = f"""记忆系统统计:
 
@@ -900,7 +907,7 @@ class MemoryHandler:
         days = params.get("days", 3)
         limit = params.get("limit", 15)
 
-        mm = self.agent.memory_manager
+        mm = self._memory_manager
         store = getattr(mm, "store", None)
         if not store:
             return "记忆系统未初始化"
@@ -969,7 +976,7 @@ class MemoryHandler:
         )
 
         # === 数据源 1: SQLite conversation_turns（主数据源） ===
-        store = getattr(self.agent.memory_manager, "store", None)
+        store = getattr(self._memory_manager, "store", None)
         # Phase 2b.5：把 turn 搜索限制到当前 (user_id, workspace_id)。多用户
         # IM 部署下，原实现会让 alice 的 search_conversation_traces 搜到 bob 的对话。
         owner_user_id, owner_workspace_id = self._current_owner_pair()
@@ -1153,7 +1160,7 @@ class MemoryHandler:
         if not memory_id and not episode_id:
             return "请提供 memory_id 或 episode_id 其中一个"
 
-        mm = self.agent.memory_manager
+        mm = self._memory_manager
         store = getattr(mm, "store", None)
         if not store:
             return "记忆系统未初始化"
@@ -1282,7 +1289,7 @@ class MemoryHandler:
     def _current_owner_pair(self) -> tuple[str | None, str | None]:
         """统一拿当前 (user_id, workspace_id)，拿不到时返回 (None, None)。"""
         try:
-            mm = self.agent.memory_manager
+            mm = self._memory_manager
             if hasattr(mm, "_current_owner"):
                 uid, wsid = mm._current_owner()
                 return uid, wsid
@@ -1583,7 +1590,7 @@ class MemoryHandler:
         if not query:
             return "❌ 请提供搜索查询"
 
-        mm = self.agent.memory_manager
+        mm = self._memory_manager
         if not mm._ensure_relational():
             return "⚠️ 关系型记忆（Mode 2）未启用。请在配置中设置 memory_mode 为 mode2 或 auto。"
 

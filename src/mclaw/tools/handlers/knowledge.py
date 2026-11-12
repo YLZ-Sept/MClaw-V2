@@ -44,9 +44,14 @@ class KnowledgeHandler:
         top_k = params.get("top_k", 5)
         top_k = max(1, min(20, top_k))
 
-        # 检查 Profile 绑定的集合权限
+        # 检查 Profile 绑定的集合权限。组织节点运行时，当前节点岗位优先于
+        # 主 Agent 的 profile，避免 org 节点用主 Agent 的绑定去检索别的部门库。
         bound_collections: list[str] | None = None
-        profile_id = getattr(self.agent, "_agent_profile_id", None)
+        from ...core.agent_context import get_current_agent_profile_id
+
+        profile_id = get_current_agent_profile_id() or getattr(
+            self.agent, "_agent_profile_id", None
+        )
         if profile_id:
             try:
                 from mclaw.agents.profile import get_profile_store
