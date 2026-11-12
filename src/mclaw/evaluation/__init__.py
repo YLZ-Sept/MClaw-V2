@@ -17,6 +17,17 @@ Mclaw Agent 评估框架
 - 记忆检索相关性
 """
 
+from .golden_runner import (
+    GoldenCase,
+    GoldenRunResult,
+    compare_runs,
+    evaluate_response,
+    list_runs,
+    load_golden_cases,
+    load_latest_run,
+    run_golden_cases,
+    save_run,
+)
 from .judge import Judge, JudgeResult
 from .metrics import EvalMetrics, EvalResult, TraceMetrics
 from .optimizer import DailyEvaluator, FeedbackAnalyzer, FeedbackOptimizer, OptimizationAction
@@ -35,4 +46,13 @@ __all__ = [
     "FeedbackOptimizer",
     "OptimizationAction",
     "DailyEvaluator",
+    "GoldenCase",
+    "GoldenRunResult",
+    "load_golden_cases",
+    "evaluate_response",
+    "run_golden_cases",
+    "save_run",
+    "load_latest_run",
+    "list_runs",
+    "compare_runs",
 ]
