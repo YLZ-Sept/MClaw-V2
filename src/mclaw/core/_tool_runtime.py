@@ -284,6 +284,53 @@ class ToolExecutor:
     def canonicalize_tool_name(self, tool_name: str) -> str:
         return self._canonicalize_tool_name(tool_name)
 
+    # 控制面/交互类工具：即使不在 profile 白名单里，也允许执行。这些工具
+    # 不产生业务副作用，profile 的 tools_mode 过滤不应该让 Agent 失去提问、
+    # 查工具信息或停止任务的能力。
+    _EXECUTION_ALWAYS_ALLOWED: frozenset[str] = frozenset(
+        {
+            "ask_user",
+            "get_tool_info",
+            "set_task_timeout",
+            "task_stop",
+            "tool_search",
+            "exit_plan_mode",
+        }
+    )
+
+    def _blocked_tool_reason(self, tool_name: str) -> str | None:
+        """执行时二次校验 profile 白名单。
+
+        ``AgentFactory._apply_tool_filter`` 只裁剪发给 LLM 的 tools schema；
+        如果模型凭 skill/上下文“发明”了一个已被过滤的工具名，handler
+        registry 仍能执行。这里在执行入口再挡一次，防止 customer 之类的
+        最小权限岗位通过 ``run_shell`` 绕过白名单。
+        """
+        if tool_name in self._EXECUTION_ALWAYS_ALLOWED:
+            return None
+        agent = self._agent_ref
+        if agent is None:
+            return None
+        tools = getattr(agent, "_tools", None)
+        if not tools:
+            return None
+        allowed = {
+            tool.get("name")
+            for tool in tools
+            if isinstance(tool, dict) and tool.get("name")
+        }
+        if not allowed or tool_name in allowed:
+            return None
+        logger.warning(
+            "[ToolFilter] blocked non-allowlisted tool '%s' (profile=%s)",
+            tool_name,
+            getattr(agent, "_agent_profile_id", "?"),
+        )
+        return (
+            f"❌ 工具 '{tool_name}' 未对该 Agent 启用。"
+            "请只使用当前可用工具；如确需该能力，请联系管理员调整白名单。"
+        )
+
     def _suggest_similar_tool(self, tool_name: str) -> str:
         """为未知工具名生成带相似推荐的错误信息。"""
         all_tools = self._handler_registry.list_tools()
@@ -493,6 +540,9 @@ class ToolExecutor:
             grounding）都返回 ``(text, None)``。
         """
         tool_name = self._canonicalize_tool_name(tool_name)
+        blocked_reason = self._blocked_tool_reason(tool_name)
+        if blocked_reason:
+            return blocked_reason, None
         if isinstance(tool_input, dict):
             tool_input = normalize_tool_input(tool_name, tool_input)
 
@@ -1128,6 +1178,9 @@ class ToolExecutor:
             )
 
         tool_name = self._canonicalize_tool_name(tool_name)
+        blocked_reason = self._blocked_tool_reason(tool_name)
+        if blocked_reason:
+            return blocked_reason, None
         if isinstance(tool_input, dict):
             tool_input = normalize_tool_input(tool_name, tool_input)
 
