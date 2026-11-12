@@ -1002,6 +1002,273 @@ async def update_profile_visibility(profile_id: str, body: ProfileVisibilityRequ
     return {"status": "ok", "profile": updated.to_dict()}
 
 
+# ─── SYSTEM preset update routes ────────────────────────────────────────
+
+
+@router.get("/api/agents/preset-updates")
+async def list_preset_updates():
+    """列出已自定义、且存在未应用预设更新的 SYSTEM Profile。"""
+    from mclaw.agents.presets import preset_diff, preset_update_available
+    from mclaw.agents.profile import get_profile_store
+
+    store = get_profile_store()
+    updates: list[dict] = []
+    for profile in store.list_all(include_hidden=True):
+        if not preset_update_available(profile):
+            continue
+        diff = preset_diff(profile)
+        if not diff:
+            continue
+        updates.append(
+            {
+                "profile_id": profile.id,
+                "name": profile.name,
+                "name_i18n": profile.name_i18n,
+                "changed_fields": list(diff.keys()),
+                "diff": diff,
+            }
+        )
+    return {"updates": updates}
+
+
+@router.post("/api/agents/profiles/{profile_id}/apply-preset-update")
+async def apply_preset_update(profile_id: str, request: Request):
+    """把当前 SYSTEM_PRESETS 的受管字段应用到已自定义的预置。
+
+    会覆盖 custom_prompt/tools/知识库等受管字段，但保留 name/icon/color/
+    preferred_endpoint 等用户身份配置；应用后清除“忽略本次”标记。
+    """
+    from mclaw.agents.presets import preset_apply_updates
+    from mclaw.agents.profile import get_profile_store
+
+    store = get_profile_store()
+    profile = store.get(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail=f"Profile '{profile_id}' not found")
+    if not profile.is_system:
+        raise HTTPException(status_code=400, detail="Preset updates only apply to SYSTEM profiles")
+
+    try:
+        updated = store.update(profile_id, preset_apply_updates(profile))
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    runtime = _invalidate_profile_runtime(
+        request, profile_id, f"preset update applied:{profile_id}"
+    )
+    logger.info(f"[Agents API] Applied preset update: {profile_id}")
+    emit_agent_profiles_changed("preset_updated", profile_id=profile_id)
+    emit_agent_categories_changed("profile_preset_updated", profile_id=profile_id)
+    return runtime_operation_response(runtime, {"profile": updated.to_dict()})
+
+
+@router.post("/api/agents/profiles/{profile_id}/ignore-preset-update")
+async def ignore_preset_update(profile_id: str, request: Request):
+    """忽略当前版本的预设更新；预置再次变化后会重新提示。"""
+    from mclaw.agents.presets import preset_ignore_update
+    from mclaw.agents.profile import get_profile_store
+
+    store = get_profile_store()
+    profile = store.get(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail=f"Profile '{profile_id}' not found")
+    if not profile.is_system:
+        raise HTTPException(status_code=400, detail="Preset updates only apply to SYSTEM profiles")
+
+    try:
+        updated = store.update(profile_id, preset_ignore_update(profile))
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    runtime = _invalidate_profile_runtime(
+        request, profile_id, f"preset update ignored:{profile_id}"
+    )
+    logger.info(f"[Agents API] Ignored preset update: {profile_id}")
+    emit_agent_profiles_changed("preset_update_ignored", profile_id=profile_id)
+    emit_agent_categories_changed("profile_preset_ignored", profile_id=profile_id)
+    return runtime_operation_response(runtime, {"profile": updated.to_dict()})
+
+
+# ─── Enterprise ops eval routes ─────────────────────────────────────────
+
+
+@router.get("/api/agents/evals/enterprise-ops/latest")
+async def get_latest_enterprise_ops_eval(include_cases: bool = True):
+    """读取最近一次 L1 黄金集评测结果（供设置页/KPI 看板使用）。"""
+    from pathlib import Path
+
+    from mclaw.config import settings
+    from mclaw.evaluation.golden_runner import load_latest_run
+
+    project_root = getattr(settings, "project_root", None) or Path.cwd()
+    data_root = Path(getattr(settings, "data_dir", None) or (project_root / "data"))
+    run = load_latest_run(data_root / "evals" / "enterprise_ops")
+    if run is None:
+        raise HTTPException(status_code=404, detail="No enterprise ops eval run found")
+    if not include_cases:
+        return {key: value for key, value in run.items() if key != "cases"}
+    return run
+
+
+@router.get("/api/agents/enterprise-ops/overview")
+async def get_enterprise_ops_overview(days: int = 30):
+    """企业运营 8 岗的轻量 KPI 汇总，供 Agent 管理页运营概览使用。"""
+    from datetime import datetime, timedelta
+    from pathlib import Path
+
+    from mclaw.agents.presets import preset_update_available
+    from mclaw.agents.profile import get_profile_store
+    from mclaw.config import settings
+    from mclaw.evaluation.golden_runner import load_latest_run
+
+    days = max(1, min(365, days))
+    store = get_profile_store()
+    profiles = [
+        profile
+        for profile in store.list_all(include_hidden=False)
+        if profile.category == "enterprise-ops"
+    ]
+
+    end = datetime.now()
+    start = end - timedelta(days=days)
+    token_by_agent: dict[str, dict] = {}
+    try:
+        from mclaw.storage.database import Database
+
+        db = Database()
+        await db.connect()
+        try:
+            token_by_agent = await db.get_token_usage_by_agent(
+                start_time=start, end_time=end
+            )
+        finally:
+            await db.close()
+    except Exception as exc:  # noqa: BLE001 — 统计失败不阻断概览
+        logger.warning("[Agents API] enterprise-ops token stats failed: %s", exc)
+
+    km = None
+    try:
+        from mclaw.api.routes.knowledge import get_knowledge_manager
+
+        km = get_knowledge_manager()
+    except Exception:  # noqa: BLE001 — KB 未就绪时文档数按 0 显示
+        km = None
+
+    project_root = getattr(settings, "project_root", None) or Path.cwd()
+    data_root = Path(getattr(settings, "data_dir", None) or (project_root / "data"))
+    latest = load_latest_run(data_root / "evals" / "enterprise_ops") or {}
+    eval_by_role = latest.get("by_role") or {}
+
+    roles: list[dict] = []
+    all_collections: set[str] = set()
+    total_tokens = 0
+    total_requests = 0
+    pending_updates = 0
+    eval_passed = 0
+    eval_total = 0
+
+    for profile in sorted(profiles, key=lambda item: item.id):
+        usage = token_by_agent.get(profile.id) or {}
+        collections = list(profile.knowledge_collections or [])
+        all_collections.update(collections)
+        doc_count = 0
+        if km is not None:
+            for collection_id in collections:
+                try:
+                    doc_count += km.get_stats(collection_id).doc_count
+                except Exception:  # noqa: BLE001
+                    pass
+
+        evaluation = eval_by_role.get(profile.id) or {}
+        pending = preset_update_available(profile)
+        pending_updates += int(pending)
+        total_tokens += int(usage.get("total_tokens") or 0)
+        total_requests += int(usage.get("request_count") or 0)
+        eval_passed += int(evaluation.get("passed") or 0)
+        eval_total += int(evaluation.get("total") or 0)
+
+        roles.append(
+            {
+                "profile_id": profile.id,
+                "name": profile.name,
+                "name_i18n": profile.name_i18n,
+                "tools_mode": profile.tools_mode,
+                "memory_mode": profile.memory_mode,
+                "knowledge_collections": collections,
+                "knowledge_doc_count": doc_count,
+                "token_usage": {
+                    "input_tokens": int(usage.get("input_tokens") or 0),
+                    "output_tokens": int(usage.get("output_tokens") or 0),
+                    "total_tokens": int(usage.get("total_tokens") or 0),
+                    "request_count": int(usage.get("request_count") or 0),
+                    "total_cost": float(usage.get("total_cost") or 0.0),
+                },
+                "eval": {
+                    "total": int(evaluation.get("total") or 0),
+                    "passed": int(evaluation.get("passed") or 0),
+                    "pass_rate": evaluation.get("pass_rate"),
+                    "must_include_rate": evaluation.get("must_include_rate"),
+                    "behavior_rate": evaluation.get("behavior_rate"),
+                    "deliverable_rate": evaluation.get("deliverable_rate"),
+                },
+                "user_customized": profile.user_customized,
+                "preset_update_available": pending,
+                "status": (
+                    "pending_update"
+                    if pending
+                    else ("customized" if profile.user_customized else "ok")
+                ),
+            }
+        )
+
+    total_docs = 0
+    if km is not None:
+        for collection_id in all_collections:
+            try:
+                total_docs += km.get_stats(collection_id).doc_count
+            except Exception:  # noqa: BLE001
+                pass
+
+    return {
+        "days": days,
+        "generated_at": datetime.now().isoformat(),
+        "eval_last_run": latest.get("started_at"),
+        "roles": roles,
+        "totals": {
+            "roles": len(roles),
+            "total_tokens": total_tokens,
+            "request_count": total_requests,
+            "knowledge_doc_count": total_docs,
+            "avg_eval_pass_rate": (
+                round(eval_passed / eval_total, 3) if eval_total else None
+            ),
+            "pending_preset_updates": pending_updates,
+        },
+    }
+
+
+@router.get("/api/agents/evals/enterprise-ops/history")
+async def get_enterprise_ops_eval_history(limit: int = 20):
+    """最近的 L1 评测运行摘要，供 KPI 看板/shadow 趋势使用。"""
+    from pathlib import Path
+
+    from mclaw.config import settings
+    from mclaw.evaluation.golden_runner import list_runs
+
+    project_root = getattr(settings, "project_root", None) or Path.cwd()
+    data_root = Path(getattr(settings, "data_dir", None) or (project_root / "data"))
+    return {
+        "runs": list_runs(
+            data_root / "evals" / "enterprise_ops",
+            limit=max(1, min(100, limit)),
+        )
+    }
+
+
 # ─── Profile identity & memory isolation routes ─────────────────────────
 
 

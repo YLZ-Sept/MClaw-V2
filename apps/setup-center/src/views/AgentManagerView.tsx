@@ -113,6 +113,72 @@ type AgentManagerStateResponse = {
   categories?: CategoryInfo[];
 };
 
+type PresetFieldDiff = {
+  current: unknown;
+  preset: unknown;
+};
+
+type PresetUpdate = {
+  profile_id: string;
+  name: string;
+  name_i18n?: Record<string, string>;
+  changed_fields: string[];
+  diff: Record<string, PresetFieldDiff>;
+};
+
+function formatPresetValue(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (Array.isArray(value)) return value.length ? value.map(String).join("、") : "—";
+  if (typeof value === "object") return JSON.stringify(value);
+  const text = String(value);
+  return text.length > 800 ? `${text.slice(0, 800)}…` : text;
+}
+
+function formatCompactNumber(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  if (value >= 100_000_000) return `${(value / 100_000_000).toFixed(1)}亿`;
+  if (value >= 10_000) return `${(value / 10_000).toFixed(1)}万`;
+  return String(Math.round(value));
+}
+
+function formatPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  return `${Math.round(value * 100)}%`;
+}
+
+type OpsOverviewRole = {
+  profile_id: string;
+  name: string;
+  name_i18n?: Record<string, string>;
+  tools_mode: string;
+  memory_mode: string;
+  knowledge_doc_count: number;
+  token_usage: { total_tokens: number; request_count: number; total_cost: number };
+  eval: {
+    total: number;
+    passed: number;
+    pass_rate: number | null;
+  };
+  user_customized: boolean;
+  preset_update_available: boolean;
+  status: string;
+};
+
+type OpsOverview = {
+  days: number;
+  generated_at: string;
+  eval_last_run?: string | null;
+  roles: OpsOverviewRole[];
+  totals: {
+    roles: number;
+    total_tokens: number;
+    request_count: number;
+    knowledge_doc_count: number;
+    avg_eval_pass_rate: number | null;
+    pending_preset_updates: number;
+  };
+};
+
 const SVG_ICONS = AGENT_SVG_ICONS;
 const SVG_ICON_KEYS = Object.keys(SVG_ICONS);
 
@@ -196,6 +262,11 @@ export function AgentManagerView({
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCatLabel, setNewCatLabel] = useState("");
   const [newCatColor, setNewCatColor] = useState("#6b7280");
+  const [presetUpdates, setPresetUpdates] = useState<PresetUpdate[]>([]);
+  const [presetUpdateTarget, setPresetUpdateTarget] = useState<PresetUpdate | null>(null);
+  const [presetUpdateBusy, setPresetUpdateBusy] = useState(false);
+  const [opsOverview, setOpsOverview] = useState<OpsOverview | null>(null);
+  const [opsExpanded, setOpsExpanded] = useState(false);
   const [batchSelected, setBatchSelected] = useState<Set<string>>(new Set());
   const [toolSearch, setToolSearch] = useState("");
   const [mcpSearch, setMcpSearch] = useState("");
@@ -261,6 +332,28 @@ export function AgentManagerView({
     } catch {}
   }, [apiBaseUrl]);
 
+  const fetchPresetUpdates = useCallback(async () => {
+    try {
+      const res = await safeFetch(`${apiBaseUrl}/api/agents/preset-updates`);
+      const data = await res.json();
+      setPresetUpdates(Array.isArray(data.updates) ? data.updates : []);
+    } catch {
+      // 旧后端没有该接口时静默降级，不影响 Agent 管理页。
+      setPresetUpdates([]);
+    }
+  }, [apiBaseUrl]);
+
+  const fetchOpsOverview = useCallback(async () => {
+    try {
+      const res = await safeFetch(`${apiBaseUrl}/api/agents/enterprise-ops/overview?days=30`);
+      const data = await res.json();
+      setOpsOverview(data && Array.isArray(data.roles) ? data : null);
+    } catch {
+      // 旧后端没有该接口时静默降级。
+      setOpsOverview(null);
+    }
+  }, [apiBaseUrl]);
+
   const fetchManagerState = useCallback(async (opts?: { showLoading?: boolean }) => {
     const showLoading = opts?.showLoading !== false;
     if (showLoading) setLoading(true);
@@ -270,12 +363,13 @@ export function AgentManagerView({
       const state = data as AgentManagerStateResponse;
       setProfiles(state.profiles || []);
       setCategories(state.categories || []);
+      await fetchPresetUpdates();
     } catch (e) {
       logger.warn("AgentManager", "Failed to fetch manager state", { error: String(e) });
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [apiBaseUrl]);
+  }, [apiBaseUrl, fetchPresetUpdates]);
 
   const fetchSkills = useCallback(async () => {
     try {
@@ -457,6 +551,7 @@ export function AgentManagerView({
       fetchMcpServers();
       fetchModels();
       fetchCollections();
+      fetchOpsOverview();
     }
   }, [
     visible,
@@ -466,6 +561,7 @@ export function AgentManagerView({
     fetchMcpServers,
     fetchModels,
     fetchCollections,
+    fetchOpsOverview,
   ]);
 
   useEffect(() => {
@@ -703,6 +799,38 @@ export function AgentManagerView({
     }
   };
 
+  const handleApplyPresetUpdate = async (profileId: string) => {
+    setPresetUpdateBusy(true);
+    try {
+      await safeFetch(`${apiBaseUrl}/api/agents/profiles/${profileId}/apply-preset-update`, {
+        method: "POST",
+      });
+      setPresetUpdateTarget(null);
+      await fetchManagerState();
+      showToast(t("agentManager.presetUpdate.applySuccess"), "ok");
+    } catch (e) {
+      showToast(String(e), "err");
+    } finally {
+      setPresetUpdateBusy(false);
+    }
+  };
+
+  const handleIgnorePresetUpdate = async (profileId: string) => {
+    setPresetUpdateBusy(true);
+    try {
+      await safeFetch(`${apiBaseUrl}/api/agents/profiles/${profileId}/ignore-preset-update`, {
+        method: "POST",
+      });
+      setPresetUpdateTarget(null);
+      await fetchManagerState();
+      showToast(t("agentManager.presetUpdate.ignoreSuccess"), "ok");
+    } catch (e) {
+      showToast(String(e), "err");
+    } finally {
+      setPresetUpdateBusy(false);
+    }
+  };
+
   const getCategoryLabel = (catId: string): string => {
     if (!catId) return t("agentManager.categoryAll");
     const i18nMap: Record<string, string> = {
@@ -754,6 +882,10 @@ export function AgentManagerView({
 
   const visibleProfiles = useMemo(() => profiles.filter((p) => !p.hidden), [profiles]);
   const hiddenProfiles = useMemo(() => profiles.filter((p) => p.hidden), [profiles]);
+  const presetUpdateById = useMemo(
+    () => new Map(presetUpdates.map((update) => [update.profile_id, update])),
+    [presetUpdates],
+  );
   const categoryProfileCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const profile of visibleProfiles) {
@@ -946,10 +1078,198 @@ export function AgentManagerView({
       </div>
 
 
+      {/* Enterprise Ops KPI overview */}
+      {opsOverview && opsOverview.roles.length > 0 && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 16,
+            borderRadius: 12,
+            border: "1px solid var(--line)",
+            background: "var(--panel)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              marginBottom: 12,
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>
+                {t("agentManager.opsOverview.title")}
+              </div>
+              <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2 }}>
+                {t("agentManager.opsOverview.subtitle", { days: opsOverview.days })}
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                onClick={() => fetchOpsOverview()}
+                title={t("agentManager.opsOverview.refresh")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "4px 8px",
+                  borderRadius: 6,
+                  border: "1px solid var(--line)",
+                  background: "transparent",
+                  cursor: "pointer",
+                  fontSize: 12,
+                }}
+              >
+                <IconRefresh size={13} />
+              </button>
+              <button
+                onClick={() => setOpsExpanded((value) => !value)}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 6,
+                  border: "1px solid var(--line)",
+                  background: "transparent",
+                  cursor: "pointer",
+                  fontSize: 12,
+                }}
+              >
+                {opsExpanded
+                  ? t("agentManager.opsOverview.collapse")
+                  : t("agentManager.opsOverview.expand")}
+              </button>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+              gap: 10,
+            }}
+          >
+            {[
+              {
+                label: t("agentManager.opsOverview.roles"),
+                value: opsOverview.totals.roles,
+              },
+              {
+                label: t("agentManager.opsOverview.tokens"),
+                value: formatCompactNumber(opsOverview.totals.total_tokens),
+              },
+              {
+                label: t("agentManager.opsOverview.requests"),
+                value: formatCompactNumber(opsOverview.totals.request_count),
+              },
+              {
+                label: t("agentManager.opsOverview.knowledgeDocs"),
+                value: opsOverview.totals.knowledge_doc_count,
+              },
+              {
+                label: t("agentManager.opsOverview.evalPassRate"),
+                value: formatPercent(opsOverview.totals.avg_eval_pass_rate),
+              },
+              {
+                label: t("agentManager.opsOverview.pendingUpdates"),
+                value: opsOverview.totals.pending_preset_updates,
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid var(--line)",
+                  background: "var(--bg, transparent)",
+                }}
+              >
+                <div style={{ fontSize: 11, opacity: 0.55 }}>{item.label}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, marginTop: 2 }}>{item.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {opsExpanded && (
+            <div style={{ overflowX: "auto", marginTop: 12 }}>
+              <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ textAlign: "left", opacity: 0.55 }}>
+                    <th style={{ padding: "6px 8px", fontWeight: 600 }}>
+                      {t("agentManager.opsOverview.role")}
+                    </th>
+                    <th style={{ padding: "6px 8px", fontWeight: 600 }}>
+                      {t("agentManager.opsOverview.tokens")}
+                    </th>
+                    <th style={{ padding: "6px 8px", fontWeight: 600 }}>
+                      {t("agentManager.opsOverview.eval")}
+                    </th>
+                    <th style={{ padding: "6px 8px", fontWeight: 600 }}>
+                      {t("agentManager.opsOverview.knowledge")}
+                    </th>
+                    <th style={{ padding: "6px 8px", fontWeight: 600 }}>
+                      {t("agentManager.opsOverview.status")}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {opsOverview.roles.map((role) => (
+                    <tr key={role.profile_id} style={{ borderTop: "1px solid var(--line)" }}>
+                      <td style={{ padding: "7px 8px", fontWeight: 600 }}>
+                        {role.name_i18n?.[langKey] || role.name}
+                      </td>
+                      <td style={{ padding: "7px 8px" }}>
+                        {formatCompactNumber(role.token_usage.total_tokens)}
+                      </td>
+                      <td style={{ padding: "7px 8px" }}>
+                        {role.eval.total
+                          ? `${role.eval.passed}/${role.eval.total} (${formatPercent(
+                              role.eval.pass_rate,
+                            )})`
+                          : "—"}
+                      </td>
+                      <td style={{ padding: "7px 8px" }}>{role.knowledge_doc_count}</td>
+                      <td style={{ padding: "7px 8px" }}>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 600,
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                            background:
+                              role.status === "pending_update"
+                                ? "rgba(239,68,68,0.12)"
+                                : role.status === "customized"
+                                  ? "rgba(245,158,11,0.12)"
+                                  : "rgba(16,185,129,0.12)",
+                            color:
+                              role.status === "pending_update"
+                                ? "#ef4444"
+                                : role.status === "customized"
+                                  ? "#f59e0b"
+                                  : "#10b981",
+                          }}
+                        >
+                          {role.status === "pending_update"
+                            ? t("agentManager.opsOverview.statusPending")
+                            : role.status === "customized"
+                              ? t("agentManager.opsOverview.statusCustomized")
+                              : t("agentManager.opsOverview.statusOk")}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Agent Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
         {filteredProfiles.map((agent) => {
           const isSystem = agent.type === "system";
+          const presetUpdate = presetUpdateById.get(agent.id);
           return (
             <div
               key={agent.id}
@@ -992,7 +1312,7 @@ export function AgentManagerView({
               </label>
 
               {/* Badges */}
-              <div style={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 4 }}>
+              <div style={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: "72%" }}>
                 {agent.category && (
                   <span
                     style={{
@@ -1022,6 +1342,22 @@ export function AgentManagerView({
                   >
                     {t("agentManager.customizedBadge")}
                   </span>
+                )}
+                {presetUpdate && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPresetUpdateTarget(presetUpdate);
+                    }}
+                    title={t("agentManager.presetUpdate.badgeTitle")}
+                    style={{
+                      fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
+                      background: "rgba(239,68,68,0.14)", color: "#ef4444",
+                      border: "1px solid rgba(239,68,68,0.35)", cursor: "pointer",
+                    }}
+                  >
+                    {t("agentManager.presetUpdate.badge")}
+                  </button>
                 )}
               </div>
 
@@ -1170,6 +1506,111 @@ export function AgentManagerView({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Preset Update Modal */}
+      {presetUpdateTarget && (
+        <div
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+            backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
+          }}
+          onClick={() => !presetUpdateBusy && setPresetUpdateTarget(null)}
+        >
+          <div
+            style={{
+              background: "var(--panel)", borderRadius: 12, padding: 24,
+              width: "min(640px, calc(100vw - 32px))", maxHeight: "82vh",
+              display: "flex", flexDirection: "column",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
+              {t("agentManager.presetUpdate.title", {
+                name: presetUpdateTarget.name_i18n?.[langKey] || presetUpdateTarget.name,
+              })}
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.65, marginBottom: 12, lineHeight: 1.5 }}>
+              {t("agentManager.presetUpdate.warning")}
+            </div>
+            <div
+              style={{
+                overflowY: "auto", maxHeight: "52vh", display: "flex",
+                flexDirection: "column", gap: 8, paddingRight: 4,
+              }}
+            >
+              {presetUpdateTarget.changed_fields.map((field) => {
+                const diff = presetUpdateTarget.diff[field];
+                return (
+                  <div
+                    key={field}
+                    style={{ border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px" }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                      {t(`agentManager.presetUpdate.fields.${field}`, { defaultValue: field })}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11, opacity: 0.7, whiteSpace: "pre-wrap",
+                        wordBreak: "break-all", marginBottom: 3,
+                      }}
+                    >
+                      <span style={{ color: "#94a3b8" }}>
+                        {t("agentManager.presetUpdate.current")}:{" "}
+                      </span>
+                      {formatPresetValue(diff?.current)}
+                    </div>
+                    <div style={{ fontSize: 11, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                      <span style={{ color: "#10b981" }}>
+                        {t("agentManager.presetUpdate.preset")}:{" "}
+                      </span>
+                      {formatPresetValue(diff?.preset)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+              <button
+                onClick={() => setPresetUpdateTarget(null)}
+                disabled={presetUpdateBusy}
+                style={{
+                  padding: "6px 14px", borderRadius: 8, border: "1px solid var(--line)",
+                  background: "var(--panel)", cursor: presetUpdateBusy ? "not-allowed" : "pointer",
+                  fontSize: 13, opacity: presetUpdateBusy ? 0.6 : 1,
+                }}
+              >
+                {t("agentManager.cancel")}
+              </button>
+              <button
+                onClick={() => handleIgnorePresetUpdate(presetUpdateTarget.profile_id)}
+                disabled={presetUpdateBusy}
+                style={{
+                  padding: "6px 14px", borderRadius: 8, border: "1px solid var(--line)",
+                  background: "transparent", cursor: presetUpdateBusy ? "not-allowed" : "pointer",
+                  fontSize: 13, opacity: presetUpdateBusy ? 0.6 : 1,
+                }}
+              >
+                {t("agentManager.presetUpdate.ignore")}
+              </button>
+              <button
+                onClick={() => handleApplyPresetUpdate(presetUpdateTarget.profile_id)}
+                disabled={presetUpdateBusy}
+                style={{
+                  padding: "6px 14px", borderRadius: 8, border: "none",
+                  background: "#f59e0b", color: "#fff", cursor: presetUpdateBusy ? "not-allowed" : "pointer",
+                  fontSize: 13, fontWeight: 600, opacity: presetUpdateBusy ? 0.7 : 1,
+                }}
+              >
+                {presetUpdateBusy
+                  ? t("agentManager.presetUpdate.applying")
+                  : t("agentManager.presetUpdate.apply")}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1359,7 +1800,7 @@ export function AgentManagerView({
                                 : "border-transparent hover:bg-accent"
                             }`}
                           >
-                            {getCategoryLabel(cat.id)}
+                            {cat.label}
                           </button>
                         ))}
                       </div>
