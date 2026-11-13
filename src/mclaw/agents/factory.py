@@ -13,6 +13,12 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from ..core.skill_permissions import (
+    build_skill_match_set,
+    is_essential_skill,
+    normalize_skill_name,
+    skill_in_set,
+)
 from .profile import AgentProfile, AgentType, SkillsMode
 
 if TYPE_CHECKING:
@@ -52,36 +58,8 @@ SKILL_GATEWAY_TOOL_NAMES: frozenset[str] = frozenset(
     }
 )
 
-ESSENTIAL_SYSTEM_SKILLS: frozenset[str] = frozenset(
-    {
-        # 规划（多步任务的核心）
-        "create-todo",
-        "update-todo-step",
-        "get-todo-status",
-        "complete-todo",
-        # 技能发现（渐进式披露入口 — 外部技能必须先 get_skill_info 读指令）
-        "get-skill-info",
-        "list-skills",
-        # 文件系统（外部技能执行的基础 — 读指令→写代码→run-shell 执行）
-        "run-shell",
-        "read-file",
-        "write-file",
-        "list-directory",
-        # IM 通道（接收用户输入、交付文件）
-        "deliver-artifacts",
-        "get-chat-history",
-        "get-image-file",
-        "get-voice-file",
-        # 记忆
-        "search-memory",
-        "add-memory",
-        # 信息检索
-        "web-search",
-        # 系统
-        "get-tool-info",
-        "set-task-timeout",
-    }
-)
+# 技能名归一化/匹配/基础技能集与执行期守卫共用 core.skill_permissions，
+# 避免“目录隐藏”和“执行拦截”两套口径漂移。
 
 
 class _GlobalStoreSource:
@@ -278,37 +256,22 @@ class AgentFactory:
     @staticmethod
     def _normalize_skill_name(name: str) -> str:
         """归一化技能名：下划线转连字符、统一小写"""
-        return name.lower().replace("_", "-")
+        return normalize_skill_name(name)
 
     @staticmethod
     def _build_skill_match_set(names: list[str]) -> tuple[set[str], set[str]]:
-        """构建技能名匹配集，同时支持完整命名空间和短名匹配。
-
-        Returns:
-            (exact_set, short_set) — exact_set 包含完整归一化名称，
-            short_set 包含 ``@`` 后的短名（用于跨格式回退匹配）。
-        """
-        n = AgentFactory._normalize_skill_name
-        exact: set[str] = set()
-        short: set[str] = set()
-        for s in names:
-            norm = n(s)
-            exact.add(norm)
-            short.add(norm.split("@", 1)[-1] if "@" in norm else norm)
-        return exact, short
+        """构建技能名匹配集，同时支持完整命名空间和短名匹配。"""
+        return build_skill_match_set(names)
 
     @staticmethod
     def _skill_in_set(skill_name: str, exact_set: set[str], short_set: set[str]) -> bool:
         """判断技能名是否在匹配集中（兼容命名空间和短名）。"""
-        norm = AgentFactory._normalize_skill_name(skill_name)
-        if norm in exact_set:
-            return True
-        return (norm.split("@", 1)[-1] if "@" in norm else norm) in short_set
+        return skill_in_set(skill_name, exact_set, short_set)
 
     @staticmethod
     def _is_essential(skill_name: str) -> bool:
         """判断是否为基础设施系统工具（INCLUSIVE 模式始终保留）。"""
-        return AgentFactory._normalize_skill_name(skill_name) in ESSENTIAL_SYSTEM_SKILLS
+        return is_essential_skill(skill_name)
 
     @staticmethod
     def _apply_skill_filter(agent: Agent, profile: AgentProfile) -> None:

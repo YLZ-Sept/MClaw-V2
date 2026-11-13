@@ -46,18 +46,16 @@ def test_eight_nodes_and_profile_bindings():
         assert node["custom_prompt"].strip()
 
 
-def test_node_tools_stay_within_document_scope():
-    forbidden = {
-        "run_shell",
-        "run_powershell",
-        "delete_file",
-        "browser",
-        "desktop",
-        "scheduled",
-        "research",
-    }
+def test_node_tools_match_role_matrix():
+    from mclaw.core.enterprise_ops_permissions import (
+        ENTERPRISE_OPS_FORBIDDEN_TOOLS,
+        enterprise_ops_tools,
+    )
+
     for node in ENTERPRISE_OPERATIONS["nodes"]:
-        assert not forbidden & set(node["external_tools"]), node["id"]
+        assert node["external_tools"] == enterprise_ops_tools(node["id"]), node["id"]
+        assert node["enable_file_tools"] is False
+        assert not ENTERPRISE_OPS_FORBIDDEN_TOOLS & set(node["external_tools"]), node["id"]
         assert "knowledge_search" in node["external_tools"]
         assert "deliver_artifacts" in node["external_tools"]
         assert "ask_user" in node["external_tools"]
@@ -109,16 +107,26 @@ def test_ensure_builtin_templates_writes_enterprise_operations(tmp_path):
     assert {node["agent_profile_id"] for node in data["nodes"]} == {ROOT_ID} | ROLE_IDS
 
 
-def test_upgrade_enterprise_operations_tools_adds_ask_user():
+def test_upgrade_enterprise_operations_tools_syncs_per_role_and_is_idempotent():
+    from mclaw.core.enterprise_ops_permissions import enterprise_ops_tools
     from mclaw.orgs._runtime_templates import _upgrade_enterprise_operations_tools
 
     data = {
         "nodes": [
-            {"external_tools": ["read_file"]},
-            {"external_tools": ["ask_user", "read_file"]},
+            {"id": "finance-management", "external_tools": ["read_file"]},
+            {"id": "sales-management", "external_tools": ["ask_user", "read_file"]},
+            {"id": "custom-node", "external_tools": ["read_file"]},
         ]
     }
 
     assert _upgrade_enterprise_operations_tools(data) is True
-    assert "ask_user" in data["nodes"][0]["external_tools"]
+    nodes = {node["id"]: node for node in data["nodes"]}
+    assert nodes["finance-management"]["external_tools"] == enterprise_ops_tools(
+        "finance-management"
+    )
+    assert nodes["sales-management"]["external_tools"] == enterprise_ops_tools(
+        "sales-management"
+    )
+    assert nodes["custom-node"]["external_tools"] == ["read_file"]
+    assert nodes["finance-management"]["enable_file_tools"] is False
     assert _upgrade_enterprise_operations_tools(data) is False

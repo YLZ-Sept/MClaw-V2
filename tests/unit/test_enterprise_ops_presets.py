@@ -16,8 +16,14 @@ from mclaw.agents.presets import (
     SYSTEM_PRESETS,
     deploy_system_presets,
     get_preset_by_id,
+    preset_update_available,
 )
 from mclaw.agents.profile import BUILTIN_CATEGORIES, AgentProfile, ProfileStore
+from mclaw.core.enterprise_ops_permissions import (
+    ENTERPRISE_OPS_FORBIDDEN_TOOLS,
+    enterprise_ops_skills,
+    enterprise_ops_tools,
+)
 
 ENTERPRISE_OPS = {
     "business-operations": "经营管理",
@@ -118,59 +124,30 @@ def test_preset_ids_unique():
     assert len(ids) == len(set(ids))
 
 
-@pytest.mark.parametrize("profile_id", ["finance-management", "hr-management"])
-def test_sensitive_roles_minimal_permissions(profile_id):
+@pytest.mark.parametrize("profile_id", list(ENTERPRISE_OPS))
+def test_enterprise_ops_permissions_match_role_matrix(profile_id):
     preset = get_preset_by_id(profile_id)
+    assert preset.tools == enterprise_ops_tools(profile_id)
+    assert preset.skills == enterprise_ops_skills(profile_id)
+    assert preset.skills_mode == "inclusive"
+    assert preset.tools_mode == "inclusive"
     assert preset.memory_mode == "isolated"
     assert preset.memory_inherit_global is False
-    assert preset.tools_mode == "inclusive"
     assert preset.mcp_mode == "inclusive"
     assert preset.mcp_servers == []
     assert preset.plugins_mode == "inclusive"
     assert preset.plugins == []
-    forbidden = {
-        "browser",
-        "desktop",
-        "scheduled",
-        "research",
-        "run_shell",
-        "run_powershell",
-        "delete_file",
-    }
-    assert not forbidden & set(preset.tools)
-
-
-@pytest.mark.parametrize(
-    "profile_id",
-    [
-        "business-operations",
-        "sales-management",
-        "commerce-management",
-        "project-management",
-        "customer-management",
-        "general-management",
-    ],
-)
-def test_non_sensitive_roles_use_isolated_memory_and_whitelist(profile_id):
-    preset = get_preset_by_id(profile_id)
-    assert preset.memory_mode == "isolated"
-    assert preset.memory_inherit_global is False
     assert "ask_user" in preset.tools
-    assert preset.tools_mode == "inclusive"
-    assert preset.mcp_mode == "inclusive"
-    assert preset.mcp_servers == []
-    assert preset.plugins_mode == "inclusive"
-    assert preset.plugins == []
-    forbidden = {
-        "browser",
-        "desktop",
-        "scheduled",
-        "research",
-        "run_shell",
-        "run_powershell",
-        "delete_file",
-    }
-    assert not forbidden & set(preset.tools)
+    assert not ENTERPRISE_OPS_FORBIDDEN_TOOLS & set(preset.tools)
+
+
+def test_role_specific_extras_are_attached():
+    assert "bid-writer" in get_preset_by_id("sales-management").skills
+    assert "bid-writer" in get_preset_by_id("commerce-management").skills
+    assert "bid-writer" not in get_preset_by_id("finance-management").skills
+    assert "get_voice_file" in get_preset_by_id("customer-management").tools
+    assert "get_voice_file" not in get_preset_by_id("finance-management").tools
+    assert "list_recent_tasks" in get_preset_by_id("business-operations").tools
 
 
 @pytest.mark.parametrize("profile_id", list(ENTERPRISE_OPS))
@@ -210,6 +187,8 @@ def test_deploy_backfills_prompt_and_job_card(tmp_path, monkeypatch):
     old["memory_isolation"] = "shared"
     old["tools"] = []
     old["tools_mode"] = "all"
+    old["skills"] = []
+    old["skills_mode"] = "all"
     store.save(AgentProfile.from_dict(old))
 
     deploy_system_presets(store)
@@ -220,6 +199,30 @@ def test_deploy_backfills_prompt_and_job_card(tmp_path, monkeypatch):
     assert stored.example_prompts == preset.example_prompts
     assert stored.memory_mode == "isolated"
     assert stored.tools_mode == "inclusive"
+    assert stored.tools == enterprise_ops_tools("finance-management")
+    assert stored.skills == enterprise_ops_skills("finance-management")
+    assert stored.skills_mode == "inclusive"
+
+
+def test_customized_role_keeps_old_permissions_and_flags_update(tmp_path, monkeypatch):
+    monkeypatch.setattr(presets_mod, "_ensure_digital_employee_kb_skeletons", lambda: None)
+    store = ProfileStore(tmp_path)
+    preset = get_preset_by_id("finance-management")
+    old = preset.to_dict()
+    old["tools"] = ["read_file"]
+    old["tools_mode"] = "inclusive"
+    old["skills"] = []
+    old["skills_mode"] = "all"
+    old["user_customized"] = True
+    old["preset_synced_hash"] = ""
+    store.save(AgentProfile.from_dict(old))
+
+    deploy_system_presets(store)
+
+    stored = store.get("finance-management")
+    assert stored.tools == ["read_file"]
+    assert stored.skills_mode == "all"
+    assert preset_update_available(stored) is True
 
 
 def test_deploy_creates_all_enterprise_ops_agents(tmp_path, monkeypatch):

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from mclaw.core._tool_runtime import ToolExecutor
 
 
@@ -50,7 +52,37 @@ def test_missing_agent_does_not_block():
 
 def test_enterprise_ops_allowlist_includes_ask_user():
     from mclaw.agents.presets import get_preset_by_id
+    from mclaw.core.enterprise_ops_permissions import enterprise_ops_tools
 
     preset = get_preset_by_id("customer-management")
+    assert preset.tools == enterprise_ops_tools("customer-management")
     assert "ask_user" in preset.tools
     assert "run_shell" not in preset.tools
+    assert {"semantic_search", "search_conversation_traces", "update_user_profile"} & set(
+        preset.tools
+    ) == set()
+
+
+@pytest.mark.parametrize(
+    "profile_id",
+    [
+        "business-operations",
+        "sales-management",
+        "commerce-management",
+        "finance-management",
+        "hr-management",
+        "project-management",
+        "customer-management",
+        "general-management",
+    ],
+)
+def test_every_enterprise_role_has_base_tools_and_no_forbidden(profile_id):
+    from mclaw.agents.presets import get_preset_by_id
+    from mclaw.core.enterprise_ops_permissions import (
+        ENTERPRISE_OPS_BASE_TOOLS,
+        ENTERPRISE_OPS_FORBIDDEN_TOOLS,
+    )
+
+    preset = get_preset_by_id(profile_id)
+    assert set(ENTERPRISE_OPS_BASE_TOOLS) <= set(preset.tools)
+    assert not ENTERPRISE_OPS_FORBIDDEN_TOOLS & set(preset.tools)

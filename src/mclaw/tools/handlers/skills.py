@@ -30,6 +30,11 @@ from typing import TYPE_CHECKING, Any
 
 from ...core._tool_runtime import MAX_TOOL_RESULT_CHARS, OVERFLOW_MARKER, save_overflow
 from ...core.policy_v2 import ApprovalClass
+from ...core.skill_permissions import (
+    current_profile_for_agent,
+    filter_skill_entries,
+    is_skill_allowed,
+)
 from ...skills.catalog import SKILL_INSTRUCTION_ADVISORY
 from ...skills.events import SkillEvent
 from ...skills.exposure import build_skill_exposure
@@ -92,6 +97,28 @@ class SkillsHandler:
     def __init__(self, agent: "Agent"):
         self.agent = agent
 
+    def _current_profile(self):
+        """当前 Agent 的 profile；组织节点通过 context 里的 profile_id 回退。"""
+        return current_profile_for_agent(self.agent)
+
+    def _skill_guard(self, skill_name: str, entry: Any = None) -> str | None:
+        """执行期技能白名单校验；允许返回 None，拒绝返回提示文本。"""
+        profile = self._current_profile()
+        if profile is None:
+            return None
+        canonical = getattr(entry, "skill_id", None) or skill_name
+        if is_skill_allowed(profile, canonical):
+            return None
+        logger.warning(
+            "[SkillFilter] blocked skill '%s' (profile=%s)",
+            skill_name,
+            getattr(profile, "id", "?"),
+        )
+        return (
+            f"❌ 技能 '{skill_name}' 未对该岗位启用。"
+            "请只使用当前可用技能；如确需该能力，请联系管理员调整技能白名单。"
+        )
+
     async def handle(self, tool_name: str, params: dict[str, Any]) -> str:
         """处理工具调用"""
         try:
@@ -128,7 +155,10 @@ class SkillsHandler:
         """列出所有技能，区分启用/禁用/可发现状态"""
         verbose = bool(params.get("verbose", False))
         include_paths = bool(params.get("include_paths", False))
-        all_skills = self.agent.skill_registry.list_all(include_disabled=True)
+        all_skills = filter_skill_entries(
+            self.agent.skill_registry.list_all(include_disabled=True),
+            self._current_profile(),
+        )
         if not all_skills:
             return (
                 "当前没有已安装的技能\n\n"
@@ -308,12 +338,20 @@ class SkillsHandler:
         skill = self.agent.skill_registry.get(skill_name)
 
         if not skill or skill.disabled:
-            available = [s.name for s in self.agent.skill_registry.list_all()[:10]]
+            available = [
+                s.name
+                for s in filter_skill_entries(
+                    self.agent.skill_registry.list_all(), self._current_profile()
+                )[:10]
+            ]
             hint = f"，当前可用技能: {', '.join(available)}" if available else ""
             return (
                 f"未找到技能 '{skill_name}'{hint}。"
                 f"请检查技能名称是否正确，或使用 list_skills 查看所有可用技能。"
             )
+
+        if reason := self._skill_guard(skill_name, skill):
+            return reason
 
         # F6: usage tracking
         usage_tracker = getattr(self.agent, "_skill_usage_tracker", None)
@@ -418,13 +456,16 @@ class SkillsHandler:
         args = params.get("args", [])
         cwd_raw = params.get("cwd")
 
+        skill_entry = self.agent.skill_registry.get(skill_name)
+        if reason := self._skill_guard(skill_name, skill_entry):
+            return reason
+
         resolved_cwd: Path | None = None
         if cwd_raw:
             resolved_cwd = Path(cwd_raw).resolve()
             from mclaw.config import settings as _settings
 
             project_root = Path(_settings.project_root).resolve()
-            skill_entry = self.agent.skill_registry.get(skill_name)
             skill_dir = (
                 Path(skill_entry.skill_path).resolve()
                 if skill_entry and skill_entry.skill_path
@@ -446,7 +487,6 @@ class SkillsHandler:
             if not allowed:
                 return f"❌ 工作目录被拒绝: {cwd_raw}\ncwd 只能位于项目工作区或技能目录内。"
 
-        skill_entry = self.agent.skill_registry.get(skill_name)
         python_executable: str | None = None
         script_env: dict[str, str] | None = None
         env_scope = "legacy"
@@ -614,6 +654,11 @@ class SkillsHandler:
         """获取技能参考文档"""
         skill_name = params["skill_name"]
         ref_name = params.get("ref_name", "REFERENCE.md")
+
+        if reason := self._skill_guard(
+            skill_name, self.agent.skill_registry.get(skill_name)
+        ):
+            return reason
 
         content = self.agent.skill_loader.get_reference(skill_name, ref_name)
 
@@ -838,9 +883,17 @@ class SkillsHandler:
 
         skill = self.agent.skill_registry.get(skill_name)
         if not skill or skill.disabled:
-            available = [s.name for s in self.agent.skill_registry.list_all()[:10]]
+            available = [
+                s.name
+                for s in filter_skill_entries(
+                    self.agent.skill_registry.list_all(), self._current_profile()
+                )[:10]
+            ]
             hint = f"，可用技能: {', '.join(available)}" if available else ""
             return f"未找到或已禁用技能 '{skill_name}'{hint}。"
+
+        if reason := self._skill_guard(skill_name, skill):
+            return reason
 
         body = skill.get_body() or ""
         if not body:

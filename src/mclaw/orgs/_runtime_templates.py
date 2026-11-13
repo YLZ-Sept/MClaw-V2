@@ -58,6 +58,11 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ..core.enterprise_ops_permissions import (
+    ENTERPRISE_OPS_ROLE_IDS,
+    enterprise_ops_tools,
+)
+
 if TYPE_CHECKING:
     from mclaw.plugins.manager import PluginManager
 
@@ -1399,54 +1404,13 @@ AIGC_VIDEO_STUDIO: dict = {
 # 直接复用企业运营预置的岗位卡/知识库/权限语义。节点工具只放行文档、表格、
 # 知识库、交付和技能脚本，不放开 shell / 删除 / 浏览器 / 桌面操作。
 #
+# 工具白名单与预置共用 ``core.enterprise_ops_permissions``，按岗位取表，
+# 避免两处手工维护后漂移。
+#
 # 注意：org 节点的 KB 检索目前走主 Agent 的 handler registry，节点级
 # ``knowledge_collections`` 尚未逐节点注入；因此节点 prompt 同时要求
 # “以用户/上级提供的文件和工作区资料为准”，不把知识库检索作为唯一来源。
 # ---------------------------------------------------------------------------
-
-_ENTERPRISE_OPS_NODE_TOOLS = [
-    # 交互：信息不足时向上级/用户提问
-    "ask_user",
-    # 计划与待办
-    "create_todo",
-    "update_todo_step",
-    "get_todo_status",
-    "complete_todo",
-    "create_plan_file",
-    # 文件读写（不含 shell / delete_file）
-    "read_file",
-    "write_file",
-    "edit_file",
-    "append_file",
-    "list_directory",
-    "glob",
-    "grep",
-    "move_file",
-    # 记忆
-    "add_memory",
-    "search_memory",
-    "get_memory_stats",
-    "list_recent_tasks",
-    "search_conversation_traces",
-    # 交付与读取附件
-    "deliver_artifacts",
-    "get_chat_history",
-    "get_image_file",
-    "get_voice_file",
-    # 知识库检索
-    "knowledge_search",
-    "semantic_search",
-    # 技能
-    "run_skill_script",
-    "list_skills",
-    "get_skill_info",
-    "get_skill_reference",
-    # 用户资料
-    "get_user_profile",
-    "update_user_profile",
-    "skip_profile_question",
-    "toggle_proactive",
-]
 
 
 def _enterprise_ops_node(
@@ -1475,7 +1439,9 @@ def _enterprise_ops_node(
         "department": department,
         "avatar": avatar,
         "custom_prompt": custom_prompt,
-        "external_tools": list(_ENTERPRISE_OPS_NODE_TOOLS),
+        "external_tools": enterprise_ops_tools(node_id),
+        # 关闭 resolver 的“自动补文件工具”，让岗位白名单成为唯一来源。
+        "enable_file_tools": False,
         "can_delegate": can_delegate,
         "can_escalate": True,
     }
@@ -1872,20 +1838,25 @@ _REMOVED_BUILTIN_TEMPLATES: tuple[str, ...] = (
 
 
 def _upgrade_enterprise_operations_tools(data: dict) -> bool:
-    """Add ask_user to existing enterprise-operations node tool lists.
+    """把已落盘的 enterprise-operations 节点工具同步为按岗位白名单。
 
-    The template was seeded before ``ask_user`` was added to the enterprise
-    ops whitelist. Built-ins are otherwise preserved, so do a narrow in-place
-    upgrade instead of overwriting the whole template (which may carry user
-    edits to names/positions/prompts).
+    旧模板的 8 个节点共用一张宽表；现在每个岗位各取一份。逐节点比对，
+    只替换 ``external_tools`` / ``enable_file_tools``，保留用户对名称、
+    位置、提示词等字段的编辑；第二次调用返回 False，保持幂等。
     """
     changed = False
     for node in data.get("nodes", []):
         if not isinstance(node, dict):
             continue
-        tools = node.get("external_tools")
-        if isinstance(tools, list) and "ask_user" not in tools:
-            tools.insert(0, "ask_user")
+        node_id = node.get("id")
+        if node_id not in ENTERPRISE_OPS_ROLE_IDS:
+            continue
+        desired = enterprise_ops_tools(node_id)
+        if node.get("external_tools") != desired:
+            node["external_tools"] = desired
+            changed = True
+        if node.get("enable_file_tools") is not False:
+            node["enable_file_tools"] = False
             changed = True
     return changed
 

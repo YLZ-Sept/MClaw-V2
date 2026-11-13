@@ -257,6 +257,46 @@ def test_mcp_inclusive_empty_filters_catalog_to_no_servers():
     assert agent.mcp_catalog.server_count == 0
 
 
+def test_enterprise_ops_sales_skill_whitelist_hides_others():
+    from mclaw.agents.presets import get_preset_by_id
+    from mclaw.core.enterprise_ops_permissions import enterprise_ops_skills
+
+    profile = get_preset_by_id("sales-management")
+    assert profile.skills_mode == SkillsMode.INCLUSIVE
+    assert profile.skills == enterprise_ops_skills("sales-management")
+
+    registry = _FakeRegistry(
+        [
+            SimpleNamespace(skill_id="docx", name="docx", disabled=False, catalog_hidden=False),
+            SimpleNamespace(
+                skill_id="bid-writer", name="bid-writer", disabled=False, catalog_hidden=False
+            ),
+            SimpleNamespace(
+                skill_id="apify-scraper",
+                name="apify-scraper",
+                disabled=False,
+                catalog_hidden=False,
+            ),
+            SimpleNamespace(
+                skill_id="list-skills", name="list-skills", disabled=False, catalog_hidden=False
+            ),
+        ]
+    )
+    catalog = _FakeCatalog()
+    agent = SimpleNamespace(
+        skill_registry=registry,
+        skill_catalog=catalog,
+        _update_skill_tools=lambda: None,
+    )
+
+    AgentFactory._apply_skill_filter(agent, profile)
+
+    assert registry.unregistered == []
+    assert set(registry.catalog_hidden) == {"apify-scraper"}
+    assert "docx" not in registry.catalog_hidden
+    assert "bid-writer" not in registry.catalog_hidden
+
+
 def test_enterprise_ops_inclusive_whitelist_blocks_high_risk_tools():
     """企业运营岗位默认白名单应保留文档/知识库工具，过滤 shell/删除/浏览器等。"""
     from mclaw.agents.presets import get_preset_by_id

@@ -9,6 +9,10 @@ import json
 import logging
 from typing import TYPE_CHECKING, NamedTuple
 
+from ..core.enterprise_ops_permissions import (
+    enterprise_ops_skills,
+    enterprise_ops_tools,
+)
 from .profile import AgentProfile, AgentType, ProfileStore, SkillsMode, get_profile_store
 
 if TYPE_CHECKING:
@@ -168,53 +172,6 @@ def _enterprise_ops_prompt(*, role: str, duties: str, outputs: str, escalate: st
     )
 
 
-# 企业运营岗位的默认工具白名单：只保留文档/表格/知识库/交付所需能力。
-# 用具体工具名而不是类目，避免顺带放开 run_shell / delete_file / 浏览器等。
-# 8 个岗位统一使用 isolated 记忆，且不继承全局记忆，保证岗位之间互不可见。
-_ENTERPRISE_OPS_SENSITIVE_TOOLS = [
-    # 交互：信息不足时向用户提问
-    "ask_user",
-    # 计划与待办
-    "create_todo",
-    "update_todo_step",
-    "get_todo_status",
-    "complete_todo",
-    "create_plan_file",
-    # 文件读写（不含 shell 与删除）
-    "read_file",
-    "write_file",
-    "edit_file",
-    "list_directory",
-    "glob",
-    "grep",
-    "move_file",
-    # 记忆
-    "add_memory",
-    "search_memory",
-    "get_memory_stats",
-    "list_recent_tasks",
-    "search_conversation_traces",
-    # 交付与读取附件
-    "deliver_artifacts",
-    "get_chat_history",
-    "get_image_file",
-    "get_voice_file",
-    # 知识库检索
-    "knowledge_search",
-    "semantic_search",
-    # 技能
-    "run_skill_script",
-    "list_skills",
-    "get_skill_info",
-    "get_skill_reference",
-    # 用户资料
-    "get_user_profile",
-    "update_user_profile",
-    "skip_profile_question",
-    "toggle_proactive",
-]
-
-
 def _enterprise_ops_agent(
     *,
     agent_id: str,
@@ -231,6 +188,7 @@ def _enterprise_ops_agent(
     deliverables: list[str],
     example_prompts: list[str],
     tools: list[str] | None = None,
+    skills: list[str] | None = None,
     tools_mode: str = "inclusive",
     mcp_mode: str = "inclusive",
     plugins_mode: str = "inclusive",
@@ -239,8 +197,8 @@ def _enterprise_ops_agent(
 ) -> AgentProfile:
     """按统一岗位卡结构构造企业运营预置。
 
-    默认最小权限：具体工具白名单 + 不加载 MCP/插件；需要更多能力的岗位
-    必须显式覆盖 tools/tools_mode。
+    默认最小权限：按岗位取工具/技能白名单 + 不加载 MCP/插件；需要更多
+    能力的岗位必须显式覆盖 tools/skills。
     """
     return AgentProfile(
         id=agent_id,
@@ -248,9 +206,9 @@ def _enterprise_ops_agent(
         name=name,
         description=description,
         type=AgentType.SYSTEM,
-        skills=[],
-        skills_mode=SkillsMode.ALL,
-        tools=list(_ENTERPRISE_OPS_SENSITIVE_TOOLS) if tools is None else list(tools),
+        skills=enterprise_ops_skills(agent_id) if skills is None else list(skills),
+        skills_mode=SkillsMode.INCLUSIVE,
+        tools=enterprise_ops_tools(agent_id) if tools is None else list(tools),
         tools_mode=tools_mode,
         mcp_mode=mcp_mode,
         plugins_mode=plugins_mode,
@@ -1217,8 +1175,6 @@ SYSTEM_PRESETS: list[AgentProfile] = [
             "核对本月工资表异常项",
             "分析本月费用超支原因",
         ],
-        tools=_ENTERPRISE_OPS_SENSITIVE_TOOLS,
-        tools_mode="inclusive",
         mcp_mode="inclusive",
         plugins_mode="inclusive",
         memory_mode="isolated",
@@ -1253,8 +1209,6 @@ SYSTEM_PRESETS: list[AgentProfile] = [
             "导出本月考勤异常清单",
             "整理季度考核结果和校准项",
         ],
-        tools=_ENTERPRISE_OPS_SENSITIVE_TOOLS,
-        tools_mode="inclusive",
         mcp_mode="inclusive",
         plugins_mode="inclusive",
         memory_mode="isolated",
