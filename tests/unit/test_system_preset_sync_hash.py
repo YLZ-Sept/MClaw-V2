@@ -38,6 +38,16 @@ def _preset_copy(**overrides) -> AgentProfile:
     return AgentProfile.from_dict(data)
 
 
+def _patch_preset(monkeypatch, **overrides) -> AgentProfile:
+    changed = _preset_copy(**overrides)
+    monkeypatch.setattr(
+        presets_mod,
+        "SYSTEM_PRESETS",
+        [changed if p.id == PRESET_ID else p for p in presets_mod.SYSTEM_PRESETS],
+    )
+    return changed
+
+
 def test_deploy_writes_current_hash(tmp_path, monkeypatch):
     store = _store(tmp_path, monkeypatch)
 
@@ -245,6 +255,63 @@ def test_diff_ignore_and_apply_flow(tmp_path, monkeypatch):
     assert applied.custom_prompt == changed.custom_prompt
     assert applied.preset_ignored_hash == ""
     assert preset_update_available(applied) is False
+
+
+def test_empty_preset_knowledge_keeps_user_bindings_and_is_not_flagged(
+    tmp_path, monkeypatch
+):
+    store = _store(tmp_path, monkeypatch)
+    _patch_preset(monkeypatch, knowledge_collections=[])
+    deploy_system_presets(store)
+
+    store.update(PRESET_ID, {"knowledge_collections": ["sys-dept-user"]})
+    stored = store.get(PRESET_ID)
+    assert stored.user_customized is True
+
+    # 模拟旧版本留下的过期哈希：实际差异只有用户自绑的知识库。
+    store.save(AgentProfile.from_dict({**stored.to_dict(), "preset_synced_hash": "stale"}))
+    stored = store.get(PRESET_ID)
+
+    assert preset_update_available(stored) is False
+    assert preset_diff(stored) == {}
+
+    applied = store.update(PRESET_ID, preset_apply_updates(stored))
+    assert applied.knowledge_collections == ["sys-dept-user"]
+    assert preset_update_available(applied) is False
+
+
+def test_empty_preset_knowledge_survives_a_real_preset_update(tmp_path, monkeypatch):
+    store = _store(tmp_path, monkeypatch)
+    _patch_preset(monkeypatch, knowledge_collections=[])
+    deploy_system_presets(store)
+    store.update(PRESET_ID, {"knowledge_collections": ["sys-dept-user"]})
+
+    _patch_preset(
+        monkeypatch, knowledge_collections=[], custom_prompt="预置新提示词"
+    )
+    stored = store.get(PRESET_ID)
+
+    assert preset_update_available(stored) is True
+    assert set(preset_diff(stored)) == {"custom_prompt"}
+
+    applied = store.update(PRESET_ID, preset_apply_updates(stored))
+    assert applied.custom_prompt == "预置新提示词"
+    assert applied.knowledge_collections == ["sys-dept-user"]
+
+
+def test_non_empty_preset_knowledge_is_still_managed(tmp_path, monkeypatch):
+    store = _store(tmp_path, monkeypatch)
+    deploy_system_presets(store)
+    original = get_preset_by_id(PRESET_ID)
+    assert original.knowledge_collections
+
+    store.update(PRESET_ID, {"knowledge_collections": ["sys-dept-other"]})
+    _patch_preset(monkeypatch, custom_prompt="预置新提示词")
+    stored = store.get(PRESET_ID)
+
+    assert "knowledge_collections" in preset_diff(stored)
+    applied = store.update(PRESET_ID, preset_apply_updates(stored))
+    assert applied.knowledge_collections == list(original.knowledge_collections)
 
 
 def test_null_preset_hashes_normalize_to_empty():

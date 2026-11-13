@@ -1438,6 +1438,17 @@ def _preset_field_value(profile: AgentProfile, name: str):
     return value
 
 
+def _preset_field_managed_by_preset(preset: AgentProfile, name: str) -> bool:
+    """预置是否管理该字段。
+
+    知识库为空表示预置“不表态”：不参与差异判断，应用更新时也不覆盖，
+    避免把用户手工绑定的知识库清空。其他字段始终由预置管理。
+    """
+    if name == "knowledge_collections":
+        return bool(_preset_field_value(preset, name))
+    return True
+
+
 def compute_preset_hash(profile: AgentProfile) -> str:
     """计算预设受管字段的稳定哈希，用于判断“有更新”。"""
     payload = {name: _preset_field_value(profile, name) for name in _PRESET_TRACKED_FIELDS}
@@ -1506,7 +1517,11 @@ def preset_update_available(profile: AgentProfile) -> bool:
         # 旧版本没有哈希。只按受管字段的实际差异判断，避免“只改名字/图标”
         # 也弹更新；同时不会漏掉权限收紧、岗位卡更新这类真实变更。
         return bool(preset_diff(profile))
-    return profile.preset_synced_hash != preset_hash
+    if profile.preset_synced_hash == preset_hash:
+        return False
+    # 哈希不同也要看实际差异：用户手工绑定的知识库会让哈希偏离预置，
+    # 但这不是可应用的预设更新，不应提示。
+    return bool(preset_diff(profile))
 
 
 def preset_diff(profile: AgentProfile) -> dict[str, dict[str, object]]:
@@ -1520,6 +1535,8 @@ def preset_diff(profile: AgentProfile) -> dict[str, dict[str, object]]:
         return {}
     diff: dict[str, dict[str, object]] = {}
     for name in _PRESET_TRACKED_FIELDS:
+        if not _preset_field_managed_by_preset(preset, name):
+            continue
         current = _preset_field_value(profile, name)
         target = _preset_field_value(preset, name)
         if current != target:
@@ -1531,14 +1548,16 @@ def preset_apply_updates(profile: AgentProfile) -> dict[str, object]:
     """构造“应用预设更新”所需的 store.update 字段。
 
     覆盖全部受管字段（包括岗位卡 custom_prompt），保留 name/icon/color/
-    endpoint 等用户身份配置；应用后清除“忽略”标记。调用方应先确认用户
-    知道这会覆盖自定义提示词/工具配置。
+    endpoint 等用户身份配置；预置知识库为空时不覆盖用户已绑定的库。应用后
+    清除“忽略”标记。调用方应先确认用户知道这会覆盖自定义提示词/工具配置。
     """
     preset = get_preset_by_id(profile.id)
     if preset is None:
         raise KeyError(f"No system preset found for {profile.id}")
     updates: dict[str, object] = {
-        name: _preset_field_value(preset, name) for name in _PRESET_TRACKED_FIELDS
+        name: _preset_field_value(preset, name)
+        for name in _PRESET_TRACKED_FIELDS
+        if _preset_field_managed_by_preset(preset, name)
     }
     updates["preset_synced_hash"] = compute_preset_hash(preset)
     updates["preset_ignored_hash"] = ""
