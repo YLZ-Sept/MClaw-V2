@@ -459,6 +459,9 @@ class LLMResponse:
     # PR-C2: 当从非标准字段恢复 content 时记录来源（如 "message.reasoning_content"）。
     # endpoint_manager 见此字段视为"已自愈"，不再触发 30s cooldown。
     recovered_from: str = ""
+    # content 为空、由 reasoning/兜底字段合成的可见文本。评测等场景应把这类
+    # 响应视为"没有答案"，不能拿思维链当模型输出判分。
+    content_synthesized: bool = False
 
     @property
     def text(self) -> str:

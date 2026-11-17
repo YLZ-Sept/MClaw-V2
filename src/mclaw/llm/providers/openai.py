@@ -1394,6 +1394,10 @@ class OpenAIProvider(LLMProvider):
             usage_data.get("output_tokens") or usage_data.get("completion_tokens") or 0
         )
 
+        # content 为空时下面是"兜底合成"，不是模型真正给出的可见答案。
+        # 评测等消费方需要靠这个标记把兜底文本排除在判分之外。
+        content_synthesized = False
+
         # Reasoning 模型容错：content 为空但 reasoning 有内容
         # 当 reasoning 模型被 max_tokens 截断时，所有输出可能都在 reasoning 字段，
         # content 为空。此时尝试从 reasoning 中提取结构化内容作为兜底。
@@ -1407,6 +1411,7 @@ class OpenAIProvider(LLMProvider):
             )
             if yaml_match:
                 text_content = yaml_match.group(1).strip()
+                content_synthesized = True
                 logger.warning(
                     f"[PARSE] content is empty but found structured data in reasoning "
                     f"({len(text_content)} chars extracted from {len(reasoning_content)} chars reasoning)"
@@ -1415,6 +1420,7 @@ class OpenAIProvider(LLMProvider):
                 # 1. 把 reasoning 全文作为 visible text fallback (优于直接放弃)
                 text_content = reasoning_content
                 reasoning_content = ""
+                content_synthesized = True
                 content_blocks.insert(0, TextBlock(text=text_content))
                 logger.warning(
                     f"[PARSE] content is empty; using reasoning_content "
@@ -1432,6 +1438,7 @@ class OpenAIProvider(LLMProvider):
                 text_content = recovered_text
                 content_blocks.insert(0, TextBlock(text=text_content))
                 recovered_from = recovered_source
+                content_synthesized = True
                 # PR-C2: 已经成功恢复，不要打 ERROR；INFO 级足够运维观察
                 logger.info(
                     f"[PARSE] auto-recovered {len(recovered_text)} chars from {recovered_source} "
@@ -1552,6 +1559,7 @@ class OpenAIProvider(LLMProvider):
             model=data.get("model", self.config.model),
             reasoning_content=reasoning_content,
             recovered_from=recovered_from,
+            content_synthesized=content_synthesized,
         )
 
     def _dump_empty_response(self, data: dict) -> None:

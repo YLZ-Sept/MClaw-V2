@@ -9,11 +9,13 @@ from types import SimpleNamespace
 from mclaw.evaluation.golden_runner import (
     compare_runs,
     evaluate_response,
+    has_tool_artifacts,
     list_runs,
     load_golden_cases,
     load_latest_run,
     run_golden_cases,
     save_run,
+    strip_tool_artifacts,
 )
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "enterprise_ops_golden_cases.json"
@@ -78,6 +80,29 @@ def test_evaluate_clarify_accepts_explicit_request_or_question():
     assert checks["must_include_pass"] is True
     assert checks["passed"] is True
 
+    # “请提供”和“需要”是同一语义组，只说其中一个即可。
+    checks = evaluate_response(case, "需要您提供统计期间、指标口径和部门范围，数据待确认。")
+    assert checks["must_include_hits"] == {"请提供": True, "需要": True}
+    assert checks["passed"] is True
+
+
+def test_evaluate_clarify_accepts_explicit_follow_up_phrasing():
+    case = _case("business-operations-insufficient_info")
+    checks = evaluate_response(
+        case, "需要先对齐三件事：时间口径、统计范围、数据来源。请先明确统计口径。"
+    )
+    assert checks["clarify_pass"] is True
+    assert checks["passed"] is True
+
+
+def test_evaluate_refusal_accepts_equivalent_phrasings():
+    case = _case("commerce-management-out_of_scope")
+    checks = evaluate_response(
+        case, "这个操作我不能做。我不直连任何业务系统，也无法执行该类操作。"
+    )
+    assert checks["must_include_pass"] is True
+    assert checks["passed"] is True
+
 
 def test_evaluate_escalation_and_refusal():
     escalation = _case("business-operations-escalation")
@@ -104,11 +129,26 @@ class _FakeUsage:
 
 
 class _FakeResponse:
-    def __init__(self, text: str):
+    def __init__(self, text: str, synthesized: bool = False):
         self.text = text
         self.model = "fake-model"
         self.endpoint_name = "fake-endpoint"
         self.usage = _FakeUsage()
+        self.content_synthesized = synthesized
+
+
+class _ScriptedClient:
+    """按顺序返回预置响应；最后一个响应可重复使用。"""
+
+    def __init__(self, responses: list[_FakeResponse]):
+        self._responses = list(responses)
+        self.calls = 0
+
+    async def chat(self, messages, system="", **kwargs):
+        self.calls += 1
+        if len(self._responses) > 1:
+            return self._responses.pop(0)
+        return self._responses[0]
 
 
 class _FakeClient:
@@ -192,3 +232,46 @@ def test_compare_runs_without_baseline_does_not_drop():
     assert comparison["dropped"] is False
     assert comparison["delta"] is None
     assert comparison["role_drops"] == {}
+
+
+def test_strip_tool_artifacts_keeps_visible_text():
+    raw = (
+        "本月偏差主要来自回款延迟。"
+        "<｜｜DSML｜｜ calls> <｜｜DSML｜｜ invoke name=\"bash\">ls</｜｜DSML｜｜ parameter> "
+        "</｜｜DSML｜｜ calls>"
+    )
+    assert has_tool_artifacts(raw)
+    cleaned = strip_tool_artifacts(raw)
+    assert "回款延迟" in cleaned
+    assert "DSML" not in cleaned
+
+    assert strip_tool_artifacts("<tool_call> ls </tool_call>") == ""
+
+
+async def test_tool_call_only_response_is_retried():
+    case = _case("business-operations-normal")
+    tool_only = (
+        "<｜｜DSML｜｜ calls> <｜｜DSML｜｜ invoke name=\"bash\">ls</｜｜DSML｜｜ parameter> "
+        "</｜｜DSML｜｜ calls>"
+    )
+    client = _ScriptedClient(
+        [
+            _FakeResponse(tool_only),
+            _FakeResponse("本月偏差主要来自回款延迟，数据来源是财务台账。"),
+        ]
+    )
+    result = await run_golden_cases([case], client=client, km=None, use_kb=False)
+    assert client.calls == 2
+    assert result.passed == 1
+    assert result.cases[0]["attempts"] == 2
+
+
+async def test_synthesized_content_is_error_not_answer():
+    case = _case("business-operations-normal")
+    client = _ScriptedClient(
+        [_FakeResponse("The user asks about operations...", synthesized=True)]
+    )
+    result = await run_golden_cases([case], client=client, km=None, use_kb=False)
+    assert client.calls == 2
+    assert result.passed == 0
+    assert result.cases[0]["error"] == "content_synthesized_fallback"

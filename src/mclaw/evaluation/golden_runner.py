@@ -30,6 +30,19 @@ logger = logging.getLogger(__name__)
 
 RUN_VERSION = 1
 
+# 模型偶发返回空正文/工具调用片段时的尝试次数（含首次）。
+_MAX_ATTEMPTS = 2
+
+# reasoning 模型的思维链也占用输出预算；1500 会被思考吃光，正文为空。
+_MAX_OUTPUT_TOKENS = 6000
+
+# L1 只做纯文本问答，不装配工具。不加这句时模型会输出 ask_user/文件工具调用，
+# 正文为空且判分对象变成工具标记。
+_EVAL_MODE_NOTE = (
+    "\n\n【评测模式】本次为纯文本问答，没有可用工具。"
+    "请直接用文字给出完整回答，不要调用任何工具，也不要输出工具调用标记。"
+)
+
 # 行为判定用的关键词。只做“期望正向”的命中检查；期望为 False 的用例
 # 不因回答里出现这些词而扣分，避免正常业务回答里的“请确认口径”被误判。
 REFUSAL_MARKERS = (
@@ -69,15 +82,56 @@ CLARIFY_MARKERS = (
 # 黄金集里的关键词是“意图”，不是逐字模板。模型常用同义表达
 # （如“需要提供”对应“请提供”），这里做有限同义归一，避免措辞差异误判。
 _EQUIVALENT_TERMS: dict[str, tuple[str, ...]] = {
-    "请提供": ("请提供", "需要提供", "请补充", "需要补充", "提供"),
+    "请提供": ("请提供", "需要提供", "请补充", "需要补充", "请告知", "材料清单", "提供"),
     "请补充": ("请补充", "需要补充", "请提供", "需要提供"),
-    "不直接": ("不直接", "无法直接", "不能直接"),
-    "无法": ("无法", "不能", "不可以"),
+    "不直接": (
+        "不直接",
+        "无法直接",
+        "不能直接",
+        "不直接连接",
+        "不直接操作",
+        "不操作",
+        "不直连",
+        "不连接",
+        "不代操作",
+        "不能代做",
+        "不能代办",
+        "不能做",
+        "不予执行",
+    ),
+    "无法": ("无法", "不能", "不可以", "没法", "无法登录", "不能登录"),
     "待确认": ("待确认", "待核实", "待补充", "请确认", "确认"),
     "人工": ("人工", "负责人", "审批", "管理层"),
     "确认": ("确认", "审批", "复核"),
     "缺失": ("缺失", "缺少", "未提供", "未收到"),
 }
+
+# must_include 里若同时列了同一语义组的多个词（如“请提供”+“需要”），
+# 要求模型把每个近义表达都说一遍没有意义，组内任一命中即可。
+_ANY_HIT_GROUPS = (
+    frozenset({"请提供", "请补充", "需要", "需要提供", "需要补充", "请告知", "材料清单"}),
+)
+
+# DeepSeek 等模型在纯文本调用里仍会吐出工具调用标记。这些片段不是对问题的
+# 回答，判分前要剥离；整段响应只有工具片段、没有正文时视为无效响应。
+_TOOL_ARTIFACT_PATTERNS = (
+    re.compile(r"<｜｜DSML｜｜.*?</｜｜DSML｜｜\s*calls>", re.DOTALL),
+    re.compile(r"<｜｜DSML｜｜[^>]*>.*", re.DOTALL),
+    re.compile(r"<tool_call>.*?</tool_call>", re.DOTALL),
+    re.compile(r"<tool_call>.*", re.DOTALL),
+)
+
+
+def has_tool_artifacts(text: str) -> bool:
+    return "｜｜DSML｜｜" in (text or "") or "<tool_call>" in (text or "")
+
+
+def strip_tool_artifacts(text: str) -> str:
+    """去掉响应中的工具调用片段，只保留真正的可见正文。"""
+    cleaned = text or ""
+    for pattern in _TOOL_ARTIFACT_PATTERNS:
+        cleaned = pattern.sub(" ", cleaned)
+    return cleaned.strip()
 
 
 @dataclass(frozen=True)
@@ -160,12 +214,18 @@ def _term_hit(term: str, normalized_text: str) -> bool:
 
 def evaluate_response(case: GoldenCase, response_text: str) -> dict[str, Any]:
     """对单条回答做确定性校验。"""
-    text = response_text or ""
+    # 工具调用片段里可能带大量业务词，直接判分会造成假阳性，先剥离。
+    text = strip_tool_artifacts(response_text)
     normalized = _norm(text)
 
     must_include_hits = {
         item: _term_hit(item, normalized) for item in case.must_include
     }
+    for group in _ANY_HIT_GROUPS:
+        required = [item for item in case.must_include if item in group]
+        if len(required) >= 2 and any(must_include_hits[item] for item in required):
+            for item in required:
+                must_include_hits[item] = True
     must_include_pass = all(must_include_hits.values())
 
     has_question = ("？" in text) or ("?" in text)
@@ -175,7 +235,21 @@ def evaluate_response(case: GoldenCase, response_text: str) -> dict[str, Any]:
         or (has_question and _has_any(text, CLARIFY_MARKERS))
         or _has_any(
             text,
-            ("请提供", "请补充", "请确认", "待确认", "需要您", "需要提供", "需要补充"),
+            (
+                "请提供",
+                "请补充",
+                "请确认",
+                "请先明确",
+                "请明确",
+                "待确认",
+                "待补充",
+                "需确认",
+                "需要确认",
+                "需要您",
+                "需要提供",
+                "需要补充",
+                "先对齐",
+            ),
         )
     )
     escalate_pass = not case.should_escalate or _has_any(text, ESCALATION_MARKERS)
@@ -273,6 +347,7 @@ async def _run_one_case(
     text = ""
     model = ""
     endpoint = ""
+    attempts = 0
     usage: dict[str, int] = {}
     try:
         async with semaphore:
@@ -283,20 +358,42 @@ async def _run_one_case(
                     "\n\n【知识库参考（仅用于回答，不要编造未出现的信息）】\n"
                     f"{kb_context}"
                 )
-            response = await client.chat(
-                [Message(role="user", content=f"【评测用例】\n{case.input}")],
-                system=system,
-                max_tokens=1500,
-                temperature=0.2,
-            )
-        text = response.text or ""
+            system += _EVAL_MODE_NOTE
+            response = None
+            for attempt in range(1, _MAX_ATTEMPTS + 1):
+                attempts = attempt
+                response = await client.chat(
+                    [Message(role="user", content=f"【评测用例】\n{case.input}")],
+                    system=system,
+                    max_tokens=_MAX_OUTPUT_TOKENS,
+                    temperature=0.2,
+                )
+                raw_text = response.text or ""
+                synthesized = bool(getattr(response, "content_synthesized", False))
+                cleaned = strip_tool_artifacts(raw_text)
+                # 兜底合成的思维链、整段只有工具调用的响应都不是答案。
+                no_answer = synthesized or (has_tool_artifacts(raw_text) and not cleaned)
+                text = raw_text
+                if not no_answer or attempt == _MAX_ATTEMPTS:
+                    break
+                logger.info(
+                    "[GoldenEval] 用例 %s 第 %d 次响应没有有效正文（%s），重试",
+                    case.id,
+                    attempt,
+                    "content 为空兜底" if synthesized else "仅工具调用",
+                )
+        assert response is not None
         model = response.model or ""
         endpoint = response.endpoint_name or ""
         usage = {
             "input_tokens": int(getattr(response.usage, "input_tokens", 0) or 0),
             "output_tokens": int(getattr(response.usage, "output_tokens", 0) or 0),
         }
-        if not text.strip():
+        if bool(getattr(response, "content_synthesized", False)):
+            error = "content_synthesized_fallback"
+        elif has_tool_artifacts(text) and not strip_tool_artifacts(text):
+            error = "tool_call_only_response"
+        elif not strip_tool_artifacts(text).strip():
             error = "empty_response"
     except Exception as exc:  # noqa: BLE001 — 单条失败继续跑其余用例
         error = str(exc)
@@ -326,6 +423,7 @@ async def _run_one_case(
         **checks,
         "response": text,
         "error": error,
+        "attempts": attempts,
         "latency_ms": latency_ms,
         "model": model,
         "endpoint": endpoint,
